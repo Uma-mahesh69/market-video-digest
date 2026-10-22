@@ -101,8 +101,20 @@ def wait_for_internet(minutes=15):
 
 def fetch(url, timeout=30):
     req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as err:
+            if attempt < 2 and err.code in (404, 429, 500, 502, 503, 504):
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
 
 
 def channel_id(url, state):
@@ -649,20 +661,25 @@ def main():
     log(f"Saved {out}")
     subject = f"Market video digest, {today:%d %b %Y}: {len(done)} new video{'s' if len(done) != 1 else ''}"
     emailed = False
-    if not args.dry_run and (done or skipped or unchecked):
-        try:
-            emailed = send(cfg, subject, page, plain_text(done, skipped, overview))
-        except Exception as err:
+    if not args.dry_run:
+        if not done and not skipped and unchecked:
+            log("Could not check any channel. Leaving videos queued; Windows will retry in 30 minutes.")
             emailed = None
-            log(f"Email failed: {err}. The digest is saved above; these videos stay queued and Windows will try again in 30 minutes.")
-        if emailed:
-            log("Emailed to " + ", ".join(cfg["email_to"] if isinstance(cfg["email_to"], list) else [cfg["email_to"]]))
-        if emailed is not None:   # sent, or email is not set up and the saved file is the digest
-            state["done"].update(sent_ok)
-            state["last_sent"] = datetime.now(timezone.utc).isoformat()
-            save_state(state)
-    elif not args.dry_run:
-        log("Nothing new today, so no email was sent.")
+        elif done or skipped or unchecked:
+            try:
+                emailed = send(cfg, subject, page, plain_text(done, skipped, overview))
+            except Exception as err:
+                emailed = None
+                log(f"Email failed: {err}. The digest is saved above; these videos stay queued and Windows will try again in 30 minutes.")
+            if emailed:
+                log("Emailed to " + ", ".join(cfg["email_to"] if isinstance(cfg["email_to"], list) else [cfg["email_to"]]))
+            if emailed is not None:   # sent, or email is not set up and the saved file is the digest
+                state["done"].update(sent_ok)
+                if done:
+                    state["last_sent"] = datetime.now(timezone.utc).isoformat()
+                save_state(state)
+        else:
+            log("Nothing new today, so no email was sent.")
     if args.open:
         os.startfile(out) if hasattr(os, "startfile") else print(out)
     if emailed is None:
