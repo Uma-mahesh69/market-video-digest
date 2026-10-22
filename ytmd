@@ -1,0 +1,1911 @@
+#!/usr/bin/env python3
+"""YouTube captions → evidence for understanding and action. Python 3.9+, yt-dlp."""
+from __future__ import annotations
+
+import argparse
+import base64
+import binascii
+import hashlib
+from contextlib import closing
+from datetime import datetime, timezone
+import html
+import json
+import math
+import os
+from pathlib import Path
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+from urllib.parse import parse_qs, urlparse
+
+VERSION = "0.7.0"
+SCHEMA = 2
+BUNDLE_SCHEMA = 1
+MAP_SCHEMA = 1
+REF_SCHEMA = 1
+MAX_BUNDLE_SOURCES = 20
+MAP_SECTION_SECONDS = 300
+MAX_JSON_BYTES = 5000000
+ID = re.compile(r"[A-Za-z0-9_-]{11}\Z")
+LANG = re.compile(r"[A-Za-z0-9_-]+\Z")
+HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"}
+
+
+class Error(Exception):
+    def __init__(self, code, message, next_steps=None):
+        self.code, self.message, self.next_steps = code, message, next_steps
+        super().__init__(message)
+
+
+def error_payload(error):
+    payload = {"code": error.code, "message": error.message}
+    if error.next_steps:
+        payload["next"] = error.next_steps
+    return payload
+
+
+def library():
+    return Path(os.environ.get("YTMD_DIR", "~/ytmd")).expanduser().resolve()
+
+
+def timestamp(seconds):
+    h, s = divmod(max(0, int(seconds)), 3600)
+    m, s = divmod(s, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def classify_input(value):
+    if ID.fullmatch(value):
+        return ("video", value)
+    try:
+        u = urlparse(value)
+        valid = u.scheme in ("https", "http") and u.hostname in HOSTS and not (u.username or u.password or u.port)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise Error("invalid_url", "Pass a YouTube video URL or 11-character video ID.")
+    parts = [p for p in u.path.strip("/").split("/") if p]
+    query = parse_qs(u.query)
+    if u.hostname in ("youtu.be", "www.youtu.be") and len(parts) == 1 and ID.fullmatch(parts[0]):
+        return ("video", parts[0])
+    if u.path == "/watch" and ID.fullmatch(query.get("v", [""])[0]):
+        return ("video", query["v"][0])
+    if len(parts) == 2 and parts[0] in ("shorts", "live", "embed") and ID.fullmatch(parts[1]):
+        return ("video", parts[1])
+    if (u.path == "/playlist" and query.get("list")) or (parts and (parts[0] in ("channel", "c", "user") or parts[0].startswith("@"))):
+        return ("collection", value)
+    raise Error("invalid_url", "Pass a YouTube video, playlist, or channel URL.")
+
+
+def video_id(value):
+    kind, ident = classify_input(value)
+    if kind != "video":
+        raise Error("invalid_url", "Pass a single video, not a channel or playlist.")
+    return ident
+
+
+def url_for(key, start=None):
+    url = f"https://www.youtube.com/watch?v={key}"
+    return url if start is None else f"{url}&t={int(start)}s"
+
+
+def captions_next(key=None):
+    video = key if key and ID.fullmatch(key) else "VIDEO_ID"
+    target = url_for(video) if ID.fullmatch(video) else "URL"
+    return [
+        {"action": "import", "command": f'ytmd import FILE --video {video} --title "Title" --json', "ask": "If you already have VTT, JSON3, or SRT captions, import them. User-supplied captions are not publisher provenance."},
+        {"action": "cookies", "command": f"ytmd add {target} --cookies-from-browser BROWSER --json", "ask": "Ask the user before reading browser cookies. Cookies are not a guaranteed fix and are not a transcription fallback."},
+    ]
+
+
+def normalize(text):
+    return " ".join(text.split())
+
+
+# JSON3 is plain text: do NOT strip angle brackets or decode entities here.
+def parse_json3(raw):
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        raise Error("invalid_captions", "Malformed JSON3 captions.")
+    if not isinstance(data, dict) or not isinstance(data.get("events", []), list):
+        raise Error("invalid_captions", "Malformed JSON3 event list.")
+    cues = []
+    for event in data.get("events", []):
+        if not isinstance(event, dict) or not isinstance(event.get("segs", []), list):
+            raise Error("invalid_captions", "Malformed JSON3 cue.")
+        segs = event.get("segs", [])
+        if any(not isinstance(s, dict) or not isinstance(s.get("utf8", ""), str) for s in segs):
+            raise Error("invalid_captions", "Malformed JSON3 text.")
+        text = normalize("".join(s.get("utf8", "") for s in segs))
+        if not text:
+            continue
+        start = float(event.get("tStartMs", 0)) / 1000
+        end = start + float(event.get("dDurationMs", 0)) / 1000
+        cues.append({"start": start, "end": end, "text": text})
+    return validate_cues(cues)
+
+
+VTT_TIME = r"(?:\d{2,}:)?\d{2}:\d{2}\.\d{3}"
+VTT_TAG = re.compile(r"</?(?:b|i|u|ruby|rt)>|</?c(?:\.[^>\s]+)*>|<v(?:\s+[^>]*)?>|</v>|<lang(?:\s+[^>]*)?>|</lang>|<" + VTT_TIME + r">")
+
+
+def seconds(value):
+    parts = value.split(":")
+    if not 1 <= len(parts) <= 3:
+        raise ValueError("Invalid timestamp")
+    nums = [float(p) for p in parts]
+    if any(not math.isfinite(n) or n < 0 for n in nums) or any(n >= 60 for n in nums[1:]):
+        raise ValueError("Invalid timestamp")
+    total = 0.0
+    for n in nums:
+        total = total * 60 + n
+    return total
+
+
+def parse_vtt(raw):
+    cues = []
+    previous_lines, previous_end = [], -1
+    for block in re.split(r"\n[ \t]*\n", raw.lstrip("\ufeff").replace("\r\n", "\n")):
+        lines = block.splitlines()
+        if not lines or lines[0].startswith(("NOTE", "STYLE", "REGION", "WEBVTT")):
+            continue
+        timing = next((i for i, line in enumerate(lines) if "-->" in line), None)
+        if timing is None:
+            continue
+        match = re.match(r"(" + VTT_TIME + r")\s+-->\s+(" + VTT_TIME + r")", lines[timing])
+        if not match:
+            raise Error("invalid_captions", "Malformed VTT timestamp.")
+        start, end = (seconds(v) for v in match.groups())
+        payload = lines[timing + 1:]
+        # Only de-roll cues with explicit YouTube rolling-caption evidence.
+        rolling = "position:" in lines[timing] and any(re.search(r"<" + VTT_TIME + r">", line) for line in payload)
+        clean = [normalize(html.unescape(VTT_TAG.sub("", line))) for line in payload]
+        clean = [line for line in clean if line]
+        original = clean[:]
+        if rolling and start <= previous_end + 0.05:
+            for size in range(min(len(previous_lines), len(clean)), 0, -1):
+                if previous_lines[-size:] == clean[:size]:
+                    clean = clean[size:]
+                    break
+        text = normalize(" ".join(clean))
+        if text:
+            cues.append({"start": start, "end": end, "text": text})
+        previous_lines, previous_end = original, end
+    return validate_cues(cues)
+
+
+SRT_CLOCK = r"\d{2}:\d{2}:\d{2}[,.]\d{3}"
+
+
+def parse_srt_time(value):
+    parts = re.split(r"[:.,]", value.strip())
+    if len(parts) != 4 or any(not p.isdigit() for p in parts):
+        raise Error("invalid_captions", "Malformed SRT timestamp.")
+    h, m, s, ms = (int(p) for p in parts)
+    if m >= 60 or s >= 60:
+        raise Error("invalid_captions", "Malformed SRT timestamp.")
+    return h * 3600 + m * 60 + s + ms / 1000
+
+
+def parse_srt(raw):
+    cues = []
+    text = raw.lstrip("\ufeff").replace("\r\n", "\n")
+    for block in re.split(r"\n[ \t]*\n", text):
+        lines = [line for line in block.splitlines() if line.strip() != ""]
+        if not lines:
+            continue
+        if re.fullmatch(r"\d+", lines[0]):
+            lines = lines[1:]
+        if not lines:
+            continue
+        match = re.match(rf"({SRT_CLOCK})\s+-->\s+({SRT_CLOCK})", lines[0])
+        if not match:
+            raise Error("invalid_captions", "Malformed SRT timestamp.")
+        start, end = (parse_srt_time(part) for part in match.groups())
+        payload = [normalize(html.unescape(re.sub(r"</?(?:b|i|u)>", "", line))) for line in lines[1:]]
+        body = normalize(" ".join(line for line in payload if line))
+        if body:
+            cues.append({"start": start, "end": end, "text": body})
+    return validate_cues(cues)
+
+
+def validate_cues(cues):
+    for c in cues:
+        if not math.isfinite(c["start"]) or not math.isfinite(c["end"]) or c["start"] < 0 or c["end"] < c["start"]:
+            raise Error("invalid_captions", "Invalid caption timing.")
+    # Preserve repetitions. Prefer occasional display overlap to lost speech.
+    return sorted(cues, key=lambda c: c["start"])
+
+
+def passages(cues):
+    result, current = [], None
+    for cue in cues:
+        if current and (len(current["text"]) + len(cue["text"]) > 480 or cue["start"] - current["start"] >= 30 or cue["start"] - current["end"] > 3):
+            result.append(current)
+            current = None
+        if current is None:
+            current = dict(cue)
+        else:
+            current["end"] = max(current["end"], cue["end"])
+            current["text"] += " " + cue["text"]
+    if current:
+        result.append(current)
+    return result
+
+
+CHAPTER_LINE = re.compile(
+    r"^\s*(?:[-*•]+\s+)?(?:\d{1,2}[.)]\s+)?\(?"
+    r"((?:\d{1,2}:)?\d{1,2}:\d{2})(?!\d)\)?\s*(?:[-–—:|]\s*)*(.*?)\s*$"
+)
+
+
+def finish_chapters(items, duration=None):
+    cleaned, seen = [], set()
+    for start, title, end in items:
+        if start in seen or not math.isfinite(start) or start < 0:
+            continue
+        if duration is not None and start > duration:
+            continue
+        seen.add(start)
+        cleaned.append({"start": start, "title": title, "end": end})
+    cleaned.sort(key=lambda c: c["start"])
+    for i, ch in enumerate(cleaned):
+        nxt = cleaned[i + 1]["start"] if i + 1 < len(cleaned) else duration
+        end = ch["end"]
+        if end is None or (nxt is not None and end > nxt):
+            ch["end"] = nxt if nxt is not None else ch["start"]
+        elif end < ch["start"]:
+            ch["end"] = ch["start"]
+    return cleaned
+
+
+def parse_chapters(description, duration=None):
+    if not description:
+        return []
+    best, run = [], []
+    for line in description.splitlines():
+        match = CHAPTER_LINE.match(line)
+        if not match:
+            continue
+        try:
+            start = seconds(match.group(1))
+        except ValueError:
+            continue
+        title = normalize(match.group(2)).strip(" -–—:|")
+        if not title or title.lower() in {"am", "pm"} or re.match(r"https?://", title, re.I):
+            continue
+        if run and start < run[-1][0]:
+            if len(run) > len(best):
+                best = run
+            run = []
+        run.append((start, title, None))
+    if len(run) > len(best):
+        best = run
+    return finish_chapters(best, duration) if len(best) >= 2 else []
+
+
+def chapters_from_player(info, description, duration):
+    items = []
+    raw = info.get("chapters")
+    if isinstance(raw, list):
+        for ch in raw:
+            if not isinstance(ch, dict):
+                items = []
+                break
+            title = normalize(str(ch.get("title") or ""))
+            try:
+                start = float(ch.get("start_time"))
+                end = ch.get("end_time")
+                end = float(end) if end is not None else None
+            except (TypeError, ValueError):
+                items = []
+                break
+            if not title or not math.isfinite(start) or start < 0:
+                continue
+            if end is not None and (not math.isfinite(end) or end < start):
+                end = None
+            items.append((start, title, end))
+    result = finish_chapters(items, duration) if items else []
+    return result or parse_chapters(description, duration)
+
+
+def public_chapters(row):
+    chapters = []
+    raw = row.get("chapters_json")
+    if raw:
+        try:
+            loaded = json.loads(raw)
+            if isinstance(loaded, list):
+                chapters = loaded
+        except (TypeError, ValueError):
+            chapters = []
+    if not chapters:
+        chapters = parse_chapters(row.get("description") or "", row.get("duration_s"))
+    return [dict(c, url=url_for(row["id"], c["start"])) for c in chapters]
+
+
+def transcript(cues):
+    return "\n\n".join(f"[{timestamp(c['start'])}] {c['text']}" for c in passages(cues))
+
+
+def run_ytdlp(args, allow_playlist=False):
+    binary = shutil.which("yt-dlp")
+    if not binary:
+        raise Error("missing_dependency", "Install yt-dlp: brew install yt-dlp (macOS) or pipx install yt-dlp (Linux).")
+    playlist_flag = ["--yes-playlist"] if allow_playlist else ["--no-playlist"]
+    try:
+        p = subprocess.run([binary, "--ignore-config", *playlist_flag, "--skip-download", "--no-progress", "--socket-timeout", "15", "--retries", "2", "--extractor-retries", "1", "--ignore-no-formats-error", *args], capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired:
+        raise Error("timeout", "YouTube request timed out. Try again later.")
+    if p.returncode:
+        ytdlp_error((p.stderr or p.stdout).strip())
+    return p.stdout
+
+
+def ytdlp_error(detail):
+    text = (detail or "").lower()
+    if "429" in (detail or "") or "too many requests" in text:
+        raise Error("rate_limited", "YouTube rate-limited this request. Wait before retrying; cookies are not a guaranteed fix.")
+    if any(s in text for s in ("sign in", "login", "cookies", "private video", "confirm your age")):
+        raise Error("authentication_required", "YouTube requires authentication. If you consent to browser-cookie access, use --cookies-from-browser BROWSER.")
+    if any(s in text for s in ("this video is unavailable", "video unavailable", "has been removed", "has been deleted", "video does not exist")):
+        raise Error("video_unavailable", "This YouTube video is unavailable. It may have been deleted, or the ID is wrong.")
+    raise Error("download_failed", (detail or "")[-1500:] or "yt-dlp failed.")
+
+
+def require_available(info, key):
+    availability = (info.get("availability") or "").lower()
+    title = (info.get("title") or "").strip()
+    if availability in ("private", "premium_only", "subscriber_only", "needs_auth") or title.lower() == "[private video]":
+        raise Error("authentication_required", "YouTube requires authentication. If you consent to browser-cookie access, use --cookies-from-browser BROWSER.")
+    stub = title == f"youtube video #{key}" or title.lower() in ("[deleted video]", "[unavailable video]")
+    missing = info.get("duration") is None and not (info.get("channel") or info.get("uploader"))
+    # Missing metadata or a placeholder-like title alone is not proof of deletion.
+    # Only recognize an empty extractor stub; live or caption-bearing results proceed.
+    has_content = any(info.get(field) for field in ("formats", "subtitles", "automatic_captions", "live_status"))
+    if availability == "unavailable" or (stub and missing and not has_content):
+        raise Error("video_unavailable", "This YouTube video is unavailable. It may have been deleted, or the ID is wrong.")
+
+
+def choose_track(info, language=None):
+    manual = info.get("subtitles") or {}
+    auto = info.get("automatic_captions") or {}
+    candidates = []
+    for source, tracks in (("manual", manual), ("auto", auto)):
+        for lang, formats in tracks.items():
+            if lang == "live_chat" or not LANG.fullmatch(lang) or not any(f.get("ext") in ("json3", "vtt") for f in formats):
+                continue
+            candidates.append((lang, source))
+    preferred = [language, language + "-orig"] if language else ["en", "en-US", "en-GB", "en-orig"]
+    if language:
+        candidates = [c for c in candidates if c[0] in preferred]
+    def rank(c):
+        lang, source = c
+        return (0 if lang in preferred else 1, 0 if source == "manual" else 1,
+                0 if lang.endswith("-orig") else 1, preferred.index(lang) if lang in preferred else 99, lang)
+    # Avoid falling back to an arbitrary machine translation.
+    candidates = [c for c in candidates if c[1] == "manual" or c[0] in preferred or c[0].endswith("-orig") or c[0] == info.get("language")]
+    if not candidates:
+        available = ", ".join(sorted(set(manual) | {k for k in auto if k.endswith("-orig")})) or "none"
+        raise Error(
+            "captions_unavailable",
+            f"No suitable captions{(' for ' + language) if language else ''}. Available original/manual tracks: {available}. Caption-less videos are not supported.",
+            next_steps=captions_next(info.get("id")),
+        )
+    return sorted(candidates, key=rank)[0]
+
+
+def playlist_entries(url, limit, browser):
+    cookies = ["--cookies-from-browser", browser] if browser else []
+    raw = run_ytdlp(["--flat-playlist", "--playlist-end", str(limit), "--dump-single-json", *cookies, "--", url], allow_playlist=True)
+    try:
+        info = json.loads(raw)
+    except ValueError:
+        raise Error("invalid_collection", "YouTube returned unreadable playlist or channel metadata.")
+    if not isinstance(info, dict):
+        raise Error("invalid_collection", "YouTube returned unreadable playlist or channel metadata.")
+    if info.get("_type") not in ("playlist", "multi_video"):
+        key = info.get("id")
+        if ID.fullmatch(key or ""):
+            return [key]
+        raise Error("invalid_collection", "Pass a playlist or channel URL, or a single video.")
+    found = []
+    seen = set()
+    for entry in info.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("id") or ""
+        if ID.fullmatch(key) and key not in seen:
+            seen.add(key)
+            found.append(key)
+        if len(found) >= limit:
+            break
+    return found
+
+
+def resolve_add_targets(urls, limit, browser):
+    targets = []
+    for url in urls:
+        try:
+            kind, ident = classify_input(url)
+            if kind == "video":
+                targets.append(("video", ident, url))
+                continue
+            items = playlist_entries(url, limit, browser)
+            if not items:
+                raise Error("empty_collection", "No videos found in that playlist or channel.")
+            for key in items:
+                targets.append(("video", key, url_for(key)))
+        except Error as error:
+            targets.append(("error", url, error))
+    return targets
+
+
+def fetch(key, language, browser):
+    cookies = ["--cookies-from-browser", browser] if browser else []
+    info = json.loads(run_ytdlp(["--dump-single-json", *cookies, "--", url_for(key)]))
+    if info.get("id") != key or info.get("_type") == "playlist":
+        raise Error("invalid_video", "YouTube returned an unexpected video.")
+    require_available(info, key)
+    lang, source = choose_track(info, language)
+    with tempfile.TemporaryDirectory(prefix="ytmd-") as tmp:
+        # Exactly one track; no user yt-dlp config, media downloads or exec hooks.
+        run_ytdlp(["--write-subs" if source == "manual" else "--write-auto-subs", "--sub-langs", re.escape(lang), "--sub-format", "json3/vtt", "--no-simulate", "-o", str(Path(tmp) / "captions.%(ext)s"), *cookies, "--", url_for(key)])
+        files = sorted(p for p in Path(tmp).iterdir() if p.suffix in (".json3", ".vtt"))
+        if len(files) != 1:
+            raise Error("captions_unavailable", "Expected one caption file; none or multiple were returned. Update yt-dlp and retry.", next_steps=captions_next(key))
+        raw = files[0].read_text(encoding="utf-8-sig")
+        fmt = files[0].suffix[1:]
+        cues = parse_json3(raw) if fmt == "json3" else parse_vtt(raw)
+    if not cues:
+        raise Error("invalid_captions", "YouTube returned empty captions.")
+    uploaded = info.get("upload_date") or ""
+    if re.fullmatch(r"\d{8}", uploaded):
+        uploaded = f"{uploaded[:4]}-{uploaded[4:6]}-{uploaded[6:]}"
+    description = info.get("description") or ""
+    duration = info.get("duration")
+    chapters = chapters_from_player(info, description, duration)
+    return dict(id=key, title=info.get("title") or key, channel=info.get("channel") or info.get("uploader") or "", url=url_for(key), uploaded_at=uploaded, duration_s=duration, description=description, captions=source, lang=lang, ingested_at=datetime.now(timezone.utc).isoformat(), transcript=transcript(cues), cues_json=json.dumps(cues, ensure_ascii=False), raw_captions=raw, caption_format=fmt, chapters_json=json.dumps(chapters, ensure_ascii=False) if chapters else None)
+
+
+# SQLite is canonical; markdown is a recoverable, generated view.
+VIDEO_SCHEMA = """CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY, title TEXT NOT NULL, channel TEXT, url TEXT NOT NULL,
+    uploaded_at TEXT, duration_s INTEGER, description TEXT, captions TEXT NOT NULL,
+    lang TEXT, ingested_at TEXT NOT NULL, transcript TEXT NOT NULL,
+    cues_json TEXT, raw_captions TEXT, caption_format TEXT, chapters_json TEXT)"""
+
+
+def legacy_cues(row):
+    chunks = re.split(r"\[(\d+(?::\d+){1,2})\]\s*", row["transcript"])
+    cues = []
+    if chunks[0].strip():
+        cues.append(dict(start=0.0, end=0.0, text=chunks[0].strip()))
+    for i in range(1, len(chunks) - 1, 2):
+        cues.append(dict(start=seconds(chunks[i]), end=seconds(chunks[i]), text=chunks[i + 1].strip()))
+    for i, c in enumerate(cues):
+        c["end"] = max(c["start"], cues[i + 1]["start"] if i + 1 < len(cues) else row["duration_s"] or c["start"])
+    return cues
+
+
+def insert_passages(conn, key, cues):
+    conn.execute("DELETE FROM passages WHERE video_id = ?", (key,))
+    conn.executemany("INSERT INTO passages(video_id,start,end,text) VALUES (?,?,?,?)", [(key, c["start"], c["end"], c["text"]) for c in passages(cues)])
+
+
+def migrate_v1(conn):
+    conn.execute(VIDEO_SCHEMA)
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
+    for col in ("cues_json", "raw_captions", "caption_format", "chapters_json"):
+        if col not in columns:
+            conn.execute(f"ALTER TABLE videos ADD COLUMN {col} TEXT")
+    conn.execute("CREATE TABLE passages (id INTEGER PRIMARY KEY, video_id TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE, start REAL NOT NULL, end REAL NOT NULL, text TEXT NOT NULL)")
+    conn.execute("CREATE INDEX passages_video ON passages(video_id,start)")
+    conn.execute("CREATE VIRTUAL TABLE passages_fts USING fts5(text, content='passages', content_rowid='id', tokenize='unicode61')")
+    conn.execute("CREATE TRIGGER passages_ai AFTER INSERT ON passages BEGIN INSERT INTO passages_fts(rowid,text) VALUES(new.id,new.text); END")
+    conn.execute("CREATE TRIGGER passages_ad AFTER DELETE ON passages BEGIN INSERT INTO passages_fts(passages_fts,rowid,text) VALUES('delete',old.id,old.text); END")
+    for row in conn.execute("SELECT * FROM videos").fetchall():
+        cues = legacy_cues(row)
+        conn.execute("UPDATE videos SET cues_json=?, caption_format='legacy', captions='unknown' WHERE id=?", (json.dumps(cues, ensure_ascii=False), row["id"]))
+        insert_passages(conn, row["id"], cues)
+    conn.execute("DROP TABLE IF EXISTS videos_fts")
+    conn.execute("PRAGMA user_version=1")
+
+
+def migrate_v2(conn):
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
+    if "chapters_json" not in columns:
+        conn.execute("ALTER TABLE videos ADD COLUMN chapters_json TEXT")
+    for row in conn.execute("SELECT id, description, duration_s, chapters_json FROM videos").fetchall():
+        if row["chapters_json"]:
+            continue
+        chapters = parse_chapters(row["description"] or "", row["duration_s"])
+        if chapters:
+            conn.execute("UPDATE videos SET chapters_json=? WHERE id=?", (json.dumps(chapters, ensure_ascii=False), row["id"]))
+    conn.execute("PRAGMA user_version=2")
+
+
+def connect():
+    root = library()
+    root.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(root / "ytmd.db", timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if version > SCHEMA:
+        conn.close()
+        raise Error("newer_database", "This library requires a newer ytmd. Update the CLI.")
+    if version == SCHEMA:
+        return conn
+    exists = conn.execute("SELECT 1 FROM sqlite_master WHERE name='videos'").fetchone()
+    try:
+        if exists and version == 0:
+            backup = root / "ytmd.pre-v0.2.db"
+            if not backup.exists():
+                with closing(sqlite3.connect(backup)) as target:
+                    conn.backup(target)
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            # Another process may have migrated while we waited for its lock.
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if version == SCHEMA:
+                return conn
+            if version == 0:
+                migrate_v1(conn)
+                version = 1
+            if version < 2:
+                migrate_v2(conn)
+    except Exception:
+        conn.close()
+        raise
+    return conn
+
+
+def save(conn, row):
+    cols = list(row)
+    with conn:
+        conn.execute(f"INSERT INTO videos ({','.join(cols)}) VALUES ({','.join('?' for _ in cols)}) ON CONFLICT(id) DO UPDATE SET " + ','.join(f"{c}=excluded.{c}" for c in cols if c != "id"), [row[c] for c in cols])
+        insert_passages(conn, row["id"], json.loads(row["cues_json"]))
+
+
+def markdown(row):
+    meta = {k: row[k] for k in ("title", "id", "url", "channel", "uploaded_at", "duration_s", "captions", "lang", "ingested_at", "caption_format")}
+    lines = ["---", *[f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in meta.items()], "source: youtube", "---", "", f"# {normalize(row['title'])}", "", row["url"], ""]
+    chapters = public_chapters(row)
+    if chapters:
+        lines += ["## Chapters", ""]
+        lines += [f"[{timestamp(c['start'])}]({c['url']}) {c['title']}" for c in chapters]
+        lines += [""]
+    lines += ["## Transcript", ""]
+    if row["caption_format"] == "legacy":
+        lines += ["> Imported from v0.1; timing is approximate and original caption data is unavailable. Re-ingest with --force to recover source captions.", ""]
+    for c in passages(json.loads(row["cues_json"])):
+        # Escape Markdown punctuation so code notation remains visible when rendered.
+        text = html.escape(c["text"], quote=False)
+        text = re.sub(r"([\\`*_{}\[\]])", r"\\\1", text)
+        lines += [f"[{timestamp(c['start'])}]({url_for(row['id'], c['start'])}) {text}", ""]
+    return "\n".join(lines)
+
+
+def write_markdown(row, dest=None):
+    if not ID.fullmatch(row["id"]):
+        raise Error("invalid_video", "Invalid stored video ID; refusing to write a filename.")
+    root = Path(dest).expanduser().resolve() if dest else library()
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{row['id']}.md"
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=root, prefix=".ytmd-", delete=False) as f:
+            temporary = Path(f.name)
+            f.write(markdown(row))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+        # Remove old generated slug filenames only after the replacement succeeds.
+        for old in root.glob(f"{row['id']}-*.md"):
+            old.unlink()
+    finally:
+        if temporary and temporary.exists():
+            temporary.unlink()
+    return str(path)
+
+
+def resolve(conn, key):
+    try:
+        key = video_id(key)
+    except (Error, ValueError):
+        pass
+    row = conn.execute("SELECT * FROM videos WHERE id=?", (key,)).fetchone()
+    if row:
+        return dict(row)
+    # Literal title/prefix lookup, never SQL wildcard semantics.
+    escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = conn.execute("SELECT * FROM videos WHERE id LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' LIMIT 11", (escaped + "%", "%" + escaped + "%")).fetchall()
+    if len(rows) > 1:
+        raise Error("ambiguous_video", "Use an exact video ID: " + ", ".join(r["id"] for r in rows))
+    if not rows:
+        raise Error("not_found", f"No saved video matches {key!r}.")
+    return dict(rows[0])
+
+
+def output(data, args, text):
+    print(json.dumps(data, ensure_ascii=False, indent=2) if args.json else text)
+
+
+def ensure_saved(args):
+    """Shared ingestion for add/get; return data without contaminating stdout."""
+    key = video_id(args.url)
+    with closing(connect()) as conn:
+        existing = conn.execute("SELECT * FROM videos WHERE id=?", (key,)).fetchone()
+    if existing and not args.force:
+        if args.lang and existing["lang"] not in (args.lang, args.lang + "-orig"):
+            raise Error("language_mismatch", f"Saved track is {existing['lang']}, not {args.lang}. Use --force to replace it, or omit --lang to read the saved track.")
+        row, status = dict(existing), "existing"
+    else:
+        if not args.json:
+            print(f"Fetching {url_for(key)} …", file=sys.stderr)
+        row, status = fetch(key, args.lang, args.cookies_from_browser), "saved"
+        with closing(connect()) as conn:
+            save(conn, row)
+    try:
+        path = write_markdown(row)
+    except OSError as e:
+        raise Error("export_failed", f"Transcript is saved in SQLite, but markdown export failed: {e}. Repair with: ytmd export")
+    return row, dict(status=status, id=key, title=row["title"], url=row["url"], path=path, captions=row["captions"], lang=row["lang"], duration_s=row["duration_s"], chapters=public_chapters(row))
+
+
+def cmd_add(args):
+    urls = args.urls if getattr(args, "urls", None) else [args.url]
+    targets = resolve_add_targets(urls, getattr(args, "limit", 10), getattr(args, "cookies_from_browser", None))
+    if len(urls) == 1 and len(targets) == 1 and targets[0][0] == "error":
+        raise targets[0][2]
+    batch = len(targets) > 1
+    results = []
+    stopped = None
+    failed = False
+    for target in targets:
+        if target[0] == "error":
+            url, error = target[1], target[2]
+            status = "error"
+            failed = True
+            results.append(dict(status=status, url=url, error=error_payload(error)))
+            if not args.json:
+                print(f"ytmd: {status}: {url}: {error.code}: {error.message}", file=sys.stderr)
+            continue
+        key, url = target[1], target[2]
+        if stopped:
+            error = Error("batch_stopped", f"Not attempted after {stopped}.")
+            status = "skipped"
+        else:
+            one = argparse.Namespace(**vars(args))
+            one.url = url
+            try:
+                row, data = ensure_saved(one)
+            except BrokenPipeError:
+                raise
+            except Error as e:
+                error = e
+            except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as e:
+                error = Error("operation_failed", str(e))
+            except KeyboardInterrupt:
+                error = Error("interrupted", "Cancelled.")
+            else:
+                results.append(data)
+                if not args.json:
+                    hint = f"Outline: ytmd info {row['id']}" if data["chapters"] else f"Read: ytmd show {row['id']} --from 0:00 --to 1:00"
+                    print(f"{data['status']}: {row['title']}\n{data['path']}\n{hint}", flush=True)
+                continue
+            # Keep the single-video error envelope and exit behavior unchanged.
+            if not batch:
+                raise error
+            status = "error"
+            if error.code in ("rate_limited", "interrupted"):
+                stopped = error.code
+        failed = True
+        results.append(dict(status=status, url=url, error=error_payload(error)))
+        if not args.json:
+            print(f"ytmd: {status}: {url}: {error.code}: {error.message}", file=sys.stderr)
+            if error.next_steps:
+                print(f"ytmd: next: {error.next_steps[0]['ask']}", file=sys.stderr)
+    if args.json:
+        print(json.dumps(results if batch else results[0], ensure_ascii=False, indent=2))
+    return 1 if failed else 0
+
+
+def window(cues, start, end=None):
+    # Include complete cues overlapping the window; zero-duration cues count at their start.
+    return [c for c in cues if (c["end"] > start or c["start"] >= start) and (end is None or c["start"] < end)]
+
+
+def check_range(args):
+    if args.to is not None and args.to <= args.start:
+        raise Error("invalid_range", "--to must be later than --from.")
+
+
+def print_transcript(row, args, extra=None):
+    cues = window(json.loads(row["cues_json"]), args.start, args.to)
+    selected = [dict(c, url=url_for(row["id"], c["start"])) for c in passages(cues)]
+    if args.plain:
+        print("\n\n".join(c["text"] for c in selected))
+        return
+    remaining = (row["duration_s"] or 0) - (args.start or 0)
+    if not args.json and args.to is None and remaining >= 600:
+        print(f"ytmd: {timestamp(remaining)} transcript. Outline: ytmd info {row['id']}", file=sys.stderr)
+    data = {k: row[k] for k in ("id", "title", "url", "channel", "lang", "captions", "caption_format", "duration_s")}
+    data.update(path=str(library() / f"{row['id']}.md"), chapters=public_chapters(row), passages=selected)
+    if extra:
+        data.update(extra)
+    text = f"# {row['title']}\n{row['url']}\n\n" + "\n\n".join(f"[{timestamp(c['start'])}] {c['text']}" for c in selected)
+    output(data, args, text)
+
+
+def cmd_get(args):
+    check_range(args)  # Invalid requests must not trigger a network fetch or save.
+    row, data = ensure_saved(args)
+    print_transcript(row, args, dict(status=data["status"]))
+
+
+def diverse_hits(rows, limit):
+    """Round-robin videos in best-hit order; retain at most limit hits per video."""
+    videos = {}
+    for row in rows:
+        hits = videos.setdefault(row["video_id"], [])
+        if len(hits) < limit:
+            hits.append(row)
+        # Enough distinct videos to fill the first round. No need to scan more.
+        if len(videos) == limit:
+            break
+    return [hits[i] for i in range(limit) for hits in videos.values() if i < len(hits)][:limit]
+
+
+def merge_search_context(results, sources, context):
+    """Merge selected windows, retaining the best hit and every original citation."""
+    by_video, grouped = {}, []
+    for rank, hit in enumerate(results):
+        nearby = window(sources[hit["video_id"]], max(0, hit["start"] - context), hit["end"] + context)
+        if not nearby:
+            grouped.append((rank, hit))
+            continue
+        by_video.setdefault(hit["video_id"], []).append(dict(
+            start=nearby[0]["start"], end=max(c["end"] for c in nearby),
+            hits=[(rank, hit)], cues={id(c) for c in nearby}))
+    for key, spans in by_video.items():
+        merged = []
+        for span in sorted(spans, key=lambda s: (s["start"], s["end"])):
+            if merged and span["start"] <= merged[-1]["end"]:
+                previous = merged[-1]
+                previous["end"] = max(previous["end"], span["end"])
+                previous["hits"].extend(span["hits"])
+                previous["cues"].update(span["cues"])
+            else:
+                merged.append(span)
+        for span in merged:
+            rank, best = min(span["hits"], key=lambda item: item[0])
+            result = dict(best)
+            # Deduplicate cue identities, never repeated words or speech. Reusing
+            # the exact selected cues also preserves zero-duration boundary cues.
+            nearby = [c for c in sources[key] if id(c) in span["cues"]]
+            result["context"] = dict(start=span["start"], end=span["end"],
+                                     text=transcript(nearby), url=url_for(key, span["start"]))
+            if len(span["hits"]) > 1:
+                result["matches"] = [{field: hit[field] for field in ("start", "end", "text", "url", "score")}
+                                     for _, hit in sorted(span["hits"], key=lambda item: (item[1]["start"], item[0]))]
+            grouped.append((rank, result))
+    return [hit for _, hit in sorted(grouped, key=lambda item: item[0])]
+
+
+def lexical_query(text, match):
+    tokens = re.findall(r"\w+", text, re.UNICODE)
+    if not tokens:
+        raise Error("invalid_query", "Enter at least one search word.")
+    if match == "phrase":
+        return '"' + " ".join(tokens) + '"'
+    joiner = " AND " if match == "all" else " OR "
+    return joiner.join('"' + t + '"' for t in dict.fromkeys(tokens))
+
+
+SEARCH_SQL = """SELECT v.id AS video_id,v.title,v.captions,v.lang,v.caption_format,p.start,p.end,p.text,
+            bm25(passages_fts) AS score FROM passages_fts
+            JOIN passages p ON p.id=passages_fts.rowid JOIN videos v ON v.id=p.video_id
+            WHERE passages_fts MATCH ? AND (? IS NULL OR v.id=?) AND (? IS NULL OR v.channel = ?)
+            ORDER BY score,p.video_id,p.start,p.id"""
+
+
+def search_results(args):
+    query = lexical_query(" ".join(args.query), args.match)
+    with closing(connect()) as conn:
+        key = resolve(conn, args.video)["id"] if args.video else None
+        channel = (args.channel or "").strip() or None
+        params = (query, key, key, channel, channel)
+        if args.diverse:
+            # Stream the ranked cursor instead of truncating a global top-N pool:
+            # a prolific video must not hide all matches from another video.
+            rows = diverse_hits(conn.execute(SEARCH_SQL, params), args.limit)
+        else:
+            rows = conn.execute(SEARCH_SQL + " LIMIT ?", (*params, args.limit)).fetchall()
+        results = [dict(r, url=url_for(r["video_id"], r["start"])) for r in rows]
+        if args.context:
+            sources = {key: json.loads(conn.execute("SELECT cues_json FROM videos WHERE id=?", (key,)).fetchone()[0])
+                       for key in dict.fromkeys(r["video_id"] for r in results)}
+            results = merge_search_context(results, sources, args.context)
+    return results
+
+
+def cmd_search(args):
+    results = search_results(args)
+    blocks = []
+    for r in results:
+        merged = f" · {len(r['matches'])} matches" if "matches" in r else ""
+        blocks.append(f"{r['video_id']}  {r['title']} [{timestamp(r['start'])}]{merged}\n{r.get('context', {}).get('text', r['text'])}\n{r['url']}")
+    text = "\n\n".join(blocks) or "No matches. Try fewer keywords or --match any; search is lexical, not semantic."
+    if results:
+        top = results[0]
+        span = top.get("context", top)
+        start = max(0, math.floor(span["start"]))
+        end = max(start + 120, math.ceil(span["end"]))
+        text += f"\n\nNext: ytmd show {top['video_id']} --from {timestamp(start)} --to {timestamp(end)}"
+    output(results, args, text)
+
+
+def source_metadata(row):
+    if not isinstance(row.get("id"), str) or not ID.fullmatch(row["id"]):
+        raise Error("invalid_video", "Invalid stored video ID; refusing to generate continuation commands.")
+    keys = ("id", "title", "url", "channel", "duration_s", "lang", "captions", "caption_format")
+    data = {k: row[k] for k in keys}
+    data["chapters"] = [dict(c, number=i + 1) for i, c in enumerate(public_chapters(row))]
+    snapshot = json.dumps([data, row["cues_json"]], sort_keys=True, ensure_ascii=False)
+    data["source_snapshot"] = hashlib.sha256(snapshot.encode()).hexdigest()
+    return data
+
+
+def encode_cursor(value):
+    return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).decode().rstrip("=")
+
+
+def decode_cursor(token):
+    try:
+        if len(token) > 4096 or not re.fullmatch(r"[A-Za-z0-9_-]+", token):
+            raise ValueError()
+        data = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+        if not isinstance(data, dict) or set(data) != {"v", "id", "source", "scope", "position"} or type(data.get("v")) is not int or data["v"] != 1:
+            raise ValueError()
+        scope, position = data["scope"], data["position"]
+        if not isinstance(scope, dict) or set(scope) != {"start", "end", "chapter"} or not isinstance(position, list) or len(position) != 2:
+            raise ValueError()
+        if any(type(n) is not int or n < 0 for n in position):
+            raise ValueError()
+        start, end = scope["start"], scope["end"]
+        if type(start) not in (int, float) or not math.isfinite(start) or start < 0:
+            raise ValueError()
+        if end is not None and (type(end) not in (int, float) or not math.isfinite(end) or end <= start):
+            raise ValueError()
+        chapter = scope["chapter"]
+        if chapter is not None and (type(chapter) is not int or chapter < 1):
+            raise ValueError()
+        if not isinstance(data["id"], str) or not isinstance(data["source"], str):
+            raise ValueError()
+        return data
+    except (ValueError, TypeError, KeyError, binascii.Error, UnicodeError, OverflowError, RecursionError):
+        raise Error("invalid_cursor", "Invalid read cursor. Start a new read without --cursor.")
+
+
+def budget_page(units, budget, position=(0, 0)):
+    index, offset = position
+    if index > len(units) or (index == len(units) and offset) or (index < len(units) and offset >= len(units[index]["text"])):
+        raise Error("invalid_cursor", "Read cursor position is outside this transcript.")
+    selected, used = [], 0
+    while index < len(units) and used < budget:
+        unit = units[index]
+        stop = min(len(unit["text"]), offset + budget - used)
+        selected.append(dict(unit, text=unit["text"][offset:stop], text_from=offset, text_to=stop,
+                             text_length=len(unit["text"]), partial=offset > 0 or stop < len(unit["text"])))
+        used += stop - offset
+        if stop == len(unit["text"]):
+            index, offset = index + 1, 0
+        else:
+            offset = stop
+    return selected, used, ([index, offset] if index < len(units) else None)
+
+
+def cited_passages(row, cues):
+    chapters = public_chapters(row)
+    return [dict(p, url=url_for(row["id"], p["start"]),
+                 chapters=[i + 1 for i, c in enumerate(chapters)
+                           if (p["end"] > c["start"] or p["start"] >= c["start"])
+                           and (c["end"] <= c["start"] or p["start"] < c["end"])])
+            for p in passages(cues)]
+
+
+def budget_metadata(max_chars, used):
+    return dict(max_chars=max_chars, used_chars=used, unit="unicode_characters", applies_to="excerpt_text_only")
+
+
+def returned_ranges(items):
+    return [dict(start=p["start"], end=p["end"], partial=p["partial"]) for p in items]
+
+
+def excerpt_text(items):
+    blocks = []
+    for p in items:
+        partial = f" (partial text {p['text_from']}:{p['text_to']} of {p['text_length']} characters)" if p["partial"] else ""
+        blocks.append(f"[{timestamp(p['start'])}]{partial} {p['text']}")
+    return "\n\n".join(blocks)
+
+
+def sha256_text(text):
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def indexed_passages(row, cues=None):
+    units = cited_passages(row, json.loads(row["cues_json"]) if cues is None else cues)
+    for i, unit in enumerate(units):
+        unit["passage_index"] = i
+        unit["passage_digest"] = sha256_text(unit["text"])
+    return units
+
+
+def bind_passage_identity(units, catalog):
+    lookup = {(p["start"], p["end"], p["text"]): p for p in catalog}
+    for unit in units:
+        match = lookup.get((unit["start"], unit["end"], unit["text"]))
+        if match:
+            unit["passage_index"] = match["passage_index"]
+            unit["passage_digest"] = match["passage_digest"]
+        else:
+            unit["passage_index"] = None
+            unit["passage_digest"] = sha256_text(unit["text"])
+
+
+def evidence_item(unit, video_id, snapshot):
+    item = {k: unit[k] for k in unit if k not in ("passage_index", "passage_digest", "video_id")}
+    text_from = unit.get("text_from", 0)
+    text_to = unit.get("text_to", len(unit["text"]))
+    passage_index = unit.get("passage_index")
+    passage_digest = unit.get("passage_digest") or sha256_text(unit["text"])
+    if passage_index is None:
+        item["id"] = f"{video_id}:{unit['start']}:{unit['end']}:{text_from}:{text_to}:{passage_digest[:12]}"
+    else:
+        item["id"] = f"{video_id}:p{passage_index}:{text_from}:{text_to}"
+    item["ref"] = dict(schema_version=REF_SCHEMA, video_id=video_id, source_snapshot=snapshot,
+                       passage_index=passage_index, passage_start=unit["start"], passage_end=unit["end"],
+                       passage_digest=passage_digest, text_from=text_from, text_to=text_to,
+                       digest=sha256_text(unit["text"]))
+    return item
+
+
+def overlap_window(start, end, item_start, item_end):
+    return (item_end > start or item_start >= start) and (end is None or item_start < end)
+
+
+def read_command(video_id, chapter=None, start=None, end=None, max_chars=None):
+    parts = ["ytmd", "read", video_id]
+    if chapter is not None:
+        parts += ["--chapter", str(chapter)]
+    elif start is not None:
+        start_i = max(0, math.floor(start))
+        parts += ["--from", str(start_i)]
+        if end is not None:
+            parts += ["--to", str(max(start_i + 1, math.ceil(end)))]
+    if max_chars is not None:
+        parts += ["--max-chars", str(max_chars)]
+    parts.append("--json")
+    return " ".join(parts)
+
+
+def generated_time_sections(duration):
+    if duration is None or duration <= 0 or not math.isfinite(duration):
+        return []
+    sections, start, number = [], 0.0, 1
+    while start < duration:
+        end = min(start + MAP_SECTION_SECONDS, duration)
+        sections.append(dict(number=number, title=f"{timestamp(start)}–{timestamp(end)}", start=start, end=end))
+        start, number = end, number + 1
+    return sections
+
+
+def fair_string_shares(lengths, budget):
+    n = len(lengths)
+    shares = [0] * n
+    if n == 0 or budget <= 0:
+        return shares
+    remaining = set(i for i, length in enumerate(lengths) if length)
+    leftover = budget
+    while leftover and remaining:
+        each, extra = leftover // len(remaining), leftover % len(remaining)
+        if each == 0:
+            for i in list(remaining):
+                if leftover <= 0:
+                    break
+                take = min(1, lengths[i] - shares[i])
+                shares[i] += take
+                leftover -= take
+                if shares[i] >= lengths[i]:
+                    remaining.discard(i)
+            continue
+        new_leftover = 0
+        for j, i in enumerate(list(remaining)):
+            grant = min(each + (1 if j < extra else 0), leftover)
+            take = min(grant, lengths[i] - shares[i])
+            shares[i] += take
+            leftover -= take
+            unused = grant - take
+            new_leftover += unused
+            if shares[i] >= lengths[i]:
+                remaining.discard(i)
+        leftover = new_leftover if new_leftover < leftover or remaining else 0
+    return shares
+
+
+def fair_budget_units(source_units, max_chars):
+    active = [(vid, units) for vid, units in source_units if units]
+    if not active or max_chars <= 0:
+        return [], 0, {}
+    by_id = {vid: units for vid, units in active}
+    selected = {vid: [] for vid, _ in active}
+    cursors = {vid: [0, 0] for vid, _ in active}
+    remaining = {vid for vid, _ in active}
+    used_total = 0
+
+    def take(vid, budget):
+        nonlocal used_total
+        if budget <= 0 or vid not in remaining:
+            return 0
+        page, got, nxt = budget_page(by_id[vid], budget, tuple(cursors[vid]))
+        selected[vid].extend(page)
+        used_total += got
+        if nxt is None or got == 0:
+            remaining.discard(vid)
+        else:
+            cursors[vid] = nxt
+        return got
+
+    leftover = max_chars
+    while leftover and remaining:
+        each, extra = leftover // len(remaining), leftover % len(remaining)
+        if each == 0:
+            for vid in list(remaining):
+                if leftover <= 0:
+                    break
+                leftover -= take(vid, 1)
+            continue
+        unused = 0
+        for j, vid in enumerate(list(remaining)):
+            grant = each + (1 if j < extra else 0)
+            unused += grant - take(vid, grant)
+        leftover = unused
+    omitted = {vid: vid in remaining for vid, _ in active}
+    evidence = []
+    for vid, _ in source_units:
+        evidence.extend(selected.get(vid, []))
+    return evidence, used_total, omitted
+
+
+def write_json_atomic(path, data, overwrite=False):
+    dest = Path(path).expanduser().resolve()
+    if dest.exists() and dest.is_dir():
+        raise Error("invalid_path", f"Refusing to overwrite directory {dest}.")
+    if dest.exists() and not overwrite:
+        raise Error("file_exists", f"Refusing to overwrite {dest}. Use --overwrite.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=dest.parent, prefix=".ytmd-", suffix=".json", delete=False) as f:
+            temporary = Path(f.name)
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, dest)
+    finally:
+        if temporary and temporary.exists():
+            temporary.unlink()
+    return str(dest)
+
+
+def load_json_file(path, code="invalid_bundle"):
+    dest = Path(path).expanduser().resolve()
+    if not dest.is_file():
+        raise Error("not_found", f"File not found: {path}")
+    if dest.stat().st_size > MAX_JSON_BYTES:
+        raise Error(code, "File is too large.")
+    try:
+        return json.loads(dest.read_text(encoding="utf-8-sig")), dest
+    except (OSError, UnicodeError, ValueError) as e:
+        raise Error(code, f"Malformed JSON: {e}")
+
+
+def cmd_read(args):
+    if args.cursor and (args.chapter is not None or args.start is not None or args.to is not None):
+        raise Error("usage", "--cursor cannot be combined with --chapter, --from, or --to.")
+    if args.chapter is not None and (args.start is not None or args.to is not None):
+        raise Error("usage", "Choose --chapter or a time range, not both.")
+    if args.to is not None and args.to <= (args.start or 0):
+        raise Error("invalid_range", "--to must be later than --from.")
+    cursor = decode_cursor(args.cursor) if args.cursor else None
+    with closing(connect()) as conn:
+        row = resolve(conn, args.video)
+    data = source_metadata(row)
+    scope = dict(start=args.start or 0, end=args.to, chapter=args.chapter)
+    position = [0, 0]
+    if cursor:
+        if cursor["id"] != row["id"]:
+            raise Error("invalid_cursor", "This cursor belongs to another video.")
+        if cursor["source"] != data["source_snapshot"]:
+            raise Error("stale_cursor", "Saved captions or metadata changed. Start a new read without --cursor.")
+        scope, position = cursor["scope"], cursor["position"]
+        if scope["chapter"] is not None:
+            if scope["chapter"] > len(data["chapters"]):
+                raise Error("invalid_cursor", "Cursor chapter is outside this transcript.")
+            chapter = data["chapters"][scope["chapter"] - 1]
+            end = chapter["end"] if chapter["end"] > chapter["start"] else None
+            if scope["start"] != chapter["start"] or scope["end"] != end:
+                raise Error("invalid_cursor", "Cursor chapter boundaries do not match this transcript.")
+    elif args.chapter is not None:
+        if args.chapter > len(data["chapters"]):
+            raise Error("invalid_chapter", f"Choose a chapter from 1 to {len(data['chapters'])}; use ytmd info {row['id']}.")
+        chapter = data["chapters"][args.chapter - 1]
+        scope.update(start=chapter["start"], end=chapter["end"] if chapter["end"] > chapter["start"] else None)
+    all_cues = json.loads(row["cues_json"])
+    scoped_cues = window(all_cues, scope["start"], scope["end"])
+    units = cited_passages(row, scoped_cues)
+    bind_passage_identity(units, indexed_passages(row, all_cues))
+    selected, used, next_position = budget_page(units, args.max_chars, position)
+    selected = [evidence_item(p, row["id"], data["source_snapshot"]) for p in selected]
+    next_cursor = encode_cursor(dict(v=1, id=row["id"], source=data["source_snapshot"], scope=scope, position=next_position)) if next_position else None
+    next_command = f"ytmd read {row['id']} --cursor {next_cursor} --max-chars {args.max_chars} --json" if next_cursor else None
+    data.update(scope=scope, passages=selected, returned_ranges=returned_ranges(selected),
+                budget=budget_metadata(args.max_chars, used), has_more=next_position is not None,
+                next_cursor=next_cursor, next_command=next_command,
+                omissions=dict(before_page=position != [0, 0], after_page=next_position is not None,
+                               outside_scope=len(scoped_cues) < len(all_cues)),
+                coverage_note="Returned source-passage ranges only, not proof of whole-video review. Partial text retains its original passage timestamps.")
+    text = f"# {row['title']}\n{row['url']}\nScope: {json.dumps(scope)}\n\n" + excerpt_text(selected)
+    text += f"\n\nExcerpt budget: {used}/{args.max_chars} characters (metadata excluded)."
+    text += "\n" + data["coverage_note"] + f"\nOmissions: {json.dumps(data['omissions'])}"
+    text += f"\nNext: {next_command}" if next_command else "\nEnd of requested scope; caption gaps may still exist."
+    output(data, args, text)
+
+
+def cmd_context(args):
+    if len(args.query) > 8 or any(len(q) > 200 or not re.findall(r"\w+", q) for q in args.query):
+        raise Error("invalid_query", "Use 1–8 queries of at most 200 characters, each containing a search word.")
+    with closing(connect()) as conn:
+        row = resolve(conn, args.video)
+    data = source_metadata(row)
+    results = []
+    for query in args.query:
+        results.append(search_results(argparse.Namespace(query=[query], match=args.match, video=row["id"],
+                       channel=None, limit=args.limit, diverse=False, context=0)))
+    # Round-robin query results: BM25 scores from different queries aren't comparable.
+    hits, seen, query_map = [], set(), {}
+    for rank in range(args.limit):
+        for query, found in zip(args.query, results):
+            if rank >= len(found):
+                continue
+            hit = found[rank]
+            identity = (hit["start"], hit["end"], hit["text"])
+            query_map.setdefault(identity, [])
+            if query not in query_map[identity]:
+                query_map[identity].append(query)
+            if identity not in seen:
+                seen.add(identity)
+                hits.append(hit)
+    # Reject mixed snapshots if another process replaced the track during retrieval.
+    with closing(connect()) as conn:
+        latest = resolve(conn, row["id"])
+    if source_metadata(latest)["source_snapshot"] != data["source_snapshot"]:
+        raise Error("source_changed", "Saved captions changed during retrieval. Run context again.")
+    cues = json.loads(row["cues_json"])
+    grouped = merge_search_context(hits, {row["id"]: cues}, args.context) if args.context else hits
+    units, used_cues = [], set()
+    for group in grouped:
+        matches = group.get("matches", [group])
+        selected_ids = {id(c) for m in matches for c in window(cues, max(0, m["start"] - args.context),
+                        m["end"] + args.context if m["end"] + args.context > m["start"] else math.nextafter(m["start"], math.inf))}
+        units.extend(cited_passages(row, [c for c in cues if id(c) in selected_ids - used_cues]))
+        used_cues.update(selected_ids)
+    bind_passage_identity(units, indexed_passages(row, cues))
+    evidence, used, rest = budget_page(units, args.max_chars)
+    evidence = [evidence_item(p, row["id"], data["source_snapshot"]) for p in evidence]
+    retrieval = [dict(start=h["start"], end=h["end"], url=h["url"], queries=query_map[(h["start"], h["end"], h["text"])]) for h in hits]
+    follow_up = None
+    if rest:
+        unit = units[rest[0]]
+        end = max(math.ceil(unit["end"]), math.floor(unit["start"]) + 1)
+        follow_up = f"ytmd read {row['id']} --from {math.floor(unit['start'])} --to {end} --max-chars {args.max_chars} --json"
+    data.update(queries=args.query, match=args.match, evidence=evidence, retrieval_hits=retrieval,
+                budget=budget_metadata(args.max_chars, used), returned_ranges=returned_ranges(evidence),
+                omissions=dict(candidate_limit_per_query=args.limit, unmatched_queries=[q for q, found in zip(args.query, results) if not found],
+                               omitted_passages=len(units) - len(evidence), partial_passages=sum(p["partial"] for p in evidence),
+                               budget_exhausted=rest is not None, selection_is_exhaustive=False),
+                next_command=follow_up,
+                coverage_note="Lexical evidence selection, not a summary or full-video review. Retrieval hits are navigation hints, not necessarily included in the budgeted evidence. Partial text retains source-passage timestamps.")
+    text = f"# Evidence: {row['title']}\n{row['url']}\n\n" + excerpt_text(evidence)
+    text += f"\n\nExcerpt budget: {used}/{args.max_chars} characters (metadata excluded).\n{data['coverage_note']}\nOmissions: {json.dumps(data['omissions'], ensure_ascii=False)}"
+    if follow_up:
+        text += f"\nNext: {follow_up}"
+    output(data, args, text)
+
+
+def hits_for_video(conn, video_id, query, match, limit):
+    rows = conn.execute(SEARCH_SQL + " LIMIT ?", (lexical_query(query, match), video_id, video_id, None, None, limit)).fetchall()
+    return [dict(r, url=url_for(r["video_id"], r["start"])) for r in rows]
+
+
+def matching_library_ids(conn, queries, match):
+    found = []
+    seen = set()
+    for query in queries:
+        sql = """SELECT DISTINCT v.id FROM passages_fts JOIN passages p ON p.id=passages_fts.rowid
+            JOIN videos v ON v.id=p.video_id WHERE passages_fts MATCH ? ORDER BY v.id"""
+        for row in conn.execute(sql, (lexical_query(query, match),)):
+            if row["id"] not in seen:
+                seen.add(row["id"])
+                found.append(row["id"])
+    return found
+
+
+def bundle_units_from_hits(row, catalog, hits, context_seconds):
+    cues = json.loads(row["cues_json"])
+    if not hits:
+        return []
+    grouped = merge_search_context(hits, {row["id"]: cues}, context_seconds) if context_seconds else hits
+    selected, seen = [], set()
+    for group in grouped:
+        matches = group.get("matches", [group])
+        for m in matches:
+            start = max(0, m["start"] - context_seconds)
+            end = m["end"] + context_seconds if m["end"] + context_seconds > m["start"] else math.nextafter(m["start"], math.inf)
+            for passage in catalog:
+                if passage["passage_index"] in seen:
+                    continue
+                if overlap_window(start, end, passage["start"], passage["end"]):
+                    seen.add(passage["passage_index"])
+                    selected.append(dict(passage, video_id=row["id"]))
+    selected.sort(key=lambda p: (p["start"], p["passage_index"]))
+    return selected
+
+
+def cmd_map(args):
+    with closing(connect()) as conn:
+        row = resolve(conn, args.video)
+    data = source_metadata(row)
+    cues = json.loads(row["cues_json"])
+    chapters = data["chapters"]
+    if chapters:
+        section_kind = "publisher_chapters"
+        raw = [dict(number=c["number"], title=c["title"], start=c["start"], end=c["end"]) for c in chapters]
+    else:
+        section_kind = "generated_time_sections"
+        duration = row["duration_s"]
+        if duration is None and cues:
+            duration = max(c["end"] for c in cues)
+        raw = generated_time_sections(duration)
+    total = len(raw)
+    page = raw[args.offset:args.offset + args.limit]
+    streams = [" ".join(p["text"] for p in passages(window(cues, s["start"], s["end"] if s["end"] > s["start"] else None))) for s in page]
+    shares = fair_string_shares([len(s) for s in streams], args.max_chars)
+    sections = []
+    used = 0
+    for section, stream, share in zip(page, streams, shares):
+        preview = stream[:share]
+        used += len(preview)
+        end = section["end"] if section["end"] > section["start"] else None
+        item = dict(number=section["number"], title=section["title"], start=section["start"], end=section["end"],
+                    caption_chars=sum(len(c["text"]) for c in window(cues, section["start"], end)),
+                    preview=preview, preview_truncated=len(preview) < len(stream),
+                    empty=not stream)
+        if section_kind == "publisher_chapters":
+            item["read_command"] = read_command(row["id"], chapter=section["number"])
+        else:
+            item["read_command"] = read_command(row["id"], start=section["start"], end=section["end"])
+        sections.append(item)
+    has_more = args.offset + len(page) < total
+    next_command = f"ytmd map {row['id']} --offset {args.offset + args.limit} --limit {args.limit} --max-chars {args.max_chars} --json" if has_more else None
+    data.update(schema_version=MAP_SCHEMA, video_id=row["id"], section_kind=section_kind, sections=sections,
+                total_sections=total, offset=args.offset, limit=args.limit, has_more=has_more, next_command=next_command,
+                preview_budget=budget_metadata(args.max_chars, used),
+                coverage_note="Section previews are opening excerpts, not summaries or proof of whole-video review. Generated time sections are not publisher chapters.")
+    lines = [f"# {row['title']}", row["url"], "", f"{section_kind.replace('_', ' ')} ({total}):"]
+    for s in sections:
+        lines.append(f"  {s['number']}. {timestamp(s['start'])}  {s['title']}  ({s['caption_chars']} chars)")
+        lines.append(f"     {s['read_command']}")
+    if not sections:
+        lines.append("  No caption sections in this range.")
+    lines += ["", data["coverage_note"], f"Preview budget: {used}/{args.max_chars} characters (metadata excluded)."]
+    if next_command:
+        lines.append("Next: " + next_command)
+    output(data, args, "\n".join(lines))
+
+
+def validate_queries(queries):
+    if not queries or len(queries) > 8 or any(len(q) > 200 or not re.findall(r"\w+", q) for q in queries):
+        raise Error("invalid_query", "Use 1–8 queries of at most 200 characters, each containing a search word.")
+
+
+def cmd_bundle(args):
+    validate_queries(args.query)
+    if bool(args.library) == bool(args.videos):
+        raise Error("usage", "Pass explicit saved videos or --library, not both.")
+    if args.videos and len(args.videos) > MAX_BUNDLE_SOURCES:
+        raise Error("usage", f"Pass at most {MAX_BUNDLE_SOURCES} videos, or use --library.")
+    if args.out:
+        dest = Path(args.out).expanduser()
+        if dest.exists() and dest.is_dir():
+            raise Error("invalid_path", f"Refusing to overwrite directory {dest}.")
+        if dest.exists() and not args.overwrite:
+            raise Error("file_exists", f"Refusing to overwrite {dest}. Use --overwrite.")
+    with closing(connect()) as conn:
+        with conn:
+            omitted_matching_sources = 0
+            if args.library:
+                matched = matching_library_ids(conn, args.query, args.match)
+                omitted_matching_sources = max(0, len(matched) - MAX_BUNDLE_SOURCES)
+                ids = matched[:MAX_BUNDLE_SOURCES]
+                rows = [dict(conn.execute("SELECT * FROM videos WHERE id=?", (key,)).fetchone()) for key in ids]
+                mode = "library"
+            else:
+                seen, rows = set(), []
+                for selector in args.videos:
+                    row = resolve(conn, selector)
+                    if row["id"] in seen:
+                        continue
+                    seen.add(row["id"])
+                    rows.append(row)
+                ids = [row["id"] for row in rows]
+                mode = "explicit"
+            snapshots, catalogs, source_hits = [], {}, {}
+            for row in rows:
+                meta = source_metadata(row)
+                snapshots.append((row, meta))
+                catalogs[row["id"]] = indexed_passages(row)
+                source_hits[row["id"]] = {query: hits_for_video(conn, row["id"], query, args.match, args.limit) for query in args.query}
+            latest = {}
+            for row, _ in snapshots:
+                current = conn.execute("SELECT * FROM videos WHERE id=?", (row["id"],)).fetchone()
+                latest[row["id"]] = source_metadata(dict(current))["source_snapshot"]
+    for row, meta in snapshots:
+        if latest[row["id"]] != meta["source_snapshot"]:
+            raise Error("source_changed", "Saved captions changed during retrieval. Run bundle again.")
+    source_units, source_results = [], []
+    query_hits = {query: False for query in args.query}
+    for row, meta in snapshots:
+        hits, query_map, seen, unmatched_here, counts = [], {}, set(), [], {}
+        for rank in range(args.limit):
+            for query in args.query:
+                found = source_hits[row["id"]][query]
+                if rank == 0:
+                    counts[query] = len(found)
+                    if found:
+                        query_hits[query] = True
+                    else:
+                        unmatched_here.append(query)
+                if rank >= len(found):
+                    continue
+                hit = found[rank]
+                identity = (hit["start"], hit["end"], hit["text"])
+                query_map.setdefault(identity, [])
+                if query not in query_map[identity]:
+                    query_map[identity].append(query)
+                if identity not in seen:
+                    seen.add(identity)
+                    hits.append(hit)
+        units = bundle_units_from_hits(row, catalogs[row["id"]], hits, args.context)
+        source_units.append((row["id"], units))
+        source_results.append(dict(video_id=row["id"], unmatched_queries=unmatched_here, candidate_counts=counts,
+                                   retrieval_hits=[dict(start=h["start"], end=h["end"], url=h["url"],
+                                                        queries=query_map[(h["start"], h["end"], h["text"])]) for h in hits]))
+    unmatched = [query for query, found in query_hits.items() if not found]
+    selected, used, omitted_budget = fair_budget_units(source_units, args.max_chars)
+    evidence, source_omitted = [], []
+    for row, meta in snapshots:
+        items = [p for p in selected if p.get("video_id") == row["id"]]
+        finalized = [evidence_item(p, row["id"], meta["source_snapshot"]) for p in items]
+        evidence.extend(finalized)
+        result = next(r for r in source_results if r["video_id"] == row["id"])
+        result.update(omitted_by_budget=bool(omitted_budget.get(row["id"])),
+                      partial_passages=sum(p["partial"] for p in finalized), returned_passages=len(finalized), next_command=None)
+        if omitted_budget.get(row["id"]):
+            source_omitted.append(row["id"])
+            follow = items[-1] if items else None
+            if follow is None:
+                unused = next(units for vid, units in source_units if vid == row["id"])
+                follow = unused[0] if unused else None
+            if follow:
+                result["next_command"] = read_command(row["id"], start=follow["start"], end=follow["end"], max_chars=args.max_chars)
+    sources = []
+    for row, meta in snapshots:
+        source = {k: meta[k] for k in ("id", "title", "url", "channel", "duration_s", "lang", "captions", "caption_format", "source_snapshot")}
+        source["chapters"] = meta["chapters"]
+        sources.append(source)
+    data = dict(schema_version=BUNDLE_SCHEMA, kind="ytmd_evidence_bundle",
+                scope=dict(mode=mode, video_ids=ids), queries=args.query, match=args.match, context=args.context,
+                sources=sources, evidence=evidence,
+                retrieval=dict(candidate_limit_per_query_per_source=args.limit, unmatched_queries=unmatched,
+                               omitted_matching_sources=omitted_matching_sources, source_results=source_results),
+                budget=budget_metadata(args.max_chars, used),
+                omissions=dict(selection_is_exhaustive=False,
+                               budget_exhausted=bool(source_omitted),
+                               sources_omitted_by_budget=source_omitted,
+                               omitted_matching_sources=omitted_matching_sources),
+                coverage_note="Lexical evidence selection across an explicit source set, not a summary or full-video review. No matches does not prove a topic is absent. Saved bundles are local artifacts, not authenticity proofs.")
+    if args.out:
+        data["path"] = write_json_atomic(args.out, data, overwrite=args.overwrite)
+    text = f"# Evidence bundle\nSources: {', '.join(ids) or '(none)'}\nQueries: {', '.join(args.query)}\n\n" + excerpt_text(evidence)
+    text += f"\n\nExcerpt budget: {used}/{args.max_chars} characters (metadata excluded).\n{data['coverage_note']}\nOmissions: {json.dumps(data['omissions'], ensure_ascii=False)}"
+    output(data, args, text)
+
+
+def lookup_passage(row, ref):
+    catalog = indexed_passages(row)
+    index = ref.get("passage_index")
+    if isinstance(index, int) and 0 <= index < len(catalog):
+        passage = catalog[index]
+        if passage["start"] == ref.get("passage_start") and passage["end"] == ref.get("passage_end") and passage["passage_digest"] == ref.get("passage_digest"):
+            return passage
+        raise Error("invalid_reference", "Evidence reference does not match the saved passage.")
+    for passage in catalog:
+        if passage["start"] == ref.get("passage_start") and passage["end"] == ref.get("passage_end") and passage["passage_digest"] == ref.get("passage_digest"):
+            return passage
+    raise Error("invalid_reference", "Evidence reference does not match a saved passage.")
+
+
+def verify_evidence_item(item, rows):
+    ref = item.get("ref") if isinstance(item, dict) else None
+    if not isinstance(ref, dict):
+        return dict(id=item.get("id") if isinstance(item, dict) else None, code="invalid_reference", message="Missing evidence reference.")
+    video_id = ref.get("video_id")
+    if video_id not in rows:
+        return dict(id=item.get("id"), code="source_missing", message=f"Source {video_id} is not in the local library.")
+    row = rows[video_id]
+    meta = source_metadata(row)
+    if meta["source_snapshot"] != ref.get("source_snapshot"):
+        return dict(id=item.get("id"), code="source_stale", message=f"Saved captions for {video_id} changed since this evidence was captured.")
+    try:
+        passage = lookup_passage(row, ref)
+    except Error as e:
+        return dict(id=item.get("id"), code=e.code, message=e.message)
+    start, end = ref.get("text_from"), ref.get("text_to")
+    if type(start) is not int or type(end) is not int or start < 0 or end < start or end > len(passage["text"]):
+        return dict(id=item.get("id"), code="invalid_reference", message="Evidence offsets are invalid.")
+    slice_text = passage["text"][start:end]
+    if slice_text != item.get("text"):
+        return dict(id=item.get("id"), code="excerpt_mismatch", message="Returned excerpt does not match the saved passage slice.")
+    if sha256_text(item["text"]) != ref.get("digest") or sha256_text(passage["text"]) != ref.get("passage_digest"):
+        return dict(id=item.get("id"), code="excerpt_mismatch", message="Evidence digest does not match the excerpt text.")
+    expected_url = url_for(video_id, passage["start"])
+    if item.get("url") != expected_url:
+        return dict(id=item.get("id"), code="invalid_reference", message="Timestamp URL does not match the referenced source passage.")
+    return None
+
+
+def cmd_verify(args):
+    bundle, _ = load_json_file(args.bundle)
+    if not isinstance(bundle, dict) or bundle.get("kind") != "ytmd_evidence_bundle" or bundle.get("schema_version") != BUNDLE_SCHEMA:
+        raise Error("invalid_bundle", "Not a ytmd evidence bundle.")
+    evidence = bundle.get("evidence")
+    if not isinstance(evidence, list):
+        raise Error("invalid_bundle", "Bundle evidence must be a list.")
+    ids = []
+    seen = set()
+    for item in evidence:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise Error("invalid_bundle", "Every evidence item needs a string id.")
+        if item["id"] in seen:
+            raise Error("invalid_bundle", f"Duplicate evidence id {item['id']}.")
+        seen.add(item["id"])
+        ids.append(item["id"])
+        ref = item.get("ref")
+        if not isinstance(ref, dict) or ref.get("schema_version") != REF_SCHEMA:
+            raise Error("invalid_bundle", "Evidence reference schema is invalid.")
+    needed = []
+    for item in evidence:
+        key = item.get("ref", {}).get("video_id")
+        if isinstance(key, str) and key not in needed:
+            needed.append(key)
+    with closing(connect()) as conn:
+        rows = {}
+        for key in needed:
+            found = conn.execute("SELECT * FROM videos WHERE id=?", (key,)).fetchone() if ID.fullmatch(key or "") else None
+            if found:
+                rows[key] = dict(found)
+    integrity, library_failures, quotes = [], [], []
+    for item in evidence:
+        failure = verify_evidence_item(item, rows)
+        if failure:
+            if failure["code"] in ("invalid_reference",):
+                integrity.append(failure)
+            else:
+                library_failures.append(failure)
+        else:
+            # digest/offset self-check already in verify_evidence_item; record integrity issue if self-inconsistent even before library
+            pass
+    claims_report = []
+    if args.claims:
+        claims, _ = load_json_file(args.claims, code="invalid_bundle")
+        if not isinstance(claims, dict) or claims.get("schema_version") != 1 or not isinstance(claims.get("quotes"), list):
+            raise Error("invalid_bundle", "Claims file must be schema_version 1 with a quotes list.")
+        by_id = {item["id"]: item for item in evidence}
+        for entry in claims["quotes"]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("evidence_id"), str) or not isinstance(entry.get("quote"), str):
+                claims_report.append(dict(evidence_id=None, code="invalid_reference", message="Each claim needs evidence_id and quote strings."))
+                continue
+            item = by_id.get(entry["evidence_id"])
+            if item is None:
+                claims_report.append(dict(evidence_id=entry["evidence_id"], code="invalid_reference", message="Quote refers to an evidence id that is not in the bundle."))
+            elif entry["quote"] not in item.get("text", ""):
+                claims_report.append(dict(evidence_id=entry["evidence_id"], code="quote_not_in_evidence", message="Quote is not an exact contiguous substring of the referenced excerpt."))
+            else:
+                claims_report.append(dict(evidence_id=entry["evidence_id"], code="ok", message="Exact quote present in referenced excerpt."))
+    ok = not integrity and not library_failures and all(c.get("code") == "ok" for c in claims_report)
+    data = dict(schema_version=1, kind="ytmd_verification", ok=ok,
+                bundle_integrity=dict(ok=not integrity, failures=integrity),
+                library_match=dict(ok=not library_failures, failures=library_failures),
+                quotes=dict(checked=bool(args.claims), failures=[c for c in claims_report if c.get("code") != "ok"], results=claims_report),
+                coverage_note="Source-text verification only. This does not certify speaker facts, paraphrases, or that enough of the video was read.")
+    lines = ["verified" if ok else "verification failed", data["coverage_note"]]
+    for group, label in ((integrity, "integrity"), (library_failures, "library"), ([c for c in claims_report if c.get("code") != "ok"], "quotes")):
+        for failure in group:
+            lines.append(f"{label}: {failure.get('code')}: {failure.get('id') or failure.get('evidence_id')}: {failure.get('message')}")
+    output(data, args, "\n".join(lines))
+    return 0 if ok else 1
+
+
+def cmd_show(args):
+    check_range(args)
+    with closing(connect()) as conn:
+        row = resolve(conn, args.video)
+    print_transcript(row, args)
+
+
+def cmd_info(args):
+    with closing(connect()) as conn:
+        row = resolve(conn, args.video)
+    chapters = [dict(c, number=i + 1) for i, c in enumerate(public_chapters(row))]
+    data = {k: row[k] for k in ("id", "title", "url", "channel", "uploaded_at", "duration_s", "captions", "lang", "caption_format", "ingested_at")}
+    data.update(path=str(library() / f"{row['id']}.md"), chapters=chapters)
+    details = " · ".join(x for x in (row["channel"] or None, timestamp(row["duration_s"]) if row["duration_s"] is not None else None, f"{row['captions']} {row['lang']}".strip()) if x)
+    lines = [f"# {row['title']}", row["url"], "", details]
+    if chapters:
+        lines += ["", f"Chapters (use ytmd read {row['id']} --chapter NUMBER):"] + [f"  {i + 1}. {timestamp(c['start'])}  {c['title']}" for i, c in enumerate(chapters)]
+    else:
+        lines += ["", f"No chapters found. Read: ytmd show {row['id']} --from 0:00 --to 1:00"]
+    output(data, args, "\n".join(lines))
+
+
+def cmd_list(args):
+    literal = (args.query or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    term = "%" + literal + "%"
+    with closing(connect()) as conn:
+        rows = [dict(r) for r in conn.execute("""SELECT id,title,channel,url,lang,captions,duration_s,uploaded_at,ingested_at FROM videos
+            WHERE title LIKE ? ESCAPE '\\' OR channel LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\'
+            ORDER BY ingested_at DESC,id LIMIT ? OFFSET ?""", (term, term, term, args.limit, args.offset))]
+    for row in rows:
+        row["path"] = str(library() / f"{row['id']}.md")
+    output(rows, args, "\n".join(f"{r['id']}  {r['title']}\n  {r['channel'] or 'Unknown channel'} · {r['lang'] or '?'} · {timestamp(r['duration_s']) if r['duration_s'] is not None else 'Unknown duration'}" for r in rows) or "No saved videos match this page. Run: ytmd list or ytmd URL")
+
+
+def cmd_export(args):
+    with closing(connect()) as conn:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM videos")]
+    files = [write_markdown(row, args.directory) for row in rows]
+    output(dict(files=files), args, f"Exported {len(files)} markdown files.")
+
+
+def cmd_rm(args):
+    if not ID.fullmatch(args.video):
+        raise Error("invalid_video", "Deletion requires the exact 11-character video ID.")
+    with closing(connect()) as conn:
+        row = resolve(conn, args.video)
+        with conn:
+            conn.execute("DELETE FROM videos WHERE id=?", (row["id"],))
+    for path in [library() / f"{row['id']}.md", *library().glob(f"{row['id']}-*.md")]:
+        if path.exists():
+            path.unlink()
+    output(dict(status="removed", id=row["id"]), args, f"Removed {row['id']}")
+
+
+def parse_caption_file(path):
+    dest = Path(path).expanduser().resolve()
+    if not dest.is_file():
+        raise Error("not_found", f"File not found: {path}")
+    if dest.stat().st_size > MAX_JSON_BYTES:
+        raise Error("invalid_captions", "Caption file is too large.")
+    try:
+        raw = dest.read_text(encoding="utf-8-sig")
+    except UnicodeError as e:
+        raise Error("invalid_captions", f"Caption file is not UTF-8: {e}")
+    suffix = dest.suffix.lower()
+    start = raw.lstrip()
+    if suffix in (".json3", ".json") or start.startswith("{"):
+        return parse_json3(raw), raw, "json3"
+    if suffix == ".srt":
+        return parse_srt(raw), raw, "srt"
+    if suffix in (".vtt", ".webvtt") or start.startswith("WEBVTT"):
+        return parse_vtt(raw), raw, "vtt"
+    if re.search(rf"{SRT_CLOCK}\s+-->", raw):
+        return parse_srt(raw), raw, "srt"
+    raise Error("invalid_captions", "Import VTT, JSON3, or SRT caption files.")
+
+
+def cmd_import(args):
+    key = video_id(args.video)
+    cues, raw, fmt = parse_caption_file(args.path)
+    if not cues:
+        raise Error("invalid_captions", "Caption file contained no timed text.")
+    with closing(connect()) as conn:
+        existing = conn.execute("SELECT * FROM videos WHERE id=?", (key,)).fetchone()
+    if existing and not args.force:
+        raise Error("already_saved", "A saved track already exists for this ID. Use --force to replace it.")
+    derived = args.duration is None
+    duration = int(args.duration) if args.duration is not None else int(math.ceil(max(c["end"] for c in cues)))
+    row = dict(id=key, title=args.title or key, channel=args.channel or "", url=url_for(key), uploaded_at="",
+               duration_s=duration, description="",
+               captions="user_supplied", lang=args.lang, ingested_at=datetime.now(timezone.utc).isoformat(),
+               transcript=transcript(cues), cues_json=json.dumps(cues, ensure_ascii=False), raw_captions=raw,
+               caption_format=fmt, chapters_json=None)
+    with closing(connect()) as conn:
+        save(conn, row)
+    path = write_markdown(row)
+    data = dict(status="replaced" if existing else "imported", id=key, title=row["title"], url=row["url"], path=path,
+                captions=row["captions"], lang=row["lang"], duration_s=row["duration_s"], duration_derived=derived,
+                caption_format=fmt, chapters=[])
+    output(data, args, f"{data['status']}: {row['title']}\n{path}\nUser-supplied {fmt} captions; not publisher provenance.")
+
+
+def executable_paths(name):
+    """List distinct executable paths in PATH order, retaining symlink locations."""
+    paths = []
+    for directory in os.get_exec_path():
+        candidate = os.path.abspath(os.path.join(directory, name))
+        if candidate not in paths and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            paths.append(candidate)
+    return paths
+
+
+def ytdlp_diagnostics(binary):
+    version, age = None, None
+    warnings = []
+    if not binary:
+        return version, age, warnings
+    try:
+        result = subprocess.run([binary, "--ignore-config", "--version"], capture_output=True, text=True, timeout=5)
+        if result.returncode or not result.stdout.strip():
+            raise ValueError("version command failed or returned no version")
+        version = result.stdout.strip().splitlines()[0][:200]
+        match = re.match(r"^(\d{4}\.\d{2}\.\d{2})(?:\D|$)", version)
+        if not match:
+            raise ValueError("version has no recognizable release date")
+        released = datetime.strptime(match[1], "%Y.%m.%d").date()
+        age = max(0, (datetime.now(timezone.utc).date() - released).days)
+        if age > 90:
+            warnings.append(dict(code="yt_dlp_outdated", message=f"yt-dlp {version} is {age} days old. Consider updating with the package manager used to install it; no update was performed."))
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        warnings.append(dict(code="yt_dlp_version_unknown", message=f"Could not determine yt-dlp release age ({e}). Check the yt-dlp installation."))
+    return version, age, warnings
+
+
+def cmd_doctor(args):
+    with closing(sqlite3.connect(":memory:")) as conn:
+        try:
+            conn.execute("CREATE VIRTUAL TABLE test USING fts5(text)")
+            fts = True
+        except sqlite3.OperationalError:
+            fts = False
+    data = dict(version=VERSION, python=sys.version.split()[0], fts5=fts, yt_dlp=shutil.which("yt-dlp"), library=str(library()))
+    version, age, warnings = ytdlp_diagnostics(data["yt_dlp"])
+    paths = [dict(path=p, resolved=str(Path(p).resolve())) for p in executable_paths("ytmd")]
+    if len({p["resolved"] for p in paths}) > 1:
+        warnings.append(dict(code="multiple_installations", message=f"Multiple ytmd installations are on PATH. Bare 'ytmd' selects {paths[0]['path']}; compare it with executable below before updating."))
+    data.update(executable=str(Path(__file__).resolve()), ytmd_on_path=paths,
+                yt_dlp_version=version, yt_dlp_age_days=age, warnings=warnings)
+    # Warnings are advisory, not a network-health check or an automatic update.
+    data["ok"] = bool(fts and data["yt_dlp"] and sys.version_info >= (3, 9))
+    lines = [f"{k}: {v}" for k, v in data.items() if k not in ("ytmd_on_path", "warnings")]
+    if paths:
+        lines += ["ytmd on PATH (in order):"] + [f"  {p['path']} -> {p['resolved']}" for p in paths]
+    if warnings:
+        lines += ["Warnings (advisory):"] + [f"  {w['code']}: {w['message']}" for w in warnings]
+    output(data, args, "\n".join(lines))
+    return 0 if data["ok"] else 1
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message):
+        raise Error("usage", message)
+
+
+def positive(value):
+    try:
+        number = int(value)
+        if not 1 <= number <= 100:
+            raise ValueError()
+        return number
+    except ValueError:
+        raise argparse.ArgumentTypeError("limit must be an integer between 1 and 100")
+
+
+def add_limit_arg(value):
+    try:
+        number = int(value)
+        if not 1 <= number <= 25:
+            raise ValueError()
+        return number
+    except ValueError:
+        raise argparse.ArgumentTypeError("playlist/channel --limit must be an integer between 1 and 25")
+
+
+def time_arg(value):
+    try:
+        return seconds(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("use seconds, MM:SS or HH:MM:SS")
+
+
+def language_arg(value):
+    if not LANG.fullmatch(value):
+        raise argparse.ArgumentTypeError("specify one language code, e.g. en or de (not a regex or 'all')")
+    if value == "all":
+        raise argparse.ArgumentTypeError("choose one language, not 'all'")
+    return value
+
+
+def nonnegative(value):
+    try:
+        number = int(value)
+        if not 0 <= number <= 1000000000:
+            raise ValueError()
+        return number
+    except ValueError:
+        raise argparse.ArgumentTypeError("use a non-negative integer up to 1000000000")
+
+
+def context_arg(value):
+    number = nonnegative(value)
+    if number > 120:
+        raise argparse.ArgumentTypeError("context must be between 0 and 120 seconds")
+    return number
+
+
+def char_budget(value):
+    number = nonnegative(value)
+    if not 256 <= number <= 100000:
+        raise argparse.ArgumentTypeError("excerpt character budget must be between 256 and 100000")
+    return number
+
+
+def chapter_number(value):
+    number = nonnegative(value)
+    if not 1 <= number <= 10000:
+        raise argparse.ArgumentTypeError("chapter number must be between 1 and 10000")
+    return number
+
+
+def map_limit_arg(value):
+    number = nonnegative(value)
+    if not 1 <= number <= 500:
+        raise argparse.ArgumentTypeError("map limit must be between 1 and 500")
+    return number
+
+
+def parser():
+    p = Parser(description=__doc__, epilog="Save: ytmd add URL | Outline: ytmd map ID | Evidence: ytmd bundle ID ID --query WORDS | Verify: ytmd verify FILE. Library: ~/ytmd (override YTMD_DIR).")
+    p.add_argument("--version", action="version", version=f"ytmd {VERSION}")
+    sub = p.add_subparsers(dest="command", required=True)
+    for name, help_text, handler in [("add", "save captions for one or more videos", cmd_add), ("get", "save if needed, then print the transcript", cmd_get), ("search", "search timestamped passages", cmd_search), ("show", "read a video or time window", cmd_show), ("read", "budgeted chapter or sequential reading", cmd_read), ("context", "task-focused evidence from a saved video", cmd_context), ("map", "section map for a saved video", cmd_map), ("bundle", "multi-video evidence bundle", cmd_bundle), ("verify", "verify saved evidence and exact quotes", cmd_verify), ("import", "save local VTT, JSON3, or SRT captions", cmd_import), ("info", "metadata and chapters", cmd_info), ("list", "list saved videos", cmd_list), ("export", "rebuild markdown from SQLite", cmd_export), ("rm", "delete a saved video", cmd_rm), ("doctor", "check local dependencies", cmd_doctor), ("path", "print library location", None)]:
+        s = sub.add_parser(name, help=help_text, description=help_text)
+        formats = s.add_mutually_exclusive_group()
+        formats.add_argument("--json", action="store_true", help="machine-readable output (errors too)")
+        if name in ("get", "show"):
+            formats.add_argument("--plain", action="store_true", help="text only, without metadata or timestamps")
+            s.add_argument("--from", dest="start", type=time_arg, default=0.0)
+            s.add_argument("--to", type=time_arg)
+        s.set_defaults(handler=handler)
+        if name == "add":
+            s.add_argument("urls", nargs="+", metavar="url")
+            s.add_argument("--lang", type=language_arg, default=os.environ.get("YTMD_LANG"), help="one language; default: English then original/manual captions")
+            s.add_argument("--force", action="store_true", help="replace saved captions")
+            s.add_argument("--cookies-from-browser", help="explicit consent to read cookies from this browser")
+            s.add_argument("--limit", type=add_limit_arg, default=10, help="max videos from a playlist or channel (default 10, max 25)")
+        elif name == "get":
+            s.add_argument("url")
+            s.add_argument("--lang", type=language_arg, default=os.environ.get("YTMD_LANG"), help="one language; default: English then original/manual captions")
+            s.add_argument("--force", action="store_true", help="replace saved captions")
+            s.add_argument("--cookies-from-browser", help="explicit consent to read cookies from this browser")
+        elif name == "search":
+            s.add_argument("query", nargs="+")
+            s.add_argument("--video", help="restrict to this video ID/title")
+            s.add_argument("--channel", help="restrict to this exact channel name")
+            s.add_argument("-n", "--limit", type=positive, default=10, help="maximum selected matches before context merging (default 10)")
+            s.add_argument("--match", choices=("all", "any", "phrase"), default="all", help="match all query words (default), any of them, or the words as one phrase")
+            s.add_argument("--context", type=context_arg, default=0, metavar="SECONDS", help="include 0–120 seconds around each match; merge overlapping windows")
+            s.add_argument("--diverse", action="store_true", help="spread selected hits across videos, one per video per round")
+        elif name in ("read", "context"):
+            s.add_argument("video", help="saved video ID, URL, or unambiguous title")
+            s.add_argument("--max-chars", type=char_budget, default=8000, help="excerpt text budget; metadata excluded (default 8000)")
+            if name == "read":
+                s.add_argument("--chapter", type=chapter_number, help="1-based chapter number from info")
+                s.add_argument("--from", dest="start", type=time_arg)
+                s.add_argument("--to", type=time_arg)
+                s.add_argument("--cursor", help="resume the returned next_cursor; no scope flags")
+            else:
+                s.add_argument("--query", action="append", required=True, help="agent-supplied keywords; repeat up to 8 times")
+                s.add_argument("--match", choices=("all", "any", "phrase"), default="all")
+                s.add_argument("--context", type=context_arg, default=15, help="seconds around each selected hit (default 15)")
+                s.add_argument("-n", "--limit", type=positive, default=5, help="maximum selected hits per query (default 5)")
+        elif name == "map":
+            s.add_argument("video", help="saved video ID, URL, or unambiguous title")
+            s.add_argument("--max-chars", type=char_budget, default=4000, help="preview text budget across this page of sections (default 4000)")
+            s.add_argument("-n", "--limit", type=map_limit_arg, default=100, help="maximum sections on this page (default 100)")
+            s.add_argument("--offset", type=nonnegative, default=0)
+        elif name == "bundle":
+            s.add_argument("videos", nargs="*", metavar="video", help="saved video IDs, URLs, or unambiguous titles")
+            s.add_argument("--library", action="store_true", help="search the saved library instead of an explicit list")
+            s.add_argument("--query", action="append", required=True, help="agent-supplied keywords; repeat up to 8 times")
+            s.add_argument("--match", choices=("all", "any", "phrase"), default="all")
+            s.add_argument("--context", type=context_arg, default=15, help="seconds around each selected hit (default 15)")
+            s.add_argument("-n", "--limit", type=positive, default=5, help="maximum selected hits per query per source (default 5)")
+            s.add_argument("--max-chars", type=char_budget, default=12000, help="global excerpt text budget (default 12000)")
+            s.add_argument("--out", help="write the bundle JSON to this path")
+            s.add_argument("--overwrite", action="store_true", help="replace an existing --out file")
+        elif name == "verify":
+            s.add_argument("bundle", help="path to a saved evidence bundle JSON file")
+            s.add_argument("--claims", help="optional JSON file of exact quotes to check against the bundle")
+        elif name == "import":
+            s.add_argument("path", help="local VTT, JSON3, or SRT caption file")
+            s.add_argument("--video", required=True, help="YouTube video ID or URL to associate with these captions")
+            s.add_argument("--title", help="title stored with the imported source")
+            s.add_argument("--channel", default="", help="optional channel name")
+            s.add_argument("--lang", type=language_arg, default="en")
+            s.add_argument("--duration", type=time_arg, help="optional known duration; otherwise derived from captions")
+            s.add_argument("--force", action="store_true", help="replace a saved track")
+        elif name == "list":
+            s.add_argument("query", nargs="?", help="filter by title, channel, or ID (literal substring)")
+            s.add_argument("-n", "--limit", type=positive, default=50)
+            s.add_argument("--offset", type=nonnegative, default=0)
+        elif name in ("show", "rm", "info"):
+            s.add_argument("video")
+        elif name == "export":
+            s.add_argument("directory", nargs="?")
+    return p
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        if not argv:
+            parser().print_help()
+            return 0
+        if argv[0] == "help":
+            argv = argv[1:] + ["--help"]
+        if argv[0].startswith(("https://", "http://")) or ID.fullmatch(argv[0]):
+            argv.insert(0, "add")
+        args = parser().parse_args(argv)
+        if args.command == "path":
+            output(dict(library=str(library()), database=str(library() / "ytmd.db")), args, str(library()))
+            return 0
+        return args.handler(args) or 0
+    except Error as e:
+        error = e
+    except BrokenPipeError:
+        return 0
+    except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as e:
+        error = Error("operation_failed", str(e))
+    except KeyboardInterrupt:
+        error = Error("interrupted", "Cancelled.")
+    data = {"error": error_payload(error)}
+    if "--json" in argv:
+        print(json.dumps(data, ensure_ascii=False), file=sys.stderr)
+    else:
+        print(f"ytmd: {error.message}", file=sys.stderr)
+        if error.next_steps:
+            print(f"ytmd: next: {error.next_steps[0]['ask']}", file=sys.stderr)
+    return 2 if error.code == "usage" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

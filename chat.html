@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digest chat</title>
+<style>
+:root{--paper:#F4F6F9;--surface:#FFFFFF;--ink:#16202E;--muted:#5C6878;--line:#DCE2EA;--blue:#2447C5;--blue-soft:#E8EDFB;--red:#B42318;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Charter,"Iowan Old Style","Palatino Linotype",Georgia,serif}
+@media (prefers-color-scheme:dark){:root{--paper:#111822;--surface:#18212E;--ink:#E6EBF2;--muted:#94A1B3;--line:#2A3646;--blue:#9DB2FF;--blue-soft:#222E4A;--red:#FF8A80;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans);display:grid;grid-template-columns:260px minmax(0,1fr);overflow:hidden}
+button,select,textarea,input{font:inherit;color:inherit}
+button{background:none;border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+a{color:var(--blue)}
+
+aside{display:flex;flex-direction:column;gap:6px;padding:16px 10px;border-right:1px solid var(--line);overflow:auto;min-height:0}
+aside h1{font:600 18px/1.2 var(--serif);margin:2px 8px 12px}
+#newChat{margin:0 4px 10px;background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
+aside .label{font-size:12px;font-weight:600;color:var(--muted);margin:8px 8px 2px}
+.chatLink{display:block;width:100%;text-align:left;border:0;padding:7px 8px;line-height:1.35}
+.chatLink span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.chatLink:hover{background:var(--blue-soft)}
+.chatLink[aria-current="true"]{background:var(--blue-soft);color:var(--blue);font-weight:600}
+aside .empty{color:var(--muted);font-size:13px;padding:0 8px}
+
+main{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;height:100%}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.top label{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted)}
+.top select{max-width:340px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.top .sp{flex:1}
+#thread{overflow:auto;padding:24px}
+.col{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.q{align-self:flex-end;max-width:80%;background:var(--blue-soft);border-radius:10px;padding:10px 14px}
+.q .meta{font-size:12px;color:var(--muted)}
+.a{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 20px 16px}
+.a h3{font:600 17px/1.3 var(--serif);margin:16px 0 6px}
+.a p{margin:0 0 8px}.a ul{margin:0 0 8px;padding-left:20px}.a li{margin:3px 0}
+a.cite{font-size:12px;white-space:nowrap;text-decoration:none;background:var(--blue-soft);border-radius:4px;padding:1px 6px}
+a.cite:hover{text-decoration:underline}
+.src{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
+.src .label{font-weight:600;color:var(--muted);margin:0 0 4px}
+.src ol{margin:0;padding-left:20px}
+.sugg{width:100%;height:64px;border:0;margin-top:8px}
+.pending{color:var(--muted);font-style:italic}
+.welcome h2{font:600 24px/1.3 var(--serif);margin:24px 0 8px}
+.welcome p{color:var(--muted);margin:0 0 14px}
+.starter{display:block;width:100%;text-align:left;margin:0 0 8px;background:var(--surface)}
+
+.composer{padding:12px 24px 18px;background:var(--paper);border-top:1px solid var(--line)}
+.composer form{max-width:820px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+#q{flex:1;min-height:46px;max-height:180px;resize:vertical;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+#ask{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600;padding:11px 18px}
+#err{max-width:820px;margin:6px auto 0;color:var(--red);font-size:14px;min-height:1em}
+.hint{max-width:820px;margin:4px auto 0;color:var(--muted);font-size:12px}
+@media (max-width:760px){body{grid-template-columns:1fr;overflow:auto}aside{display:none}main{height:100vh}}
+</style></head>
+<body>
+<aside>
+  <h1>Digest chat</h1>
+  <button id="newChat">New chat</button>
+  <p class="label">Earlier chats</p>
+  <div id="chats"></div>
+</aside>
+<main>
+  <div class="top">
+    <label>Videos <select id="days" aria-label="Which videos to use">
+      <option value="3">Last 3 days</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="0">All saved videos</option>
+    </select></label>
+    <label><select id="video" aria-label="One video"><option value="">All videos in that range</option></select></label>
+    <label><input type="checkbox" id="web" checked> Also search the web</label>
+    <span class="sp"></span>
+    <button id="del" hidden>Delete chat</button>
+  </div>
+  <div id="thread"><div class="col" id="col"></div></div>
+  <div class="composer">
+    <form id="form">
+      <textarea id="q" placeholder="Ask about your videos, or compare them with what is happening now" aria-label="Your question"></textarea>
+      <button id="ask" type="submit">Ask</button>
+    </form>
+    <p id="err" role="alert"></p>
+    <p class="hint">Enter sends, Shift+Enter adds a line. Answers come from Gemini and can be wrong; check the linked moments and sources. Not investment advice.</p>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let state = { videos: [], chats: [] }, chat = null, busy = false, armed = false;
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const secs = t => t.split(':').reduce((a, n) => a * 60 + Number(n), 0);
+
+// Gemini writes citations like [V2 12:34], [V1 0:45, V3 2:10] or [V1 3:33, 10:13] (a bare time belongs to the video before it).
+// Each becomes a link to that moment; citations of videos that do not exist are dropped.
+function cites(html, videos) {
+  return html.replace(/\[(V\d+[^\]]*)\]/g, (whole, inner) => {
+    const found = [...inner.matchAll(/(?:V(\d+)\s*@?\s*)?((?:\d{1,2}:)?\d{1,2}:\d{2})/g)];
+    if (!found.length) return whole;
+    let n = null;
+    return found.map(([, num, t]) => {
+      n = num || n;
+      const v = n && videos && videos[n];
+      if (!v) return '';
+      return `<a class="cite" href="${esc(v.url)}&t=${secs(t)}s" target="_blank" rel="noopener" title="${esc(v.title || '')}">${esc((v.channel || 'Video ' + n))} ${t}</a>`;
+    }).join(' ');
+  });
+}
+function md(text, videos) {
+  const out = []; let list = false;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    const inline = s => cites(esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'), videos);
+    if (/^[-*]\s+/.test(line)) { if (!list) { out.push('<ul>'); list = true; } out.push('<li>' + inline(line.replace(/^[-*]\s+/, '')) + '</li>'); continue; }
+    if (list) { out.push('</ul>'); list = false; }
+    if (!line) continue;
+    if (/^#{1,4}\s+/.test(line)) out.push('<h3>' + inline(line.replace(/^#+\s+/, '')) + '</h3>');
+    else out.push('<p>' + inline(line) + '</p>');
+  }
+  if (list) out.push('</ul>');
+  return out.join('');
+}
+
+function renderChats() {
+  const box = $('chats'); box.textContent = '';
+  if (!state.chats.length) { const p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Your chats will be listed here.'; box.append(p); }
+  for (const c of state.chats) {
+    const b = document.createElement('button'), t = document.createElement('span'); b.className = 'chatLink'; t.textContent = c.title; b.append(t); b.title = c.title;
+    if (chat && chat.id === c.id) b.setAttribute('aria-current', 'true');
+    b.onclick = () => openChat(c.id);
+    box.append(b);
+  }
+}
+
+function renderThread(pendingQuestion) {
+  const col = $('col'); col.textContent = '';
+  $('del').hidden = !chat; armed = false; $('del').textContent = 'Delete chat';
+  if (!chat && !pendingQuestion) {
+    const w = document.createElement('div'); w.className = 'welcome';
+    w.innerHTML = '<h2>Ask about your digest</h2><p>Answers draw on the videos in your digest, with links to the exact moment, and on a web search for what has happened since.</p>';
+    ['What did my channels say about the market this week?', 'Which stocks came up most this week, and was each channel bullish or bearish on them?',
+     'Explain the points about Treasury yields in plain terms, and what yields are doing now.'].forEach(s => {
+      const b = document.createElement('button'); b.className = 'starter'; b.textContent = s; b.onclick = () => { $('q').value = s; $('q').focus(); }; w.append(b);
+    });
+    return col.append(w);
+  }
+  for (const m of (chat ? chat.messages : [])) {
+    if (m.role === 'you') {
+      const d = document.createElement('div'); d.className = 'q';
+      d.innerHTML = `<div>${esc(m.text)}</div><div class="meta">${esc(m.scope)}${m.web ? ', with web search' : ''}</div>`;
+      col.append(d);
+    } else {
+      const d = document.createElement('div'); d.className = 'a'; d.innerHTML = md(m.text, m.videos);
+      if (m.sources && m.sources.length) {
+        const s = document.createElement('div'); s.className = 'src';
+        s.innerHTML = '<p class="label">Web sources</p><ol>' + m.sources.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></li>`).join('') + '</ol>';
+        d.append(s);
+      }
+      if (m.suggestions) {   // Google's search suggestions, shown as Google requires, kept in a sandbox
+        const f = document.createElement('iframe'); f.className = 'sugg'; f.title = 'Google search suggestions';
+        f.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox'); f.srcdoc = m.suggestions; d.append(f);
+      }
+      col.append(d);
+    }
+  }
+  if (pendingQuestion) {
+    const q = document.createElement('div'); q.className = 'q'; q.textContent = pendingQuestion; col.append(q);
+    const p = document.createElement('div'); p.className = 'a pending'; p.innerHTML = '<p>Reading your videos' + ($('web').checked ? ' and searching the web' : '') + '. This can take up to a minute.</p>'; col.append(p);
+  }
+  $('thread').scrollTop = $('thread').scrollHeight;
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const data = await r.json().catch(() => ({ error: 'The chat page stopped responding. Is the black chat window still open?' }));
+  if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+  return data;
+}
+async function refresh() {
+  state = await api('/api/state');
+  const sel = $('video'), keep = sel.value || new URLSearchParams(location.search).get('video') || '';
+  sel.length = 1;
+  for (const v of state.videos) { const o = document.createElement('option'); o.value = v.id; o.textContent = `${v.date}  ${v.channel || ''}: ${v.title}`.slice(0, 90); sel.append(o); }
+  sel.value = state.videos.some(v => v.id === keep) ? keep : '';
+  $('days').disabled = !!sel.value;
+  renderChats();
+}
+async function openChat(id) {
+  try { chat = await api('/api/chat?id=' + encodeURIComponent(id)); $('err').textContent = ''; }
+  catch (e) { $('err').textContent = e.message; chat = null; }
+  renderChats(); renderThread();
+}
+
+$('form').onsubmit = async ev => {
+  ev.preventDefault();
+  const question = $('q').value.trim();
+  if (busy) return;
+  if (!question) { $('err').textContent = 'Type a question first.'; return; }
+  busy = true; $('ask').disabled = true; $('err').textContent = ''; renderThread(question);
+  try {
+    chat = await api('/api/ask', { chat: chat && chat.id, question, days: Number($('days').value), video: $('video').value, web: $('web').checked });
+    $('q').value = ''; await refresh();
+  } catch (e) { $('err').textContent = e.message; }
+  busy = false; $('ask').disabled = false; renderThread(); $('q').focus();
+};
+$('q').onkeydown = ev => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $('form').requestSubmit(); } };
+$('q').oninput = () => { if ($('err').textContent === 'Type a question first.') $('err').textContent = ''; };
+$('video').onchange = () => { $('days').disabled = !!$('video').value; };
+$('newChat').onclick = () => { chat = null; $('err').textContent = ''; renderChats(); renderThread(); $('q').focus(); };
+$('del').onclick = async () => {
+  if (!armed) { armed = true; $('del').textContent = 'Click again to delete'; setTimeout(() => { armed = false; $('del').textContent = 'Delete chat'; }, 4000); return; }
+  try { await api('/api/delete', { id: chat.id }); chat = null; await refresh(); renderThread(); } catch (e) { $('err').textContent = e.message; }
+};
+refresh().then(() => renderThread()).catch(e => { $('err').textContent = e.message; renderThread(); });
+</script>
+</body></html>
