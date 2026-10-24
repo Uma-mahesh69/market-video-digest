@@ -73,8 +73,17 @@ a plain-language summary.
    Video numbers are validated by code.
 6. **Render** (`render`): HTML built in code from the notes. The stock table is grouped by ticker in code, not
    written by the model. Unclear figures are marked "(check)". All text is HTML-escaped.
-7. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
-8. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
+7. **JSON copy** (`digest_export.py`): the same content saved as `video-digest_YYYY-MM-DD.json` in `json_dir`
+   (default `digest_json\`), for the Econova Dashboard Hub. The shape is fixed by `digest_schema.json` (schema 1.0):
+   videos, one `mentions` row per stock call, themes, debates with sides, levels and upcoming events, each with its
+   video number and timestamp. Stock names are merged into tickers with `tickers.json`; a name with no entry gets
+   `ticker: null` and a line in `digest.log`. The file is checked against the schema before saving; on any problem
+   nothing is written and the reason is logged with the date. A day with no new videos still writes a file with
+   `video_count: 0`, but never over an earlier file from the same day that had videos. `--dry-run` and `--video`
+   write to `digests\` instead, so a test cannot replace the real day's file. Scoring (mood, consensus, upside) is
+   done by the hub, not here.
+8. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
+9. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
    out. If sending fails, nothing is marked, and the run exits with code 1 so Windows retries in 30 minutes.
 
 ## 4. Talking to Gemini (`call_gemini`)
@@ -114,6 +123,8 @@ a plain-language summary.
 | `digest_state.json` | Channel ids, done/skipped videos, `last_sent` | No |
 | `digest_cache\<id>.json` | Gemini's notes per video | No |
 | `digests\*.html` | Every digest as a web page | No |
+| `digest_json\video-digest_YYYY-MM-DD.json` (or `json_dir`) | The day's digest as JSON for the Econova hub | No |
+| `tickers.json` | Company name to ticker lookup. Add a line when the log reports an unmatched name | No |
 | `chats.json` | Saved chats | Private |
 | `digest.log` | Output of scheduled runs | No |
 | `%USERPROFILE%\ytmd\` | Transcripts and the search index (ytmd library) | No |

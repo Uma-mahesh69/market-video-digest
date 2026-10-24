@@ -31,12 +31,15 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
+from digest_export import export_digest, speakers as note_speakers
+
 HERE = Path(__file__).resolve().parent
 YTMD = HERE / "ytmd"
 CONFIG = HERE / "digest_config.json"
 STATE = HERE / "digest_state.json"
 OUT_DIR = HERE / "digests"
 CACHE_DIR = HERE / "digest_cache"
+JSON_DIR = HERE / "digest_json"   # where the daily JSON files go unless json_dir is set in the config
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 MAX_TRANSCRIPT_CHARS = 150_000
@@ -291,19 +294,26 @@ Rules:
 - Copy numbers as spoken. Captions are automatic and can mishear names and figures; if a figure is unclear, keep it and set "unclear": true.
 - Report the channel's or speaker's view, not yours. Views are one of: bullish, bearish, neutral, mixed.
 - Leave a list empty when the video does not cover it. Never invent items to fill a list.
+- List every separate call on a stock as its own item. Do not merge two remarks, or two speakers' views, into one.
 
 Return one JSON object with exactly these keys:
 {
  "summary": "3 to 5 sentences: what the video argues and why it matters",
- "speakers": ["names and roles if stated"],
+ "speakers": [{"name": "...", "role": "job title and firm if stated, else empty"}],
  "key_points": [{"point": "...", "time": "m:ss"}],
- "market_levels": [{"item": "index, yield, rate, commodity, currency or data release", "value": "as said", "context": "what was said about it", "time": "m:ss", "unclear": false}],
- "stocks": [{"name": "company name", "ticker": "if said, else empty", "view": "bullish|bearish|neutral|mixed", "reason": "the channel's reason, one sentence", "time": "m:ss"}],
+ "market_levels": [{"item": "index, yield, rate, commodity, currency or data release", "value": "as said", "number": 5.45, "unit": "%|USD|index pts|bp", "context": "what was said about it", "time": "m:ss", "unclear": false}],
+ "stocks": [{"name": "company name", "ticker": "if said, else empty", "view": "bullish|bearish|neutral|mixed", "reason": "the channel's reason, one sentence", "analyst": "the speaker who makes this call, if clear, else empty", "time": "m:ss"}],
  "sectors_and_themes": [{"name": "...", "view": "bullish|bearish|neutral|mixed", "reason": "...", "time": "m:ss"}],
  "predictions": [{"claim": "what they expect", "horizon": "timeframe if said", "time": "m:ss"}],
  "risks": [{"risk": "...", "time": "m:ss"}],
- "upcoming_events": [{"event": "earnings, data release, meeting", "when": "as said", "time": "m:ss"}]
-}"""
+ "sp500_targets": [{"value": 8050, "horizon": "year-end|12-month", "time": "m:ss"}],
+ "upcoming_events": [{"event": "earnings, data release, meeting", "when": "as said", "date": "YYYY-MM-DD", "time": "m:ss"}]
+}
+
+Notes on the newer fields:
+- market_levels "number" is the figure as a plain number ("near 100" gives 100), or null when no single figure is said; "unit" is one of the four listed, or empty when none fits.
+- sp500_targets: only S&P 500 index targets the speaker states for year-end or for the next 12 months.
+- upcoming_events "date": only when a specific calendar day is said or follows plainly from the published date; otherwise empty."""
 
 DAY_SYSTEM = """You write the opening of a daily digest of finance videos for a busy professional.
 You receive structured notes from each video, numbered. Use only these notes.
@@ -311,9 +321,10 @@ Return one JSON object:
 {
  "overview": "4 to 6 sentences: what today's videos say about the markets, naming channels",
  "themes": [{"theme": "short title", "detail": "2 to 3 sentences", "videos": [video numbers]}],
- "disagreements": [{"topic": "...", "detail": "who says what", "videos": [video numbers]}]
+ "disagreements": [{"topic": "...", "detail": "who says what", "videos": [video numbers],
+                     "sides": [{"analysts": ["speaker names, as in the notes"], "position": "what this side says", "videos": [video numbers]}]}]
 }
-Give at most 5 themes. Leave "disagreements" empty if the videos do not disagree."""
+Give at most 5 themes. Leave "disagreements" empty if the videos do not disagree. Each disagreement has two or more sides."""
 
 
 def extract(cfg, video, text):
@@ -335,7 +346,7 @@ VIEWS = {"bullish", "bearish", "neutral", "mixed"}
 
 def clean_notes(n, duration):
     """Keep only well-formed items, and only times that exist in the video."""
-    out = {"summary": str(n.get("summary", "")).strip(), "speakers": [str(s) for s in n.get("speakers", []) if s]}
+    out = {"summary": str(n.get("summary", "")).strip(), "speakers": note_speakers(n)}
     for key in LISTS:
         items = []
         for it in n.get(key, []) or []:
@@ -347,11 +358,15 @@ def clean_notes(n, duration):
                 it["view"] = it["view"] if it["view"] in VIEWS else "mixed"
             items.append(it)
         out[key] = items
+    out["sp500_targets"] = [{"value": t["value"], "horizon": t["horizon"]} for t in n.get("sp500_targets", []) or []
+                            if isinstance(t, dict) and isinstance(t.get("value"), (int, float)) and not isinstance(t.get("value"), bool)
+                            and t.get("horizon") in ("year-end", "12-month")]
     return out
 
 
 def day_summary(cfg, done):
     brief = [{"n": i + 1, "channel": d["video"]["channel"], "title": d["video"]["title"], "summary": d["notes"]["summary"],
+              "speakers": [s["name"] for s in note_speakers(d["notes"])],
               "stocks": [{k: s.get(k) for k in ("name", "view", "reason")} for s in d["notes"]["stocks"]],
               "sectors": [{k: s.get(k) for k in ("name", "view")} for s in d["notes"]["sectors_and_themes"]],
               "predictions": [p.get("claim") for p in d["notes"]["predictions"]]} for i, d in enumerate(done)]
@@ -363,6 +378,8 @@ def day_summary(cfg, done):
     valid = lambda nums: [x for x in nums if isinstance(x, int) and 1 <= x <= len(done)] if isinstance(nums, list) else []
     for key in ("themes", "disagreements"):
         s[key] = [dict(t, videos=valid(t.get("videos"))) for t in s.get(key, []) if isinstance(t, dict)]
+    for t in s["disagreements"]:
+        t["sides"] = [dict(side, videos=valid(side.get("videos"))) for side in t.get("sides", []) if isinstance(side, dict)] if isinstance(t.get("sides"), list) else []
     return s
 
 
@@ -460,8 +477,9 @@ def render(day, done, skipped, overview, unchecked=()):
         body = [f'<p id="v{n}" style="margin:0 0 2px;color:{C["muted"]};font-size:12px">#{n}. {", ".join(meta)}</p>',
                 f'<p style="margin:0 0 6px;font-weight:600;font-size:16px"><a href="{v["url"]}" style="color:{C["ink"]}">{e(v["title"])}</a></p>',
                 f'<p style="margin:0">{e(nt["summary"])}</p>']
-        if nt["speakers"]:
-            body.append(f'<p style="margin:6px 0 0;color:{C["muted"]};font-size:13px">Speaking: {e(", ".join(nt["speakers"]))}</p>')
+        names = [f'{s["name"]} ({s["role"]})' if s["role"] else s["name"] for s in note_speakers(nt)]
+        if names:
+            body.append(f'<p style="margin:6px 0 0;color:{C["muted"]};font-size:13px">Speaking: {e(", ".join(names))}</p>')
         groups = [("Key points", [f'{e(p.get("point", ""))}{tlink(v, p)}' for p in nt["key_points"]]),
                   ("Sectors and themes", [f'{e(s.get("name", ""))}: {view_tag(s["view"])}. {e(s.get("reason", ""))}{tlink(v, s)}' for s in nt["sectors_and_themes"]]),
                   ("What they expect", [f'{e(p.get("claim", ""))}' + (f' ({e(p["horizon"])})' if p.get("horizon") else "") + tlink(v, p) for p in nt["predictions"]]),
@@ -659,6 +677,14 @@ def main():
                    f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat page; start it with run_chat.bat)</p>', page)
     out.write_text(local, encoding="utf-8")
     log(f"Saved {out}")
+    # The JSON copy for the Econova hub. A test run (--dry-run or --video) goes to the digests folder, so it can never
+    # replace the real day's file. With no videos and a channel that could not be read, we cannot say "no new videos".
+    if done or not unchecked:
+        try:
+            test_run = args.dry_run or args.video
+            export_digest(today, done, overview, OUT_DIR if test_run else Path(cfg.get("json_dir") or JSON_DIR), log)
+        except Exception as err:   # the email matters more than the JSON copy
+            log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
     subject = f"Market video digest, {today:%d %b %Y}: {len(done)} new video{'s' if len(done) != 1 else ''}"
     emailed = False
     if not args.dry_run:

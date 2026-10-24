@@ -11,5 +11,7 @@
   "smtp_user": "your.address@gmail.com",
   "smtp_password": "PASTE A GMAIL APP PASSWORD HERE",
   "smtp_host": "smtp.gmail.com",
-  "smtp_port": 465
+  "smtp_port": 465,
+
+  "json_dir": ""
 }

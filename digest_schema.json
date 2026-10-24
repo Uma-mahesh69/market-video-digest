@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Market video digest, schema 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "digest_date", "generated_at", "channels", "video_count", "summary",
+               "videos", "mentions", "themes", "debates", "levels", "upcoming"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "digest_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "generated_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"},
+    "channels": {"type": "array", "items": {"type": "string"}},
+    "video_count": {"type": "integer", "minimum": 0},
+    "summary": {"type": "string"},
+    "videos": {"type": "array", "items": {"$ref": "#/$defs/video"}},
+    "mentions": {"type": "array", "items": {"$ref": "#/$defs/mention"}},
+    "themes": {"type": "array", "items": {"$ref": "#/$defs/theme"}},
+    "debates": {"type": "array", "items": {"$ref": "#/$defs/debate"}},
+    "levels": {"type": "array", "items": {"$ref": "#/$defs/level"}},
+    "upcoming": {"type": "array", "items": {"$ref": "#/$defs/event"}}
+  },
+  "$defs": {
+    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "timestamp": {"type": ["string", "null"], "pattern": "^\\d{1,2}(:\\d{2}){1,2}$"},
+    "video_no": {"type": "integer", "minimum": 1},
+    "video_nos": {"type": "array", "items": {"$ref": "#/$defs/video_no"}},
+    "view": {"enum": ["bullish", "bearish", "neutral", "mixed"]},
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "channel", "published_date", "duration", "title", "url", "speakers", "summary",
+                   "key_points", "sectors", "expectations", "risks", "sp500_targets"],
+      "properties": {
+        "number": {"$ref": "#/$defs/video_no"},
+        "channel": {"type": "string"},
+        "published_date": {"$ref": "#/$defs/date"},
+        "duration": {"type": ["string", "null"], "pattern": "^\\d{1,2}(:\\d{2}){1,2}$"},
+        "title": {"type": "string"},
+        "url": {"type": "string", "pattern": "^https?://"},
+        "speakers": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["name", "role"],
+          "properties": {"name": {"type": "string"}, "role": {"type": ["string", "null"]}}}},
+        "summary": {"type": "string"},
+        "key_points": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["text", "timestamp"],
+          "properties": {"text": {"type": "string"}, "timestamp": {"$ref": "#/$defs/timestamp"}}}},
+        "sectors": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["name", "view", "reason", "timestamp"],
+          "properties": {"name": {"type": "string"}, "view": {"$ref": "#/$defs/view"}, "reason": {"type": "string"},
+                         "timestamp": {"$ref": "#/$defs/timestamp"}}}},
+        "expectations": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["text", "horizon", "timestamp"],
+          "properties": {"text": {"type": "string"}, "horizon": {"type": ["string", "null"]},
+                         "timestamp": {"$ref": "#/$defs/timestamp"}}}},
+        "risks": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["text", "timestamp"],
+          "properties": {"text": {"type": "string"}, "timestamp": {"$ref": "#/$defs/timestamp"}}}},
+        "sp500_targets": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["value", "horizon"],
+          "properties": {"value": {"type": "number"}, "horizon": {"enum": ["year-end", "12-month"]}}}}
+      }
+    },
+    "mention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "name", "view", "reason", "video", "analyst", "timestamp"],
+      "properties": {
+        "ticker": {"type": ["string", "null"]},
+        "name": {"type": "string"},
+        "view": {"$ref": "#/$defs/view"},
+        "reason": {"type": "string"},
+        "video": {"$ref": "#/$defs/video_no"},
+        "analyst": {"type": ["string", "null"]},
+        "timestamp": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "theme": {
+      "type": "object", "additionalProperties": false, "required": ["name", "summary", "videos"],
+      "properties": {"name": {"type": "string"}, "summary": {"type": "string"}, "videos": {"$ref": "#/$defs/video_nos"}}
+    },
+    "debate": {
+      "type": "object", "additionalProperties": false, "required": ["topic", "sides"],
+      "properties": {
+        "topic": {"type": "string"},
+        "sides": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["analysts", "position", "videos"],
+          "properties": {"analysts": {"type": "array", "items": {"type": "string"}}, "position": {"type": "string"},
+                         "videos": {"$ref": "#/$defs/video_nos"}}}}
+      }
+    },
+    "level": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metric", "value", "unit", "display", "note", "video", "timestamp"],
+      "properties": {
+        "metric": {"type": "string"},
+        "value": {"type": ["number", "null"]},
+        "unit": {"type": ["string", "null"], "enum": ["%", "USD", "index pts", "bp", null]},
+        "display": {"type": "string"},
+        "note": {"type": "string"},
+        "video": {"$ref": "#/$defs/video_no"},
+        "timestamp": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false, "required": ["event", "date", "date_text", "videos"],
+      "properties": {
+        "event": {"type": "string"},
+        "date": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "date_text": {"type": "string"},
+        "videos": {"$ref": "#/$defs/video_nos"}
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ digest_config.json
 digest_state.json
 digest_cache/
 digests/
+digest_json/
 chats.json
 digest.log
 
