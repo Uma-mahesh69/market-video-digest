@@ -49,10 +49,33 @@ def speakers(notes):
 
 
 def number(value):
-    """A plain number, or None. Booleans and text are not numbers."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    """A plain number, or None. Accepts numbers and plain numeric text like "8,050"; booleans are not numbers."""
+    if isinstance(value, bool):
         return None
-    return value
+    if isinstance(value, (int, float)):
+        return value
+    m = re.fullmatch(r"-?\d{1,3}(,\d{3})+(\.\d+)?|-?\d+(\.\d+)?", text(value))
+    if not m:
+        return None
+    n = float(m.group(0).replace(",", ""))
+    return int(n) if n.is_integer() and "." not in m.group(0) else n
+
+
+def parse_level(display):
+    """(value, unit) from a level as said, when it is a single figure: "5.45%" gives (5.45, "%"), "near 100" gives
+    (100, None). (None, None) when it is not one figure, such as "between 4 and 5%"."""
+    m = re.fullmatch(r"(?:about|around|near|roughly|approximately|~)?\s*(\$)?\s*(-?[\d,]*\d(?:\.\d+)?)\s*(%|percent|bps?|basis points?)?",
+                     text(display).lower())
+    if not m or number(m.group(2)) is None:
+        return None, None
+    unit = "USD" if m.group(1) else "%" if m.group(3) in ("%", "percent") else "bp" if m.group(3) else None
+    return number(m.group(2)), unit
+
+
+def view(value):
+    """The view word as written, lower-cased; anything other than the four becomes mixed."""
+    word = text(value).lower()
+    return word if word in VIEWS else "mixed"
 
 
 def iso_date(value):
@@ -75,13 +98,17 @@ def load_tickers():
 
 
 def norm(name):
-    return re.sub(r"\s+", " ", text(name).lower()).strip(" .,")
+    return re.sub(r"\s+", " ", text(name).lower().replace("\u2019", "'")).strip(" .,")
+
+
+COMPANY_WORDS = re.compile(r"^the |'s$|(,?\s+(inc|incorporated|corp|corporation|co|company|ltd|limited|plc|holdings|group|class [abc]))+\.?$")
 
 
 def resolve_ticker(name, said, table):
-    """The ticker for a company as written in the digest, or None. Tries the name, the name without any
-    bracketed part, then the ticker the video said."""
-    for candidate in (name, re.sub(r"\(.*?\)", "", text(name)), said):
+    """The ticker for a company as written in the digest, or None. Tries the name, the name without any bracketed
+    part, the name without words like "Inc." or "Corporation", then the ticker the video said."""
+    bare = re.sub(r"\(.*?\)", "", text(name))
+    for candidate in (name, bare, COMPANY_WORDS.sub("", norm(bare)), said):
         hit = table.get(norm(candidate))
         if hit:
             return hit
@@ -99,6 +126,7 @@ def build_payload(day, done, overview, table, now=None):
     for n, d in enumerate(done, 1):
         v, nt = d["video"], d["notes"]
         at = lambda item: stamp(item.get("seconds"))
+        people = speakers(nt)
         videos.append({
             "number": n,
             "channel": text(v.get("channel")),
@@ -106,15 +134,15 @@ def build_payload(day, done, overview, table, now=None):
             "duration": stamp(v.get("duration")) if v.get("duration") else None,
             "title": text(v.get("title")),
             "url": text(v.get("url")),
-            "speakers": speakers(nt),
+            "speakers": people,
             "summary": text(nt.get("summary")),
             "key_points": [{"text": text(p.get("point")), "timestamp": at(p)} for p in nt.get("key_points", []) if text(p.get("point"))],
-            "sectors": [{"name": text(s.get("name")), "view": s.get("view", "mixed"), "reason": text(s.get("reason")), "timestamp": at(s)}
+            "sectors": [{"name": text(s.get("name")), "view": view(s.get("view")), "reason": text(s.get("reason")), "timestamp": at(s)}
                         for s in nt.get("sectors_and_themes", []) if text(s.get("name"))],
             "expectations": [{"text": text(p.get("claim")), "horizon": text(p.get("horizon")) or None, "timestamp": at(p)}
                              for p in nt.get("predictions", []) if text(p.get("claim"))],
             "risks": [{"text": text(r.get("risk")), "timestamp": at(r)} for r in nt.get("risks", []) if text(r.get("risk"))],
-            "sp500_targets": [{"value": t["value"], "horizon": t["horizon"]} for t in nt.get("sp500_targets", [])
+            "sp500_targets": [{"value": number(t.get("value")), "horizon": t.get("horizon")} for t in nt.get("sp500_targets", [])
                               if number(t.get("value")) is not None and t.get("horizon") in HORIZONS],
         })
         for s in nt.get("stocks", []):   # one row per call; the same company in two videos is two rows
@@ -124,13 +152,17 @@ def build_payload(day, done, overview, table, now=None):
             ticker = resolve_ticker(name, s.get("ticker"), table)
             if ticker is None and (name, text(s.get("ticker"))) not in unmatched:
                 unmatched.append((name, text(s.get("ticker"))))
-            mentions.append({"ticker": ticker, "name": name, "view": s.get("view") if s.get("view") in VIEWS else "mixed",
-                             "reason": text(s.get("reason")), "video": n, "analyst": text(s.get("analyst")) or None, "timestamp": at(s)})
+            # With one named speaker the call can only be theirs; otherwise only Gemini's per-call answer is used.
+            analyst = text(s.get("analyst")) or (people[0]["name"] if len(people) == 1 else None)
+            mentions.append({"ticker": ticker, "name": name, "view": view(s.get("view")),
+                             "reason": text(s.get("reason")), "video": n, "analyst": analyst, "timestamp": at(s)})
         for l in nt.get("market_levels", []):
             if not text(l.get("item")):
                 continue
-            value = number(l.get("number"))
-            levels.append({"metric": text(l.get("item")), "value": value, "unit": l.get("unit") if value is not None and l.get("unit") in UNITS else None,
+            value, unit = number(l.get("number")), l.get("unit")
+            if value is None:   # notes saved before the number field existed, or Gemini left it out
+                value, unit = parse_level(l.get("value"))
+            levels.append({"metric": text(l.get("item")), "value": value, "unit": unit if value is not None and unit in UNITS else None,
                            "display": text(l.get("value")), "note": text(l.get("context")), "video": n, "timestamp": at(l)})
         for x in nt.get("upcoming_events", []):   # one row per distinct event, with every video that mentions it
             if not text(x.get("event")):
@@ -250,6 +282,10 @@ def save(payload, directory, log):
         tmp.replace(path)
     except OSError as err:
         log(f"JSON digest for {date} NOT saved: could not write {path}: {err}")
+        try:
+            path.with_suffix(".tmp").unlink()
+        except OSError:
+            pass
         return None
     log(f"Saved {path} ({payload['video_count']} videos, {len(payload['mentions'])} stock calls)")
     return path

@@ -34,7 +34,7 @@ a plain-language summary.
 
 | Component | File | What it does |
 |---|---|---|
-| **Digest pipeline** | `digest.py` | The daily job: find new videos, get captions, summarise with Gemini, render, email. Also `--check`. |
+| **Digest pipeline** | `digest.py` | The daily job: find new videos, get captions, summarise with Gemini, render, email. Also `--check` and `--rebuild`. |
 | **Chat server** | `chat.py` | A small web server on `127.0.0.1:8765` (this PC only). Builds context from saved notes and captions, calls Gemini, saves chats. |
 | **Chat page** | `chat.html` | The browser interface: chat list, scope selectors, answers with clickable citations. |
 | **Caption reader** | `ytmd` (external, MIT licence, v0.7.0) | Downloads captions through yt-dlp and stores them in a SQLite full-text index at `%USERPROFILE%\ytmd`. Provides `add`, `read`, `search`, `info`, `doctor`. |
@@ -42,6 +42,8 @@ a plain-language summary.
 | **Installer** | `install.bat` + `install.ps1` | One-step Windows setup: Python, yt-dlp, settings, tests, scheduled task, desktop shortcut. |
 | **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
 | **Launchers** | `run_digest.bat`, `run_chat.bat` | Written by the installer with the PC's own Python path, and `bin\` on PATH. |
+| **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
+| **Tests** | `test_digest_export.py`, `test_digest_run.py` | `python -m unittest` runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |
 
 ## 3. The daily run, step by step (`digest.py`, `main()`)
@@ -76,12 +78,21 @@ a plain-language summary.
 7. **JSON copy** (`digest_export.py`): the same content saved as `video-digest_YYYY-MM-DD.json` in `json_dir`
    (default `digest_json\`), for the Econova Dashboard Hub. The shape is fixed by `digest_schema.json` (schema 1.0):
    videos, one `mentions` row per stock call, themes, debates with sides, levels and upcoming events, each with its
-   video number and timestamp. Stock names are merged into tickers with `tickers.json`; a name with no entry gets
-   `ticker: null` and a line in `digest.log`. The file is checked against the schema before saving; on any problem
-   nothing is written and the reason is logged with the date. A day with no new videos still writes a file with
-   `video_count: 0`, but never over an earlier file from the same day that had videos. `--dry-run` and `--video`
-   write to `digests\` instead, so a test cannot replace the real day's file. Scoring (mood, consensus, upside) is
-   done by the hub, not here.
+   video number and timestamp. Stock names are merged into tickers with `tickers.json` (also trying the name without
+   "Inc.", "Corporation" and the like); a name with no entry gets `ticker: null` and a line in `digest.log`.
+   - **One file per day, covering the whole day.** A run only picks up videos not yet sent, so a second run on the
+     same day (a manual `--open` after the morning run) adds its videos to the day's file from the saved notes and
+     redoes the overview; it never replaces the morning's videos. The video ids in today's file are kept in
+     `digest_state.json` (`json_day`). A run with nothing new leaves the file as it is. A day with no videos at all
+     still gets a file with `video_count: 0`.
+   - **Checked before saving.** On any schema problem, or if the folder cannot be written, nothing is saved and the
+     reason is logged with the date. Earlier days' files are never touched. The schema accepts any 1.x file, because
+     1.x may add optional fields.
+   - **Tests and past days.** `--dry-run` and `--video` write to `digests\`, so a test cannot replace the real file.
+     `--rebuild YYYY-MM-DD` writes the file for an earlier day's digest (the videos recorded as sent that day),
+     summarising again any video whose notes were saved before the JSON fields existed. It refuses to overwrite an
+     existing file; with `--dry-run` it writes to `digests\`.
+   - Scoring (mood, consensus, upside) is done by the hub, not here.
 8. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
 9. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
    out. If sending fails, nothing is marked, and the run exits with code 1 so Windows retries in 30 minutes.

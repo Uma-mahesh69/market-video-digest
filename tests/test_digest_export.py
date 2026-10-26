@@ -123,6 +123,49 @@ class Export(unittest.TestCase):
         self.assertTrue(any("mentions[0].view" in x for x in errors))
         self.assertTrue(any("videos[0].number" in x for x in errors))
 
+    def test_view_words(self):
+        self.assertEqual([dx.view(w) for w in ("Bullish", " bearish ", "NEUTRAL", "cautious", None)],
+                         ["bullish", "bearish", "neutral", "mixed", "mixed"])
+
+    def test_company_name_forms(self):
+        for name in ("Apple Inc.", "NVIDIA Corporation", "Nvidia's", "Nvidia\u2019s", "Nvidia (NVDA)", "The Walt Disney Company"):
+            with self.subTest(name=name):
+                expected = None if "Disney" in name else ("AAPL" if "Apple" in name else "NVDA")
+                self.assertEqual(dx.resolve_ticker(name, "", self.table), expected)
+        self.assertEqual(dx.resolve_ticker("Some Bank", "JPM", self.table), "JPM")   # falls back to the ticker said
+
+    def test_numbers_and_levels(self):
+        self.assertEqual(dx.number("8,050"), 8050)
+        self.assertEqual(dx.number("5.45"), 5.45)
+        self.assertIsNone(dx.number("lots"))
+        self.assertIsNone(dx.number(True))
+        self.assertEqual(dx.parse_level("5.45%"), (5.45, "%"))
+        self.assertEqual(dx.parse_level("near 100"), (100, None))
+        self.assertEqual(dx.parse_level("$4,000"), (4000, "USD"))
+        self.assertEqual(dx.parse_level("50 bps"), (50, "bp"))
+        self.assertEqual(dx.parse_level("between 4 and 5%"), (None, None))
+
+    def test_older_notes_still_fill_fields(self):
+        """Notes saved before this change have no "number" on levels and no analyst on stocks."""
+        old = notes(speakers=["Sam Stovall"], market_levels=[{"item": "10-year yield", "value": "4.95%", "context": "", "time": "1:00", "seconds": 60}],
+                    stocks=[{"name": "Tesla", "ticker": "", "view": "bearish", "reason": "r", "time": "0:00", "seconds": 0}])
+        del old["sp500_targets"]
+        payload, _ = self.build(done=[{"video": video(1), "notes": old}], overview={"overview": "", "themes": [], "disagreements": []})
+        self.assertEqual(dx.validate(payload, self.schema), [])
+        self.assertEqual((payload["levels"][0]["value"], payload["levels"][0]["unit"]), (4.95, "%"))
+        self.assertEqual(payload["mentions"][0]["analyst"], "Sam Stovall")   # the video's only speaker
+
+    def test_analyst_not_guessed_with_several_speakers(self):
+        two = notes(speakers=[{"name": "A", "role": ""}, {"name": "B", "role": ""}], stocks=[stock("Tesla", "bearish")])
+        payload, _ = self.build(done=[{"video": video(1), "notes": two}], overview={"overview": "", "themes": [], "disagreements": []})
+        self.assertIsNone(payload["mentions"][0]["analyst"])
+
+    def test_later_1x_versions_pass(self):
+        payload, _ = self.build()
+        newer = dict(payload, schema_version="1.1", new_optional_field=[1])
+        self.assertEqual(dx.validate(newer, self.schema), [])
+        self.assertTrue(dx.validate(dict(payload, schema_version="2.0"), self.schema))
+
 
 class Save(unittest.TestCase):
     def setUp(self):

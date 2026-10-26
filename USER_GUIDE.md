@@ -149,11 +149,12 @@ cd $env:USERPROFILE\market-digest
 
 | Command | What it does |
 |---|---|
-| `python digest.py --check` | Tests every channel, the Gemini key and the Gmail login. Sends nothing. |
+| `python digest.py --check` | Tests every channel, the Gemini key, the JSON folder and the Gmail login. Sends nothing. |
 | `python digest.py --open` | Makes and emails a digest now, then opens it in the browser. |
 | `python digest.py --hours 48 --open` | The same, covering the last 48 hours. |
 | `python digest.py --hours 72 --dry-run --open` | A test digest of the last 3 days: **not emailed**, and videos are not marked as done. |
 | `python digest.py --video https://www.youtube.com/watch?v=... --dry-run --open` | A digest of one video. |
+| `python digest.py --rebuild 2026-10-22 --dry-run` | The Econova JSON file for an earlier day's digest, written to `digests\` to look at. Without `--dry-run` it goes to the JSON folder, unless that day already has a file. |
 
 To run the scheduled task exactly as Windows would: open **Task Scheduler**, click **Task Scheduler Library**,
 right-click **Market video digest**, choose **Run**. Its log is in `digest.log` in the program folder.

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Market video digest, schema 1.0",
+  "title": "Market video digest, schema 1.x",
+  "description": "Schema 1.0. Files of any 1.x version pass: 1.x may add optional fields, never rename or remove one.",
   "type": "object",
-  "additionalProperties": false,
   "required": ["schema_version", "digest_date", "generated_at", "channels", "video_count", "summary",
                "videos", "mentions", "themes", "debates", "levels", "upcoming"],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"type": "string", "pattern": "^1\\.\\d+$"},
     "digest_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
     "generated_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"},
     "channels": {"type": "array", "items": {"type": "string"}},
@@ -27,8 +27,7 @@
     "view": {"enum": ["bullish", "bearish", "neutral", "mixed"]},
     "video": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["number", "channel", "published_date", "duration", "title", "url", "speakers", "summary",
+          "required": ["number", "channel", "published_date", "duration", "title", "url", "speakers", "summary",
                    "key_points", "sectors", "expectations", "risks", "sp500_targets"],
       "properties": {
         "number": {"$ref": "#/$defs/video_no"},
@@ -38,32 +37,31 @@
         "title": {"type": "string"},
         "url": {"type": "string", "pattern": "^https?://"},
         "speakers": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["name", "role"],
+          "type": "object", "required": ["name", "role"],
           "properties": {"name": {"type": "string"}, "role": {"type": ["string", "null"]}}}},
         "summary": {"type": "string"},
         "key_points": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["text", "timestamp"],
+          "type": "object", "required": ["text", "timestamp"],
           "properties": {"text": {"type": "string"}, "timestamp": {"$ref": "#/$defs/timestamp"}}}},
         "sectors": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["name", "view", "reason", "timestamp"],
+          "type": "object", "required": ["name", "view", "reason", "timestamp"],
           "properties": {"name": {"type": "string"}, "view": {"$ref": "#/$defs/view"}, "reason": {"type": "string"},
                          "timestamp": {"$ref": "#/$defs/timestamp"}}}},
         "expectations": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["text", "horizon", "timestamp"],
+          "type": "object", "required": ["text", "horizon", "timestamp"],
           "properties": {"text": {"type": "string"}, "horizon": {"type": ["string", "null"]},
                          "timestamp": {"$ref": "#/$defs/timestamp"}}}},
         "risks": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["text", "timestamp"],
+          "type": "object", "required": ["text", "timestamp"],
           "properties": {"text": {"type": "string"}, "timestamp": {"$ref": "#/$defs/timestamp"}}}},
         "sp500_targets": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["value", "horizon"],
+          "type": "object", "required": ["value", "horizon"],
           "properties": {"value": {"type": "number"}, "horizon": {"enum": ["year-end", "12-month"]}}}}
       }
     },
     "mention": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["ticker", "name", "view", "reason", "video", "analyst", "timestamp"],
+          "required": ["ticker", "name", "view", "reason", "video", "analyst", "timestamp"],
       "properties": {
         "ticker": {"type": ["string", "null"]},
         "name": {"type": "string"},
@@ -75,21 +73,21 @@
       }
     },
     "theme": {
-      "type": "object", "additionalProperties": false, "required": ["name", "summary", "videos"],
+      "type": "object", "required": ["name", "summary", "videos"],
       "properties": {"name": {"type": "string"}, "summary": {"type": "string"}, "videos": {"$ref": "#/$defs/video_nos"}}
     },
     "debate": {
-      "type": "object", "additionalProperties": false, "required": ["topic", "sides"],
+      "type": "object", "required": ["topic", "sides"],
       "properties": {
         "topic": {"type": "string"},
         "sides": {"type": "array", "items": {
-          "type": "object", "additionalProperties": false, "required": ["analysts", "position", "videos"],
+          "type": "object", "required": ["analysts", "position", "videos"],
           "properties": {"analysts": {"type": "array", "items": {"type": "string"}}, "position": {"type": "string"},
                          "videos": {"$ref": "#/$defs/video_nos"}}}}
       }
     },
     "level": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
       "required": ["metric", "value", "unit", "display", "note", "video", "timestamp"],
       "properties": {
         "metric": {"type": "string"},
@@ -102,7 +100,7 @@
       }
     },
     "event": {
-      "type": "object", "additionalProperties": false, "required": ["event", "date", "date_text", "videos"],
+      "type": "object", "required": ["event", "date", "date_text", "videos"],
       "properties": {
         "event": {"type": "string"},
         "date": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},

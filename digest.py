@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
-from digest_export import export_digest, speakers as note_speakers
+from digest_export import export_digest, file_name, number, speakers as note_speakers
 
 HERE = Path(__file__).resolve().parent
 YTMD = HERE / "ytmd"
@@ -327,9 +327,10 @@ Return one JSON object:
 Give at most 5 themes. Leave "disagreements" empty if the videos do not disagree. Each disagreement has two or more sides."""
 
 
-def extract(cfg, video, text):
+def extract(cfg, video, text, fresh=False):
+    """Gemini's notes for one video, saved in digest_cache so it is paid for once. fresh ignores the saved copy."""
     cached = CACHE_DIR / f"{video['id']}.json"
-    if cached.exists():
+    if cached.exists() and not fresh:
         return json.loads(cached.read_text(encoding="utf-8"))
     head = f"Video: {video['title']}\nChannel: {video['channel']}\nPublished: {video['published']}\n\nTranscript:\n"
     notes = gemini(cfg, EXTRACT_SYSTEM, head + text)
@@ -354,13 +355,13 @@ def clean_notes(n, duration):
                 continue
             s = seconds(it.get("time"))
             it["seconds"] = s if s is not None and (not duration or s <= duration + 5) else None
-            if "view" in it:
-                it["view"] = it["view"] if it["view"] in VIEWS else "mixed"
+            if key in ("stocks", "sectors_and_themes"):
+                view = str(it.get("view") or "").strip().lower()
+                it["view"] = view if view in VIEWS else "mixed"
             items.append(it)
         out[key] = items
-    out["sp500_targets"] = [{"value": t["value"], "horizon": t["horizon"]} for t in n.get("sp500_targets", []) or []
-                            if isinstance(t, dict) and isinstance(t.get("value"), (int, float)) and not isinstance(t.get("value"), bool)
-                            and t.get("horizon") in ("year-end", "12-month")]
+    out["sp500_targets"] = [{"value": number(t.get("value")), "horizon": t.get("horizon")} for t in n.get("sp500_targets", []) or []
+                            if isinstance(t, dict) and number(t.get("value")) is not None and t.get("horizon") in ("year-end", "12-month")]
     return out
 
 
@@ -383,6 +384,12 @@ def day_summary(cfg, done):
     return s
 
 
+def make_overview(cfg, done):
+    if len(done) > 1:
+        return day_summary(cfg, done)
+    return {"overview": done[0]["notes"]["summary"] if done else "", "themes": [], "disagreements": []}
+
+
 # ---------------------------------------------------------------- 4. build and send the digest
 
 C = {"ink": "#16202E", "muted": "#5C6878", "line": "#DCE2EA", "soft": "#F4F6F9", "blue": "#2447C5",
@@ -402,6 +409,7 @@ def tlink(video, item):
 
 
 def view_tag(view):
+    view = view if view in VIEWS else "mixed"
     return f'<span style="color:{C[view]};font-weight:600">{e(view)}</span>'
 
 
@@ -563,6 +571,19 @@ def check(cfg, state):
         print(f"FAILED: {err}")
         ok = False
 
+    folder = Path(cfg.get("json_dir") or JSON_DIR)
+    print("JSON folder: ", end="", flush=True)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        probe = folder / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        print(f"{folder} (can write)")
+    except OSError as err:
+        print(f"FAILED to write to {folder}: {err}")
+        print("  Check json_dir in digest_config.json. For a Google Drive folder, Google Drive for desktop must be running.")
+        ok = False
+
     print("Email: ", end="", flush=True)
     if not (cfg.get("email_to") and cfg.get("smtp_user") and cfg.get("smtp_password")):
         print("not set up, so digests are only saved to the digests folder")
@@ -578,6 +599,77 @@ def check(cfg, state):
     return ok
 
 
+# ---------------------------------------------------------------- the JSON file for the Econova hub
+
+def saved_notes(vid):
+    """The notes saved for a video, with its details; None when they are missing."""
+    try:
+        notes = json.loads((CACHE_DIR / f"{vid}.json").read_text(encoding="utf-8"))
+        return {"video": notes["_video"], "notes": notes}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def whole_day(cfg, state, day, done, overview):
+    """Every video in today's digests, so a second run on the same day (for example a manual one after the morning
+    run) adds its videos to the day's file instead of replacing it. Returns (done, overview), or None when this run
+    found nothing new and today already has videos."""
+    date = f"{day:%Y-%m-%d}"
+    record = state.get("json_day") or {}
+    ids = list(record.get("ids", [])) if record.get("date") == date else []
+    if ids and not done:
+        return None
+    by_id = {d["video"]["id"]: d for d in done}
+    ids += [vid for vid in by_id if vid not in ids]
+    state["json_day"] = {"date": date, "ids": ids}
+    day_done = []
+    for vid in ids:
+        item = by_id.get(vid) or saved_notes(vid)
+        if item:
+            day_done.append(item)
+        else:
+            log(f"JSON digest: no saved notes for {vid}, so it is left out of today's file")
+    if len(day_done) == len(done):   # this run is the whole day: keep the overview the email used
+        return done, overview
+    return day_done, make_overview(cfg, day_done)
+
+
+def rebuild(cfg, state, date, test_run):
+    """Write the JSON file for an earlier day's digest, from the videos that digest covered and their saved notes.
+    Notes saved before the JSON fields existed are summarised again; the captions come from the ytmd library."""
+    try:
+        day = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        log("--rebuild needs a date like 2026-10-22.")
+        return False
+    ids = [vid for vid, when in state["done"].items()
+           if when[:2] == "20" and datetime.fromisoformat(when).astimezone().date() == day.date()]
+    if not ids:
+        log(f"No videos are recorded as sent in a digest on {date}.")
+        return False
+    folder = OUT_DIR if test_run else Path(cfg.get("json_dir") or JSON_DIR)
+    if not test_run and (folder / file_name(date)).exists():
+        log(f"{folder / file_name(date)} already exists, and past days' files are never changed. Delete it first to rebuild it.")
+        return False
+    done = []
+    for vid in ids:
+        item = saved_notes(vid)
+        if not item:
+            log(f"No saved notes for {vid}, so it is left out")
+            continue
+        if "sp500_targets" not in item["notes"]:   # saved before the JSON fields existed
+            v = dict(item["video"])
+            try:
+                log(f"Summarising again for the new fields: {v.get('title', vid)[:70]}")
+                item = {"video": v, "notes": extract(cfg, v, transcript(v), fresh=True)}
+            except Exception as err:
+                log(f"  could not ({err}); using the older notes")
+        done.append(item)
+    done.sort(key=lambda d: d["video"].get("published") or "", reverse=True)   # newest first, like the email
+    log(f"{len(done)} videos from the {date} digest")
+    return export_digest(day, done, make_overview(cfg, done), folder, log) is not None
+
+
 # ---------------------------------------------------------------- the daily run
 
 def main():
@@ -585,8 +677,9 @@ def main():
     ap.add_argument("--hours", type=float, help="look back this many hours (default from the config, 26)")
     ap.add_argument("--dry-run", action="store_true", help="do not email, and do not mark videos as done")
     ap.add_argument("--video", help="make a digest of one video link instead of checking channels")
-    ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key and the email login, then stop")
+    ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key, the JSON folder and the email login, then stop")
     ap.add_argument("--open", action="store_true", help="open the digest in the browser when done")
+    ap.add_argument("--rebuild", metavar="YYYY-MM-DD", help="write the JSON file for an earlier day's digest from the saved notes, then stop")
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -602,6 +695,8 @@ def main():
     unchecked = []   # channels whose uploads could not be read this time
     if args.check:
         sys.exit(0 if check(cfg, state) else 1)
+    if args.rebuild:
+        sys.exit(0 if rebuild(cfg, state, args.rebuild, args.dry_run) else 1)
     if args.video:
         vid = re.search(r"(?:v=|youtu\.be/|shorts/)([\w-]{11})", args.video)
         if not vid:
@@ -668,7 +763,7 @@ def main():
         save_state(state)
 
     # 4. One digest
-    overview = day_summary(cfg, done) if len(done) > 1 else {"overview": done[0]["notes"]["summary"] if done else "", "themes": [], "disagreements": []}
+    overview = make_overview(cfg, done)
     today = datetime.now()
     page = render(today, done, skipped, overview, unchecked)
     OUT_DIR.mkdir(exist_ok=True)
@@ -681,8 +776,15 @@ def main():
     # replace the real day's file. With no videos and a channel that could not be read, we cannot say "no new videos".
     if done or not unchecked:
         try:
-            test_run = args.dry_run or args.video
-            export_digest(today, done, overview, OUT_DIR if test_run else Path(cfg.get("json_dir") or JSON_DIR), log)
+            if args.dry_run or args.video:
+                export_digest(today, done, overview, OUT_DIR, log)
+            else:
+                day = whole_day(cfg, state, today, done, overview)
+                if day is None:
+                    log(f"JSON digest for {today:%Y-%m-%d}: no new videos on this run, so today's file is kept as it is.")
+                else:
+                    export_digest(today, *day, Path(cfg.get("json_dir") or JSON_DIR), log)
+                save_state(state)
         except Exception as err:   # the email matters more than the JSON copy
             log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
     subject = f"Market video digest, {today:%d %b %Y}: {len(done)} new video{'s' if len(done) != 1 else ''}"
