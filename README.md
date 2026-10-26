@@ -40,8 +40,8 @@ That's it. The digest arrives by email every day at the time you chose, and **Di
 
 - **[USER_GUIDE.md](USER_GUIDE.md)**: installation, settings, daily use, updating and removing it.
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: what to do when something goes wrong.
-- **ARCHITECTURE.md**: how it works inside, for developers. *(In the project's source folder, not in the setup zip.)*
-- **PRESENTATION.md**: a 6-slide overview of the project. *(In the project's source folder, not in the setup zip.)*
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: how it works inside, for developers. *(In `docs/`, not in the setup zip.)*
+- **[PRESENTATION.md](docs/PRESENTATION.md)**: a 6-slide overview of the project. *(In `docs/`, not in the setup zip.)*
 
 ## Good to know
 

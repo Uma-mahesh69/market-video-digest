@@ -4,6 +4,7 @@ digest_config.json
 # Runtime state and cached data
 digest_state.json
 digest_cache/
+digest_cache_old/
 digests/
 digest_json/
 chats.json
