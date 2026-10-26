@@ -1,5 +1,5 @@
 """Tests for the daily run in digest.py: the JSON file across runs on the same day, --rebuild and --check.
-YouTube, ytmd, Gemini and email are replaced by fakes. Run: python -m unittest test_digest_run -v"""
+YouTube, ytmd, Gemini and email are replaced by fakes. Run from the project folder: python -m unittest -v"""
 import io
 import json
 import sys

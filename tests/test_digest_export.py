@@ -1,4 +1,4 @@
-"""Tests for the JSON export (digest_export.py). Run: python -m unittest test_digest_export -v
+"""Tests for the JSON export (digest_export.py). Run from the project folder: python -m unittest -v
 Uses made-up notes shaped like the Oct 22 digest; no network, Gemini or YouTube needed."""
 import json
 import tempfile
