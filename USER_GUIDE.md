@@ -96,6 +96,7 @@ If you prefer to edit the file in Notepad, these are the settings:
 | `email_to` | Who receives the digest. | |
 | `smtp_user`, `smtp_password` | The Gmail account that sends it, and its app password. | |
 | `smtp_host`, `smtp_port` | The mail server. Leave as is for Gmail. | smtp.gmail.com, 465 |
+| `json_dir` | Folder for the daily JSON file (`video-digest_YYYY-MM-DD.json`) that feeds the Econova hub. Use a Google Drive for desktop folder to share it. | `digest_json` in the program folder |
 
 After editing, run `python digest.py --check` (see section 7) to test your changes.
 
