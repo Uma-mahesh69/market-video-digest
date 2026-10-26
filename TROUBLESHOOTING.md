@@ -42,6 +42,25 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 
 ---
 
+### Mac: "install-mac.command cannot be opened because it is from an unidentified developer"
+
+macOS shows this when the file is double-clicked. Start it from Terminal instead: type `bash ` (with a space),
+drag the file into the Terminal window, press Return. The same works if Finder says you do not have permission to
+open it (a zip made on Windows does not keep the "can be run" flag).
+
+### Mac: "Python cannot check web certificates" or `CERTIFICATE_VERIFY_FAILED`
+
+Python from python.org needs its certificates installed once. The installer tries this itself. If it still fails:
+open **Applications > Python 3.x**, double-click **Install Certificates.command**, then run the installer again.
+
+### Mac: the JSON file is not appearing in Google Drive
+
+Run `cd ~/market-digest && python3 digest.py --check` and look at the `JSON folder:` line. Google Drive for desktop
+must be running and signed in, and its folder is under `~/Library/CloudStorage/GoogleDrive-<your email>/My Drive`.
+If macOS asked whether Terminal may access Google Drive, it needs **Allow** (System Settings > Privacy & Security >
+Files and Folders). Not yet tested on a real Mac: whether the scheduled (launchd) run is allowed to write there
+without asking. Check `digest.log` after the first scheduled run.
+
 ## No digest email
 
 ### Nothing arrived, and `digest.log` says `getaddrinfo failed` (Verified)

@@ -39,9 +39,9 @@ a plain-language summary.
 | **Chat page** | `chat.html` | The browser interface: chat list, scope selectors, answers with clickable citations. |
 | **Caption reader** | `ytmd` (external, MIT licence, v0.7.0) | Downloads captions through yt-dlp and stores them in a SQLite full-text index at `%USERPROFILE%\ytmd`. Provides `add`, `read`, `search`, `info`, `doctor`. |
 | **yt-dlp** | `bin\yt-dlp.exe` or already installed | Fetches caption files from YouTube for ytmd. |
-| **Installer** | `install.bat` + `install.ps1` | One-step Windows setup: Python, yt-dlp, settings, tests, scheduled task, desktop shortcut. |
+| **Installer** | `install.bat` + `install.ps1` (Windows), `install-mac.command` (Mac) | One-step setup: Python, yt-dlp, settings, tests, daily schedule (Task Scheduler on Windows, a launchd agent on a Mac), desktop shortcut. |
 | **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
-| **Launchers** | `run_digest.bat`, `run_chat.bat` | Written by the installer with the PC's own Python path, and `bin\` on PATH. |
+| **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. On a Mac, `run_digest.sh` also retries a failed run every 30 minutes, 3 times, as Task Scheduler does on Windows. |
 | **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
 | **Tests** | `tests/test_digest_export.py`, `tests/test_digest_run.py` | `python -m unittest` in the project folder runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |

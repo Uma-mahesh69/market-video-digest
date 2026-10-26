@@ -80,6 +80,30 @@ If step 5 says **FAILED**, the installer stops before scheduling anything. Read 
 `install.bat` again and re-enter the setting that failed. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) explains each
 message.
 
+### Installing on a Mac
+
+The Mac installer does the same steps as the Windows one, in Terminal.
+
+1. Install **Python 3.9 or newer** if you don't have it: https://www.python.org/downloads/macos/ (the "macOS 64-bit
+   universal" installer). The installer checks this and opens that page if Python is missing.
+2. Double-click `market-digest-setup.zip` in Finder to unzip it.
+3. Open **Terminal** (press Cmd+Space, type `Terminal`, press Return).
+4. Type `bash ` (with a space after it), then drag **`install-mac.command`** from the unzipped folder into the
+   Terminal window, and press Return. Starting it this way avoids macOS's "unidentified developer" warning.
+5. Answer the same questions as on Windows. **Cmd+V** pastes; the key and password stay hidden. For the JSON folder
+   you can drag a folder from Finder into the window; the installer shows where your Google Drive is.
+
+What is different on a Mac:
+
+- The program goes to `~/market-digest` (your home folder, `market-digest`).
+- The daily run is a **launchd** job (`~/Library/LaunchAgents/com.nugenix.market-digest.plist`) instead of a Task
+  Scheduler task. It runs while you are logged in. If the Mac is asleep at that time, it runs when it wakes; if
+  it is shut down, the next run covers everything since the last digest. A failed run is retried every 30 minutes,
+  3 times, like on Windows.
+- **Digest chat** on the desktop is `Digest chat.command`. Double-click it; a Terminal window opens and must stay
+  open while you use the chat.
+- If macOS asks whether Terminal may access your Desktop or Google Drive, click **Allow**.
+
 ## 4. Your settings
 
 The installer saves your answers in `C:\Users\<you>\market-digest\digest_config.json`. **This file contains your
@@ -160,6 +184,10 @@ cd $env:USERPROFILE\market-digest
 To run the scheduled task exactly as Windows would: open **Task Scheduler**, click **Task Scheduler Library**,
 right-click **Market video digest**, choose **Run**. Its log is in `digest.log` in the program folder.
 
+**On a Mac**, open Terminal, run `cd ~/market-digest`, and use the same commands with `python3` instead of `python`,
+for example `python3 digest.py --check`. To start the scheduled run now:
+`launchctl kickstart gui/$(id -u)/com.nugenix.market-digest`. Its log is `~/market-digest/digest.log`.
+
 ## 8. Changing, updating and removing it
 
 - **Change channels, email, key or time:** run `install.bat` again and answer `y` to "Settings already exist.
@@ -172,6 +200,10 @@ right-click **Market video digest**, choose **Run**. Its log is in `digest.log` 
   2. Delete the folder `C:\Users\<you>\market-digest`.
   3. Delete the **Digest chat** shortcut from the desktop.
   4. Optional: delete `C:\Users\<you>\ytmd` (the saved transcripts).
+- **Remove it from a Mac:** in Terminal run
+  `launchctl bootout gui/$(id -u)/com.nugenix.market-digest; rm ~/Library/LaunchAgents/com.nugenix.market-digest.plist`,
+  then delete the folders `~/market-digest` and (optional) `~/ytmd`, and `Digest chat.command` from the desktop.
+- **Update on a Mac:** unzip the new version and run its `install-mac.command` the same way as the first time.
 
 ## 9. If something goes wrong
 

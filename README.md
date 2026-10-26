@@ -11,7 +11,7 @@ Every morning it:
    levels quoted, predictions, risks and upcoming events,
 4. emails you one digest, where every point links to the exact moment in the video where it was said.
 
-It runs on your own Windows PC, uses only free services, and keeps your keys and data on your computer.
+It runs on your own Windows PC or Mac, uses only free services, and keeps your keys and data on your computer.
 
 ## Quick start (Windows)
 
@@ -22,6 +22,19 @@ address with an app password** (Google Account > Security > 2-Step Verification 
 2. Double-click **`install.bat`**. If Windows says "Windows protected your PC", click **More info > Run anyway**.
 3. Answer the questions. **Paste with a right-click**; Ctrl+V does not work in the hidden key prompts.
 4. Say **yes** to the test digest at the end. It opens in your browser.
+
+## Quick start (Mac)
+
+You need the same Gemini key and Gmail app password, and **Python 3.9 or newer**
+(https://www.python.org/downloads/macos/; the installer tells you if it is missing).
+
+1. Double-click `market-digest-setup.zip` in Finder to unzip it.
+2. Open **Terminal** (Cmd+Space, type Terminal, Return). Type `bash ` (with a space), drag **`install-mac.command`**
+   from the unzipped folder into the Terminal window, and press Return.
+3. Answer the questions. Cmd+V pastes; the key and password stay hidden as you paste them.
+4. Say **yes** to the test digest at the end. It opens in your browser.
+
+The digest then runs every day at the time you chose, from `~/market-digest`, and **Digest chat** is on your desktop.
 
 That's it. The digest arrives by email every day at the time you chose, and **Digest chat** is on your desktop.
 

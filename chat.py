@@ -1,6 +1,6 @@
 """Ask questions about the videos in your digest, plus what the web says now.
 
-Start it with run_chat.bat (or: python chat.py). It opens http://127.0.0.1:8765 in your browser.
+Start it with Digest chat on the desktop (run_chat.bat on Windows, run_chat.command on a Mac), or: python chat.py. It opens http://127.0.0.1:8765 in your browser.
 It only listens on this computer. It uses the same digest_config.json, Gemini key and saved videos as digest.py.
 Standard library only.
 """

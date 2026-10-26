@@ -25,6 +25,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -688,7 +689,7 @@ def main():
         sys.exit(f"Put digest.py in the same folder as the ytmd script (looked for {YTMD}).")
 
     if not wait_for_internet():
-        log("No internet for 15 minutes; stopping. Windows will try again in 30 minutes.")
+        log("No internet for 15 minutes; stopping. The daily schedule tries again in 30 minutes.")
         sys.exit(1)
 
     # 1. What is new
@@ -769,7 +770,7 @@ def main():
     OUT_DIR.mkdir(exist_ok=True)
     out = OUT_DIR / f"digest-{today:%Y-%m-%d-%H%M}.html"
     local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}" '
-                   f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat page; start it with run_chat.bat)</p>', page)
+                   f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat page; start it with Digest chat on the desktop)</p>', page)
     out.write_text(local, encoding="utf-8")
     log(f"Saved {out}")
     # The JSON copy for the Econova hub. A test run (--dry-run or --video) goes to the digests folder, so it can never
@@ -791,14 +792,14 @@ def main():
     emailed = False
     if not args.dry_run:
         if not done and not skipped and unchecked:
-            log("Could not check any channel. Leaving videos queued; Windows will retry in 30 minutes.")
+            log("Could not check any channel. Leaving videos queued; the daily schedule tries again in 30 minutes.")
             emailed = None
         elif done or skipped or unchecked:
             try:
                 emailed = send(cfg, subject, page, plain_text(done, skipped, overview))
             except Exception as err:
                 emailed = None
-                log(f"Email failed: {err}. The digest is saved above; these videos stay queued and Windows will try again in 30 minutes.")
+                log(f"Email failed: {err}. The digest is saved above; these videos stay queued and the daily schedule tries again in 30 minutes.")
             if emailed:
                 log("Emailed to " + ", ".join(cfg["email_to"] if isinstance(cfg["email_to"], list) else [cfg["email_to"]]))
             if emailed is not None:   # sent, or email is not set up and the saved file is the digest
@@ -809,9 +810,12 @@ def main():
         else:
             log("Nothing new today, so no email was sent.")
     if args.open:
-        os.startfile(out) if hasattr(os, "startfile") else print(out)
+        if hasattr(os, "startfile"):   # Windows
+            os.startfile(out)
+        else:                          # Mac and others: the default browser
+            webbrowser.open(out.resolve().as_uri())
     if emailed is None:
-        sys.exit(1)   # tells Task Scheduler the run failed, so it retries
+        sys.exit(1)   # tells the scheduler (Task Scheduler, or run_digest.sh on a Mac) the run failed, so it retries
 
 
 if __name__ == "__main__":
