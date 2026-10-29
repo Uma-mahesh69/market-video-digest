@@ -7,7 +7,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $src = $PSScriptRoot
-$files = "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
+$files = "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "STOPPED: $text" -ForegroundColor Red; exit 1 }
@@ -110,6 +110,8 @@ try {
         Write-Host "Each digest is also saved as a JSON file for the Econova hub. To share it, give a Google Drive for desktop folder,"
         Write-Host "for example G:\My Drive\Econova\Video Digests\json"
         $jsonDir = Ask "Folder for the daily JSON file (blank = digest_json in the program folder)" ""
+        Write-Host "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
+        $watchlist = Ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" ""
         $settings = [ordered]@{
             channels = @($channels -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
             gemini_api_key = $key
@@ -122,6 +124,7 @@ try {
             smtp_host = "smtp.gmail.com"
             smtp_port = 465
             json_dir = $jsonDir
+            watchlist_csv = $watchlist
         }
         [IO.File]::WriteAllText($config, ($settings | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
         Write-Host "Saved."

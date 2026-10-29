@@ -8,7 +8,7 @@ INSTALL_DIR="${MARKET_DIGEST_DIR:-$HOME/market-digest}"
 LABEL="com.nugenix.market-digest"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 SRC="$(cd "$(dirname "$0")" && pwd)"
-FILES=(digest.py digest_export.py digest_schema.json tickers.json chat.py chat.html ytmd README.md digest_config.example.json)
+FILES=(digest.py digest_export.py digest_schema.json tickers.json market_data.py market_schema.json chat.py chat.html ytmd README.md digest_config.example.json)
 
 step() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[31mSTOPPED: %s\033[0m\n' "$1"; exit 1; }
@@ -129,7 +129,9 @@ if [ "$write" = yes ]; then
     drive="$(ls -d "$HOME"/Library/CloudStorage/GoogleDrive-*/"My Drive" 2>/dev/null | head -1)"
     [ -n "$drive" ] && echo "Your Google Drive is at: $drive   (for example: $drive/Econova/Video Digests/json)"
     jsondir="$(ask "Folder for the daily JSON file (blank = digest_json in the program folder)" "")"
-    KEY="$key" CHANNELS="$channels" TO="$to" SMTP_USER="$user" SMTP_PASS="$pass" JSON_DIR="$jsondir" "$PY" - "$CONFIG" <<'EOF' || fail "Could not save the settings."
+    echo "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
+    watchlist="$(ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" "")"
+    KEY="$key" CHANNELS="$channels" TO="$to" SMTP_USER="$user" SMTP_PASS="$pass" JSON_DIR="$jsondir" WATCHLIST="$watchlist" "$PY" - "$CONFIG" <<'EOF' || fail "Could not save the settings."
 import json, os, sys
 split = lambda s: [x.strip() for x in s.split(",") if x.strip()]
 settings = {
@@ -145,6 +147,7 @@ settings = {
     "smtp_port": 465,
     # A folder dragged into Terminal arrives as /Users/x/My\ Drive or in quotes.
     "json_dir": os.path.expanduser(os.environ["JSON_DIR"].strip().strip("'\"").replace("\\ ", " ")),
+    "watchlist_csv": os.environ["WATCHLIST"].strip(),
 }
 with open(sys.argv[1], "w", encoding="utf-8") as f:
     json.dump(settings, f, indent=2)

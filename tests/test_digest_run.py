@@ -125,6 +125,49 @@ class DailyRun(unittest.TestCase):
         self.assertEqual(self.day_file("digests")["video_count"], 2)
         self.assertEqual(self.calls["extract"], 3)
 
+    def use_watchlist(self, content):
+        sheet = self.tmp / "watchlist.csv"
+        sheet.write_text(content, encoding="utf-8")
+        cfg = json.loads(digest.CONFIG.read_text())
+        digest.CONFIG.write_text(json.dumps(dict(cfg, watchlist_csv=str(sheet))))
+        self.sent = []
+        digest.send = lambda cfg, subject, page, text: self.sent.append((page, text)) or True
+
+    def test_watchlist_in_email_and_market_file(self):
+        self.use_watchlist("Role,Ticker,Name,Price,Currency,Change % (day),Change % (week)\n"
+                           "watch,NVDA,NVIDIA Corp,213.25,USD,-0.99,0.49\nwatch,AAPL,Apple Inc,349.32,USD,1.6,0.32\n"
+                           "sp500,INDEXSP:.INX,S&P 500,7706.17,,-0.49,0.56\n")
+        code, out = self.run_digest()
+        self.assertEqual(code, 0, out)
+        page, text = self.sent[0]
+        self.assertIn("Your watchlist", page)
+        self.assertIn("No new expert views today on 1 of your 2 stocks: AAPL.", page)
+        self.assertIn("year-end S&amp;P 500 target of 8,050 is +4.5%", page)
+        self.assertIn("Look at next:", text)
+        market = json.loads((self.tmp / "json" / f"market-data_{datetime.now():%Y-%m-%d}.json").read_text(encoding="utf-8"))
+        nvda = market["watchlist"][0]
+        self.assertEqual((nvda["ticker"], nvda["price"], nvda["calls_today"]["bullish"]), ("NVDA", 213.25, 2))
+        code, out = self.run_digest("--check")
+        self.assertIn("Watchlist sheet: 2 stocks, 2 with prices, S&P 500 at 7,706", out)
+
+    def test_broken_sheet_does_not_stop_the_digest(self):
+        self.use_watchlist("<html>Sign in</html>")
+        code, out = self.run_digest()
+        self.assertEqual(code, 0, out)
+        self.assertIn("Prices for your watchlist could not be read today", self.sent[0][0])
+        self.assertEqual(self.day_file()["video_count"], 2)   # the digest file is saved as usual
+        self.assertFalse((self.tmp / "json" / f"market-data_{datetime.now():%Y-%m-%d}.json").exists())
+
+    def test_email_stock_table_merges_names(self):
+        notes = digest.clean_notes(fake_notes(), 1404)
+        notes["stocks"].append({"name": "NVDA", "ticker": "NVDA", "view": "bearish", "reason": "too far, too fast", "time": "2:00", "seconds": 120})
+        page = digest.render(datetime.now(), [{"video": dict(upload(1), duration=1404), "notes": notes}], [],
+                             {"overview": "", "themes": [], "disagreements": []})
+        table = page[page.index("Stocks mentioned"):page.index("Market levels")]
+        self.assertEqual(table.count("<b>Nvidia</b>"), 1)
+        self.assertNotIn("<b>NVDA</b>", table)
+        self.assertIn("too far, too fast", table)
+
     def test_check_reports_the_json_folder(self):
         code, out = self.run_digest("--check")   # the /channel/UC... link needs no lookup
         self.assertEqual(code, 0, out)

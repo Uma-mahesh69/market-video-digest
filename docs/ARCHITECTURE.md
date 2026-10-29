@@ -43,6 +43,7 @@ a plain-language summary.
 | **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
 | **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. On a Mac, `run_digest.sh` also retries a failed run every 30 minutes, 3 times, as Task Scheduler does on Windows. |
 | **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
+| **Watchlist** | `market_data.py`, `market_schema.json`, `watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
 | **Tests** | `tests/test_digest_export.py`, `tests/test_digest_run.py` | `python -m unittest` in the project folder runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |
 
@@ -93,6 +94,18 @@ a plain-language summary.
      summarising again any video whose notes were saved before the JSON fields existed. It refuses to overwrite an
      existing file; with `--dry-run` it writes to `digests\`.
    - Scoring (mood, consensus, upside) is done by the hub, not here.
+   - **Watchlist and prices** (`market_data.py`, when `watchlist_csv` is set). The watchlist is a Google Sheet whose
+     `GOOGLEFINANCE()` formulas give price, day and week change, 52-week range, P/E and market cap, plus two
+     benchmark rows: the S&P 500 (`INDEXSP:.INX`) and the 10-year yield (`INDEXCBOE:TNX`, quoted as the yield
+     times 10). The sheet is read as CSV from its "Publish to web" link (no API key, standard library only).
+     `market_brief` joins it with the day's stock calls and with the last 14 days of calls in `digest_cache`, and
+     applies fixed rules (no model call): experts vs price (the week's calls lean one way, the price moved 5% or
+     more the other way), sentiment shift (this week's bullish share a third or more away from last week's), split
+     today, a catalyst in "Coming up", S&P 500 target vs today's level, 10-year concern level vs today's yield, new
+     calls today, and the stocks with no new views. Up to 5 cards, in that order of priority, go into the email's
+     "Your watchlist" section and into `market-data_YYYY-MM-DD.json` (schema `market_schema.json`), saved next to
+     the digest file and covering the same videos. Prices stay out of `video-digest_*.json`, which holds only what
+     analysts said. A sheet that cannot be read gives a note in the email and no market file; the digest goes on.
 8. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
 9. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
    out. If sending fails, nothing is marked, and the run exits with code 1 so Windows retries in 30 minutes.
@@ -135,6 +148,8 @@ a plain-language summary.
 | `digest_cache\<id>.json` | Gemini's notes per video | No |
 | `digests\*.html` | Every digest as a web page | No |
 | `digest_json\video-digest_YYYY-MM-DD.json` (or `json_dir`) | The day's digest as JSON for the Econova hub | No |
+| `digest_json\market-data_YYYY-MM-DD.json` (or `json_dir`) | Watchlist prices, analyst calls per stock and the insight cards | No |
+| `watchlist_template.csv` | The watchlist sheet's formulas, to import into Google Sheets | No |
 | `tickers.json` | Company name to ticker lookup. Add a line when the log reports an unmatched name | No |
 | `chats.json` | Saved chats | Private |
 | `digest.log` | Output of scheduled runs | No |
@@ -170,4 +185,7 @@ a plain-language summary.
 - Captions are automatic: names and numbers can be misheard.
 - Shorts usually have no captions and are skipped.
 - `generateContent` is Google's older ("legacy") API style; Google now recommends the Interactions API. It still works.
+- Watchlist prices come from `GOOGLEFINANCE()`: delayed up to 20 minutes, US-centred, and Google says not for trading.
+  It has no earnings dates, so the "catalyst" card relies on what the videos say. Whether a published sheet keeps
+  recalculating when nobody has it open has not been checked over several days.
 - The YouTube terms-of-service and copyright check required by the original task has not been done yet.

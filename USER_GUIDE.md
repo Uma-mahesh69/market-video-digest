@@ -120,6 +120,7 @@ If you prefer to edit the file in Notepad, these are the settings:
 | `email_to` | Who receives the digest. | |
 | `smtp_user`, `smtp_password` | The Gmail account that sends it, and its app password. | |
 | `smtp_host`, `smtp_port` | The mail server. Leave as is for Gmail. | smtp.gmail.com, 465 |
+| `watchlist_csv` | The CSV link of your watchlist Google Sheet (see section 5a), or the path of a CSV file. Empty = no watchlist. | |
 | `json_dir` | Folder for the daily JSON file (`video-digest_YYYY-MM-DD.json`) that feeds the Econova hub. Use a Google Drive for desktop folder to share it. | `digest_json` in the program folder |
 
 After editing, run `python digest.py --check` (see section 7) to test your changes.
@@ -139,6 +140,45 @@ After editing, run `python digest.py --check` (see section 7) to test your chang
 **How to read it safely:** captions are made automatically and can mishear names and numbers. A figure Gemini was
 unsure of is marked **(check)**. Click the time next to any point to hear it said in the video. The digest
 reports each channel's opinion. It is not investment advice.
+
+## 5a. Your watchlist (prices from Google Finance)
+
+Optional. With a watchlist, every digest starts with a **Your watchlist** section: today's price and the week's move
+for each of your stocks, what the analysts said about them, and up to five short notes such as:
+
+- *Experts stayed bullish on GOOGL (2 of 2 calls this week), but the stock fell 12.7% this week.*
+- *Experts turned cautious on NFLX: 0 of 2 calls bullish this week, against 3 of 3 the week before.*
+- *Experts split on NVDA today: 1 bullish, 1 bearish.* (with a link to each side's moment in the video)
+- *NVDA: 'Nvidia earnings' (2026-11-19) was flagged in video #1.*
+- *Sam Stovall's year-end S&P 500 target of 8,050 is +4.5% from today's level (7,706).*
+- *No new expert views today on 4 of your 6 stocks: ...*
+
+Each note ends with **Look at next** (watch the clip, check the news, note a date). It never says buy or sell: the
+digest reports what analysts said and what prices did.
+
+Google Finance cannot export a watchlist, so the list lives in a Google Sheet whose `GOOGLEFINANCE()` formulas fetch
+the prices. To set it up once:
+
+1. Open https://sheets.new (a new Google Sheet), then **File > Import > Upload** and choose `watchlist_template.csv`
+   from the program folder. Choose **Replace current sheet** and **Convert text to numbers, dates, and formulas**.
+2. Change the tickers in column **B** to your own stocks (keep column A as `watch`). Add or delete rows as you like.
+   Keep the two last rows (`sp500` and `us10y`): they give the S&P 500 level and the 10-year Treasury yield.
+   Non-US stocks need Google Finance's form, for example `KRX:000660` for SK Hynix.
+3. **File > Settings > Calculation > Recalculation: On change and every minute**, so the prices stay fresh.
+4. **File > Share > Publish to web**: choose the sheet, **Comma-separated values (.csv)**, tick **Automatically
+   republish when changes are made**, click **Publish**, and copy the link.
+5. Run the installer again (answer `y` to "Enter them again?") and paste the link at the watchlist question, or put
+   it in `digest_config.json` as `watchlist_csv`. Then run `python digest.py --check`: it should say
+   `Watchlist sheet: 10 stocks, 10 with prices`.
+
+**Privacy:** a published link can be opened by anyone who has it. The sheet holds only tickers and public prices,
+not how many shares you own. Do not add quantities or values to it.
+
+Each digest also saves `market-data_YYYY-MM-DD.json` next to the digest's JSON file, for the Econova hub.
+
+**Coverage check:** to see how often your stocks came up in the videos lately, run
+`python market_data.py --coverage` (last 14 days) or `python market_data.py --coverage --days 28`. It lists the calls
+per stock (bullish, bearish, neutral, mixed) and says whether most of your stocks come up every week.
 
 ## 6. Everyday use: the chat page
 

@@ -32,7 +32,8 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
-from digest_export import export_digest, file_name, number, speakers as note_speakers
+from digest_export import export_digest, file_name, load_tickers, number, resolve_ticker, speakers as note_speakers
+from market_data import market_brief, read_watchlist, save_market
 
 HERE = Path(__file__).resolve().parent
 YTMD = HERE / "ytmd"
@@ -385,6 +386,19 @@ def day_summary(cfg, done):
     return s
 
 
+def watchlist(cfg, day, done):
+    """(prices, market) from the watchlist sheet, or (None, None) when none is set up. A sheet that cannot be read
+    gives a market of {"error": ...}, shown as a note in the email; it never stops the digest."""
+    if not cfg.get("watchlist_csv"):
+        return None, None
+    try:
+        prices = read_watchlist(cfg["watchlist_csv"])
+        return prices, market_brief(day, prices, done, CACHE_DIR)
+    except Exception as err:
+        log(f"Watchlist prices not read: {err}")
+        return None, {"error": str(err)}
+
+
 def make_overview(cfg, done):
     if len(done) > 1:
         return day_summary(cfg, done)
@@ -429,7 +443,45 @@ def bullets(items):
     return '<ul style="margin:6px 0 0;padding-left:20px">' + "".join(f'<li style="margin:3px 0">{i}</li>' for i in items) + "</ul>"
 
 
-def render(day, done, skipped, overview, unchecked=()):
+def change(pct):
+    """A % change in green or red, like +1.2%; a dash when unknown."""
+    if pct is None:
+        return f'<span style="color:{C["muted"]}">-</span>'
+    return f'<span style="color:{C["bullish"] if pct >= 0 else C["bearish"]}">{pct:+.1f}%</span>'
+
+
+def watchlist_html(market):
+    """The watchlist section: insight cards, then prices and today's calls. Built in code from the sheet and the notes."""
+    if market.get("error"):
+        return f'<p style="color:{C["muted"]}">Prices for your watchlist could not be read today: {e(market["error"])}.</p>'
+    out = []
+    b = market["benchmarks"]
+    marks = []
+    if b.get("sp500"):
+        marks.append(f'S&amp;P 500 {b["sp500"]["value"]:,.0f} ({change(b["sp500"].get("change_pct_day"))} today)')
+    if b.get("us10y"):
+        marks.append(f'US 10-year yield {b["us10y"]["value"]:.2f}%')
+    if marks:
+        out.append(f'<p style="margin:0 0 8px;color:{C["muted"]};font-size:13px">{" &middot; ".join(marks)}</p>')
+    cards = []
+    for c in market["insights"]:
+        clip = f' <a href="{e(c["url"])}" style="color:{C["blue"]};text-decoration:none">[{e(c["timestamp"] or "video")}]</a>' if c["url"] else ""
+        cards.append(f'{e(c["text"])}{clip}<br><span style="color:{C["muted"]};font-size:13px">Look at next: {e(c["look_at_next"])}</span>')
+    if cards:
+        out.append(bullets(cards))
+    rows = []
+    for w in market["watchlist"]:
+        calls = ", ".join(f"{n} {k}" for k, n in w["calls_today"].items() if n) or f'<span style="color:{C["muted"]}">none</span>'
+        price = f'{w["price"]:,.2f}' + (f' <span style="color:{C["muted"]};font-size:12px">{e(w["currency"])}</span>' if w.get("currency") else "") if w["price"] is not None else "-"
+        rows.append([f'<b>{e(w["ticker"])}</b><br><span style="color:{C["muted"]};font-size:12px">{e(w["name"])}</span>',
+                     price, change(w["change_pct_day"]), change(w["change_pct_week"]), calls])
+    out.append(f'<div style="margin-top:12px">{table(["Stock", "Price", "Day", "Week", "Calls today"], rows)}</div>')
+    out.append(f'<p style="margin:6px 0 0;font-size:12px;color:{C["muted"]}">Prices from Google Finance, can be delayed up to 20 minutes. '
+               'They are shown next to what analysts said, for information only.</p>')
+    return "".join(out)
+
+
+def render(day, done, skipped, overview, unchecked=(), market=None):
     vref = lambda nums: " ".join(f'<a href="#v{n}" style="color:{C["blue"]}">#{n}</a>' for n in nums)
     parts = [f'<p style="margin:0;color:{C["muted"]};font-size:13px">{day:%A, %d %B %Y}. '
              f'{len(done)} new video{"s" if len(done) != 1 else ""} from {len({d["video"]["channel"] for d in done})} channel(s).</p>',
@@ -441,6 +493,8 @@ def render(day, done, skipped, overview, unchecked=()):
         parts.append("<p>No new videos with captions since the last digest.</p>")
     if overview.get("overview"):
         parts.append(f'<p style="font-size:16px;line-height:1.6">{e(overview["overview"])}</p>')
+    if market:
+        parts.append(section("Your watchlist", watchlist_html(market)))
     if overview.get("themes"):
         parts.append(section("Themes today", "".join(
             f'<p style="margin:0 0 10px"><b>{e(t.get("theme", ""))}</b>. {e(t.get("detail", ""))} {vref(t["videos"])}</p>' for t in overview["themes"])))
@@ -448,18 +502,21 @@ def render(day, done, skipped, overview, unchecked=()):
         parts.append(section("Where channels disagree", "".join(
             f'<p style="margin:0 0 10px"><b>{e(t.get("topic", ""))}</b>. {e(t.get("detail", ""))} {vref(t["videos"])}</p>' for t in overview["disagreements"])))
 
-    # Stocks across all videos, grouped by name. Built from the notes, not written by the model.
-    stocks = {}
+    # Stocks across all videos, grouped by ticker (tickers.json), so "Nvidia" and "NVDA" are one row, as in the
+    # JSON file. Built from the notes, not written by the model.
+    stocks, tickers = {}, load_tickers()
     for n, d in enumerate(done, 1):
         for s in d["notes"]["stocks"]:
-            key = (s.get("ticker") or s.get("name") or "").strip().upper()
+            said = str(s.get("ticker") or "").strip()
+            key = resolve_ticker(str(s.get("name") or said), said, tickers) or (said or str(s.get("name") or "")).strip().upper()
             if key:
                 stocks.setdefault(key, []).append((n, d, s))
     if stocks:
         rows = []
         for key, hits in sorted(stocks.items(), key=lambda kv: -len(kv[1])):
-            name = hits[0][2].get("name") or key
-            tick = hits[0][2].get("ticker")
+            # The company's name as written, preferring a name over a bare ticker ("Nvidia" rather than "NVDA")
+            name = next((h[2]["name"] for h in hits if h[2].get("name") and str(h[2]["name"]).upper() != key), None) or hits[0][2].get("name") or key
+            tick = key
             rows.append([f'<b>{e(name)}</b>' + (f'<br><span style="color:{C["muted"]};font-size:12px">{e(tick)}</span>' if tick and tick.upper() != name.upper() else ""),
                          "<br>".join(f'{view_tag(s["view"])} <span style="color:{C["muted"]}">{e(d["video"]["channel"])}</span>' for n, d, s in hits),
                          "<br>".join(f'{e(s.get("reason", ""))}{tlink(d["video"], s)}' for n, d, s in hits)])
@@ -512,8 +569,10 @@ def render(day, done, skipped, overview, unchecked=()):
             f'font:15px/1.55 -apple-system,\'Segoe UI\',Roboto,Arial,sans-serif;color:{C["ink"]}">{"".join(parts)}</div></body></html>')
 
 
-def plain_text(done, skipped, overview):
+def plain_text(done, skipped, overview, market=None):
     lines = [overview.get("overview", ""), ""]
+    if market and market.get("insights"):
+        lines += ["Your watchlist:"] + [f'- {c["text"]} Look at next: {c["look_at_next"]}' for c in market["insights"]] + [""]
     for n, d in enumerate(done, 1):
         lines += [f'#{n} {d["video"]["title"]} ({d["video"]["channel"]})', d["video"]["url"], d["notes"]["summary"], ""]
     lines += [f'Not included: {v["title"]} ({why})' for v, why in skipped]
@@ -571,6 +630,17 @@ def check(cfg, state):
     except RuntimeError as err:
         print(f"FAILED: {err}")
         ok = False
+
+    if cfg.get("watchlist_csv"):
+        print("Watchlist sheet: ", end="", flush=True)
+        try:
+            prices = read_watchlist(cfg["watchlist_csv"])
+            priced = sum(1 for w in prices["watchlist"] if w["price"] is not None)
+            sp = prices["benchmarks"].get("sp500")
+            print(f"{len(prices['watchlist'])} stocks, {priced} with prices" + (f", S&P 500 at {sp['value']:,.0f}" if sp else ""))
+        except Exception as err:
+            print(f"FAILED: {err}")
+            ok = False
 
     folder = Path(cfg.get("json_dir") or JSON_DIR)
     print("JSON folder: ", end="", flush=True)
@@ -678,7 +748,7 @@ def main():
     ap.add_argument("--hours", type=float, help="look back this many hours (default from the config, 26)")
     ap.add_argument("--dry-run", action="store_true", help="do not email, and do not mark videos as done")
     ap.add_argument("--video", help="make a digest of one video link instead of checking channels")
-    ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key, the JSON folder and the email login, then stop")
+    ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key, the watchlist sheet, the JSON folder and the email login, then stop")
     ap.add_argument("--open", action="store_true", help="open the digest in the browser when done")
     ap.add_argument("--rebuild", metavar="YYYY-MM-DD", help="write the JSON file for an earlier day's digest from the saved notes, then stop")
     args = ap.parse_args()
@@ -766,7 +836,8 @@ def main():
     # 4. One digest
     overview = make_overview(cfg, done)
     today = datetime.now()
-    page = render(today, done, skipped, overview, unchecked)
+    prices, market = watchlist(cfg, today, done)
+    page = render(today, done, skipped, overview, unchecked, market)
     OUT_DIR.mkdir(exist_ok=True)
     out = OUT_DIR / f"digest-{today:%Y-%m-%d-%H%M}.html"
     local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}" '
@@ -779,12 +850,17 @@ def main():
         try:
             if args.dry_run or args.video:
                 export_digest(today, done, overview, OUT_DIR, log)
+                if prices:
+                    save_market(market, OUT_DIR, log)
             else:
                 day = whole_day(cfg, state, today, done, overview)
                 if day is None:
                     log(f"JSON digest for {today:%Y-%m-%d}: no new videos on this run, so today's file is kept as it is.")
                 else:
-                    export_digest(today, *day, Path(cfg.get("json_dir") or JSON_DIR), log)
+                    folder = Path(cfg.get("json_dir") or JSON_DIR)
+                    export_digest(today, *day, folder, log)
+                    if prices:   # the market file covers the same videos as the day's digest file
+                        save_market(market if day[0] is done else market_brief(today, prices, day[0], CACHE_DIR), folder, log)
                 save_state(state)
         except Exception as err:   # the email matters more than the JSON copy
             log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
@@ -796,7 +872,7 @@ def main():
             emailed = None
         elif done or skipped or unchecked:
             try:
-                emailed = send(cfg, subject, page, plain_text(done, skipped, overview))
+                emailed = send(cfg, subject, page, plain_text(done, skipped, overview, market))
             except Exception as err:
                 emailed = None
                 log(f"Email failed: {err}. The digest is saved above; these videos stay queued and the daily schedule tries again in 30 minutes.")

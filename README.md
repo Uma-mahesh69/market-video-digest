@@ -47,6 +47,7 @@ That's it. The digest arrives by email every day at the time you chose, and **Di
 | Get a digest right now | In PowerShell: `cd $env:USERPROFILE\market-digest` then `python digest.py --open` |
 | Check everything works | `python digest.py --check` (in the same folder) |
 | Feed the Econova hub | Each run also saves `video-digest_YYYY-MM-DD.json` in `json_dir` (set it to a Google Drive for desktop folder to share it). See [ARCHITECTURE.md](docs/ARCHITECTURE.md) §3. |
+| See prices for my stocks next to the analysts' calls | Set up the watchlist sheet: USER_GUIDE.md, section 5a. |
 | Change channels, email or time | Run `install.bat` again and answer `y` to "Enter them again?" |
 
 ## Documents

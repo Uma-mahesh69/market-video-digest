@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Market data for the watchlist, schema 1.x",
+  "description": "Schema 1.0. Prices come from Google Finance through a Google Sheet; analyst calls come from the day's videos. Files of any 1.x version pass: 1.x may add optional fields, never rename or remove one.",
+  "type": "object",
+  "required": ["schema_version", "date", "generated_at", "source", "benchmarks", "watchlist", "insights"],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^1\\.\\d+$"},
+    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "generated_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"},
+    "source": {"type": "string"},
+    "benchmarks": {
+      "type": "object",
+      "required": ["sp500", "us10y"],
+      "properties": {
+        "sp500": {"type": ["object", "null"], "required": ["value"], "properties": {
+          "value": {"type": "number"}, "change_pct_day": {"type": ["number", "null"]}, "change_pct_week": {"type": ["number", "null"]}}},
+        "us10y": {"type": ["object", "null"], "required": ["value", "unit"], "properties": {
+          "value": {"type": "number"}, "unit": {"const": "%"}, "change_pct_day": {"type": ["number", "null"]}}}
+      }
+    },
+    "watchlist": {"type": "array", "items": {"$ref": "#/$defs/stock"}},
+    "insights": {"type": "array", "items": {"$ref": "#/$defs/insight"}}
+  },
+  "$defs": {
+    "maybe_number": {"type": ["number", "null"]},
+    "calls": {
+      "type": "object", "required": ["bullish", "bearish", "neutral", "mixed"],
+      "properties": {"bullish": {"type": "integer", "minimum": 0}, "bearish": {"type": "integer", "minimum": 0},
+                     "neutral": {"type": "integer", "minimum": 0}, "mixed": {"type": "integer", "minimum": 0}}
+    },
+    "stock": {
+      "type": "object",
+      "required": ["ticker", "name", "currency", "price", "change_pct_day", "change_pct_week", "high_52w", "low_52w", "pe",
+                   "market_cap", "calls_today", "calls_7d", "mood_7d"],
+      "properties": {
+        "ticker": {"type": "string"},
+        "name": {"type": "string"},
+        "currency": {"type": ["string", "null"]},
+        "price": {"$ref": "#/$defs/maybe_number"},
+        "change_pct_day": {"$ref": "#/$defs/maybe_number"},
+        "change_pct_week": {"$ref": "#/$defs/maybe_number"},
+        "high_52w": {"$ref": "#/$defs/maybe_number"},
+        "low_52w": {"$ref": "#/$defs/maybe_number"},
+        "pe": {"$ref": "#/$defs/maybe_number"},
+        "market_cap": {"$ref": "#/$defs/maybe_number"},
+        "calls_today": {"$ref": "#/$defs/calls"},
+        "calls_7d": {"$ref": "#/$defs/calls"},
+        "mood_7d": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "insight": {
+      "type": "object",
+      "required": ["type", "tickers", "text", "look_at_next", "video", "timestamp", "url"],
+      "properties": {
+        "type": {"enum": ["no_new_views", "experts_vs_price", "sentiment_shift", "split", "catalyst", "target_upside", "rate_headroom", "new_views"]},
+        "tickers": {"type": "array", "items": {"type": "string"}},
+        "text": {"type": "string"},
+        "look_at_next": {"type": "string"},
+        "video": {"type": ["integer", "null"], "minimum": 1},
+        "timestamp": {"type": ["string", "null"], "pattern": "^\\d{1,2}(:\\d{2}){1,2}$"},
+        "url": {"type": ["string", "null"], "pattern": "^https?://"}
+      }
+    }
+  }
+}

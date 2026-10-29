@@ -13,5 +13,6 @@
   "smtp_host": "smtp.gmail.com",
   "smtp_port": 465,
 
-  "json_dir": ""
+  "json_dir": "",
+  "watchlist_csv": ""
 }
