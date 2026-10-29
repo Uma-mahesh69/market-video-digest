@@ -10,6 +10,7 @@ dates, and the sides of a debate are worked out from the sentence that describes
 Standard library only.
 """
 import argparse
+import glob
 import html
 import json
 import re
@@ -260,8 +261,12 @@ def main():
     if not folder:
         cfg = HERE / "digest_config.json"
         folder = (json.loads(cfg.read_text(encoding="utf-8")).get("json_dir") if cfg.exists() else None) or HERE / "digest_json"
+    # Windows shells pass "digests\\digest-*.html" on unexpanded, so expand patterns here
+    pages = [match for p in args.pages for match in (sorted(glob.glob(p)) if glob.has_magic(p) else [p])]
+    if not pages:
+        sys.exit(f"No files match {' '.join(args.pages)}")
     by_day, ok = {}, True
-    for p in args.pages:   # several digests on one day become one file, as the daily run does
+    for p in pages:   # several digests on one day become one file, as the daily run does
         try:
             page = Path(p).read_text(encoding="utf-8")
             by_day.setdefault(f"{parse(page)[0]:%Y-%m-%d}", []).append(page)

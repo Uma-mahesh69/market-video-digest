@@ -94,6 +94,17 @@ class RoundTrip(unittest.TestCase):
         sides = eb.sides("Video 6 explicitly rates Apple a buy, while Videos 1, 4, and 5 label it a trap", [1, 4, 5, 6], {})
         self.assertEqual([s["videos"] for s in sides], [[6], [1, 4, 5]])
 
+    def test_saved_copy_and_patterns(self):
+        """The saved copy in digests/ has an "Ask a question" link under each video; a pattern is expanded by the script."""
+        import re, subprocess, sys
+        folder, out = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
+        local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}">Ask a question about this video</a></p>', self.page)
+        (folder / "digest-2026-10-22-0730.html").write_text(local, encoding="utf-8")
+        run = subprocess.run([sys.executable, "email_backfill.py", str(folder / "digest-*.html"), "--out", str(out)], capture_output=True, text=True,
+                             cwd=Path(__file__).resolve().parent.parent)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(json.loads((out / "video-digest_2026-10-22.json").read_text(encoding="utf-8"))["video_count"], 2)
+
     def test_not_a_digest(self):
         with self.assertRaises(ValueError):
             eb.parse("<html>hello</html>")
