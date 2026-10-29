@@ -181,6 +181,18 @@ Share classes are matched: a watchlist with `GOOG` picks up the analysts' calls 
 
 Each digest also saves `market-data_YYYY-MM-DD.json` next to the digest's JSON file, for the Econova hub.
 
+### Feeding the Econova dashboard
+
+The dashboard reads the two daily files from the Google Drive folder **Econova / Video Digests / json**.
+
+1. Install **Google Drive for desktop** (https://www.google.com/drive/download/) and sign in. Your Drive then shows up
+   as a drive letter on Windows (often `G:\My Drive`) or under `~/Library/CloudStorage/GoogleDrive-<you>/My Drive` on a Mac.
+2. Run the installer again and give that folder as the JSON folder, for example
+   `G:\My Drive\Econova\Video Digests\json`. `python digest.py --check` should say the JSON folder can be written.
+3. To add days from before the JSON export existed, from their saved digests:
+   `python email_backfill.py digests\digest-2026-10-*.html --out "G:\My Drive\Econova\Video Digests\json"`.
+   Several digests on one day become one file, and a day that already has a file is left as it is.
+
 **Coverage check:** to see how often your stocks came up in the videos lately, run
 `python market_data.py --coverage` (last 14 days) or `python market_data.py --coverage --days 28`. It lists the calls
 per stock (bullish, bearish, neutral, mixed) and says whether most of your stocks come up every week.

@@ -3,6 +3,19 @@
 For whoever connects the hub's **Analyst Video Digest** page to the automation. The automation side is done; this
 page says what it writes and how the hub's KPIs map onto it.
 
+## A working page
+
+[`econova_dashboard/`](econova_dashboard/) holds a working **Analyst Video Digest** page built on the Claude
+Dashboard artifact type: `index.html` (the page, its loaders and its calculations) and `sources.json` (its three
+live sources). It reads both daily files straight from the Google Drive folder through the Google Drive connector,
+and the watchlist sheet's prices the same way, so it refreshes itself whenever it is opened. Its headline cards are
+the user story's KPIs as visible calculations; on the Oct 22 file they give the reference page's values. To use it
+inside the hub, copy the page and its three sources, or link to it from the hub's sidebar.
+
+Each live source runs with the reader's own Google Drive access, so a reader needs the Google Drive connector and
+read access to the folder and the sheet. In the dashboard's Settings, the owner can instead let readers see the
+owner's results.
+
 ## What arrives each day
 
 Two files, in the same folder (`json_dir` in the digest's settings, for example a shared Google Drive folder):
@@ -22,6 +35,9 @@ Two files, in the same folder (`json_dir` in the digest's settings, for example 
 **Checked on real data:** applied to the real Oct 22, 2026 digest (TheStreet, 9 videos), these rules give the
 user story's reference values exactly: mood 74% (58 vs 20), consensus buys GOOGL, AMZN, MU, split NVDA, AAPL, META,
 CRWV, NFLX, avoid TSLA (2 bearish, 2 mixed), and Nvidia's 7 calls as 7 rows (`tests/test_reference_day.py`).
+
+Days before the JSON export existed can be added from their digest emails or saved digests with
+`python email_backfill.py digests/digest-*.html --out <folder>` (see the script's header for what an email can't hold).
 
 Sample files to build against: [`samples/`](samples/). Their analyst calls are made up; the prices are the ones
 Google Finance gave on 29 Oct 2026.

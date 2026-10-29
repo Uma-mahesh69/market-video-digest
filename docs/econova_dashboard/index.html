@@ -1,0 +1,654 @@
+<meta name="dash-one-writer">
+<style>
+  .mvd { max-width: 72rem; margin-inline: auto; display: grid; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); }
+  .mvd-head { display: grid; gap: var(--cds-gap-sm); }
+  .mvd-eyebrow { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .06em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+  .mvd-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .mvd-bottom { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); }
+  .mvd-bottom p { margin: 0; max-width: 68ch; line-height: 1.55; }
+  .mvd-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; line-height: 1.5; }
+  .mvd-tiles { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); }
+  .mvd-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); align-content: start; }
+  .mvd-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; }
+  .mvd-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .mvd-sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; font-variant-numeric: tabular-nums; line-height: 1.45; }
+  .mvd-grid { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+  .mvd-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-sm); align-content: start; min-width: 0; }
+  .mvd-card h2, .mvd-section h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+  .mvd-section { display: grid; gap: var(--cds-gap-md); }
+  .mvd-chart { position: relative; min-height: 6rem; }
+  .mvd-chart svg { display: block; }
+  .mvd-tip { position: absolute; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); pointer-events: none; white-space: nowrap; z-index: 2; }
+  .mvd-tip .k { color: var(--cds-text-secondary); }
+  .mvd-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; padding: 0; list-style: none; }
+  .mvd-legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+  .mvd-sw-bull { background: var(--cds-chart-series-1, currentColor); }
+  .mvd-sw-bear { background: var(--cds-chart-status-critical); }
+  .mvd-sw-other { background: var(--cds-chart-muted); }
+  .mvd-scroll { overflow-x: auto; }
+  .mvd-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); font-variant-numeric: tabular-nums; }
+  .mvd-table th { text-align: left; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .mvd-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .mvd-table .num { text-align: right; }
+  .mvd-table .sub { display: block; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .mvd-up { color: var(--color-ok); }
+  .mvd-down { color: var(--color-bad); }
+  .mvd-cards { display: grid; gap: var(--cds-gap-sm); margin: 0; padding: 0; list-style: none; }
+  .mvd-cards li { border-left: 3px solid var(--color-border-line); padding: var(--cds-pad-xs) 0 var(--cds-pad-xs) var(--cds-pad-md); display: grid; gap: 2px; }
+  .mvd-cards li.warn { border-left-color: var(--color-warn); }
+  .mvd-cards li.bad { border-left-color: var(--color-bad); }
+  .mvd-cards li.ok { border-left-color: var(--color-ok); }
+  .mvd-cards .look { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .mvd-list { margin: 0; padding-left: 1.1rem; display: grid; gap: var(--cds-gap-xs); }
+  .mvd-debate { display: grid; gap: var(--cds-gap-xs); padding-bottom: var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); }
+  .mvd-debate:last-child { border-bottom: 0; }
+  .mvd-debate b { font-weight: var(--cds-font-weight-medium); }
+  .mvd-debate p { margin: 0; line-height: 1.45; }
+  .mvd-tag { font-size: var(--cds-font-size-caption); }
+  .mvd a { color: inherit; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  [data-dash-source-state=empty] { color: transparent; }
+  .mvd-failed { display: flex; align-items: center; justify-content: center; gap: .4rem; min-height: inherit; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .mvd-failed::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+</style>
+
+<div class="mvd">
+  <header class="mvd-head" id="summary">
+    <p class="mvd-eyebrow">Analyst video digest · <span data-draw="channels" data-source="latest" data-field="channels" data-row="0" class="dash-skeleton">—</span> · <span data-draw="videos" data-source="latest" data-field="videos" data-row="0" class="dash-skeleton">—</span> videos · digest of <span data-draw="day" data-source="latest" data-field="day" data-row="0" class="dash-skeleton">—</span></p>
+    <h1 class="mvd-title">What are the analysts saying?</h1>
+    <div class="mvd-bottom">
+      <p class="mvd-label">Bottom line from today's videos</p>
+      <p data-draw="summary" data-source="latest" data-field="summary" data-row="0" class="dash-skeleton">—</p>
+      <p class="mvd-note mvd-backfilled" hidden>This day was rebuilt from its digest email, so who made each call is filled in only where a video had one speaker.</p>
+    </div>
+  </header>
+
+  <section class="mvd-tiles" id="kpis" aria-label="Headline figures">
+    <div class="mvd-tile">
+      <p class="mvd-label">Analyst mood</p>
+      <p class="mvd-big"><span data-draw="mood" data-source="mood" data-field="mood_pct" data-row="0" class="dash-skeleton">—</span> bullish</p>
+      <p class="mvd-sub"><span data-draw="bull" data-source="mood" data-field="bullish" data-row="0">—</span> bullish vs <span data-draw="bear" data-source="mood" data-field="bearish" data-row="0">—</span> bearish calls; <span data-draw="other" data-source="mood" data-field="other" data-row="0">—</span> neutral or mixed left out</p>
+    </div>
+    <div class="mvd-tile">
+      <p class="mvd-label">Consensus buys</p>
+      <p class="mvd-big"><span data-draw="consensus" data-source="picks" data-field="consensus" data-row="0" class="dash-skeleton">—</span></p>
+      <p class="mvd-sub">Most bullish calls, no bearish ones (2 or more bullish)</p>
+    </div>
+    <div class="mvd-tile">
+      <p class="mvd-label">Avoid</p>
+      <p class="mvd-big"><span data-draw="avoid" data-source="picks" data-field="avoid" data-row="0" class="dash-skeleton">—</span></p>
+      <p class="mvd-sub"><span data-draw="avoid-detail" data-source="picks" data-field="avoid_detail" data-row="0">—</span></p>
+    </div>
+    <div class="mvd-tile">
+      <p class="mvd-label">S&amp;P 500 target upside</p>
+      <p class="mvd-big"><span data-draw="up-low" data-source="upside" data-field="low" data-row="0" class="dash-skeleton">—</span><span class="mvd-upside-to"> to </span><span data-draw="up-high" data-source="upside" data-field="high" data-row="0">—</span></p>
+      <p class="mvd-sub mvd-has-upside">Year-end and 12-month targets vs today's S&amp;P 500 at <span data-draw="sp-close" data-source="bench" data-field="sp500" data-row="0">—</span></p>
+      <p class="mvd-sub mvd-no-upside" hidden>No year-end or 12-month S&amp;P 500 target in today's videos. S&amp;P 500 now <span data-draw="sp-close-2" data-source="bench" data-field="sp500" data-row="0">—</span>.</p>
+    </div>
+    <div class="mvd-tile">
+      <p class="mvd-label">Rate headroom</p>
+      <p class="mvd-big"><span data-draw="headroom" data-source="headroom" data-field="bp" data-row="0" class="dash-skeleton">—</span> bp</p>
+      <p class="mvd-sub mvd-has-headroom">10-year at <span data-draw="yield" data-source="bench" data-field="us10y" data-row="0">—</span> vs the <span data-draw="concern" data-source="headroom" data-field="level" data-row="0">—</span> concern level quoted in video #<span data-draw="concern-video" data-source="headroom" data-field="video" data-row="0">—</span></p>
+      <p class="mvd-sub mvd-no-headroom" hidden>No 10-year concern level quoted today. The 10-year yield is <span data-draw="yield-2" data-source="bench" data-field="us10y" data-row="0">—</span>.</p>
+    </div>
+  </section>
+
+  <section class="mvd-card" id="conviction">
+    <h2>Conviction board: bullish vs bearish calls per stock</h2>
+    <p class="mvd-note">Every call in today's videos, one per row in the data, grouped by ticker. Consensus: 2 or more bullish, none bearish. Split: both sides. Avoid: only bearish or mixed. Lean: the rest. The 20 stocks with the most calls are shown.</p>
+    <ul class="mvd-legend"><li><i class="mvd-sw-bull" data-draw="sw-bull"></i>Bullish</li><li><i class="mvd-sw-bear"></i>Bearish</li><li><i class="mvd-sw-other"></i>Neutral or mixed</li></ul>
+    <div class="mvd-chart" data-draw="board" data-source="board" style="min-height: 22rem"></div>
+  </section>
+
+  <section class="mvd-section" id="watchlist">
+    <h2>Your watchlist</h2>
+    <div class="mvd-grid">
+      <div class="mvd-card">
+        <h2>What stands out today</h2>
+        <p class="mvd-note">Fixed rules set the analysts' calls against the week's prices. Each note ends with something to look at, never buy or sell.</p>
+        <ul class="mvd-cards" data-draw="insights" data-source="market"></ul>
+      </div>
+      <div class="mvd-card">
+        <h2>Prices and today's calls</h2>
+        <p class="mvd-note">Live from your watchlist sheet (Google Finance, can be delayed up to 20 minutes). Calls: today's digest. Mood: the last 7 digest days.</p>
+        <div class="mvd-scroll">
+          <table class="mvd-table" data-source="watch" data-row-key="ticker">
+            <thead><tr><th data-field="ticker">Stock</th><th class="num" data-field="price">Price</th><th class="num" data-field="change_pct_day">Day</th><th class="num" data-field="change_pct_week">Week</th><th class="num" data-field="bull_today">Bull</th><th class="num" data-field="bear_today">Bear</th><th class="num" data-field="mood_7d">7-day mood</th></tr></thead>
+            <tbody data-draw="watch"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mvd-card" id="trend">
+    <h2>Analyst mood by digest day</h2>
+    <p class="mvd-note">Bullish share of bullish and bearish calls, one point per digest day in the folder (up to the last 14). Days build up as the daily run adds files.</p>
+    <div class="mvd-chart" data-draw="trend" data-source="trend" style="min-height: 14rem"></div>
+  </section>
+
+  <section class="mvd-grid" id="themes">
+    <div class="mvd-card">
+      <h2>Themes: how many of today's videos raised them</h2>
+      <p class="mvd-note">Theme strength is videos per theme over today's videos.</p>
+      <div class="mvd-chart" data-draw="themes" data-source="themes_today" style="min-height: 10rem"></div>
+    </div>
+    <div class="mvd-card">
+      <h2>S&amp;P 500 targets vs today</h2>
+      <p class="mvd-note">Year-end and 12-month index targets stated in today's videos, against the S&amp;P 500 now.</p>
+      <div class="mvd-scroll">
+        <table class="mvd-table" data-source="targets" data-row-key="video,horizon">
+          <thead><tr><th data-field="video">Video</th><th data-field="who">Who</th><th data-field="horizon">Horizon</th><th class="num" data-field="target">Target</th><th class="num" data-field="upside_pct">Upside</th></tr></thead>
+          <tbody data-draw="targets"></tbody>
+        </table>
+      </div>
+      <p class="mvd-note mvd-no-targets" hidden>No video stated a year-end or 12-month S&amp;P 500 target today.</p>
+    </div>
+  </section>
+
+  <section class="mvd-grid" id="debates">
+    <div class="mvd-card">
+      <h2>Where the analysts disagree</h2>
+      <div data-draw="debates" data-source="sides_today"></div>
+    </div>
+    <div class="mvd-card">
+      <h2>Coming up</h2>
+      <ul class="mvd-list" data-draw="events" data-source="events_today"></ul>
+    </div>
+  </section>
+
+  <section class="mvd-card" id="videos">
+    <h2>Today's videos</h2>
+    <div class="mvd-scroll">
+      <table class="mvd-table" data-source="videos_today" data-row-key="video">
+        <thead><tr><th data-field="video">#</th><th data-field="title">Video</th><th data-field="duration">Length</th><th data-field="speakers">Speaking</th></tr></thead>
+        <tbody data-draw="videolist"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="mvd-note">This page reports what the channels' analysts said and what prices did. It is not investment advice. Calls come from the digest's JSON files in Google Drive (Econova / Video Digests / json); prices from the watchlist sheet.</p>
+</div>
+
+<script>
+  /* ---------- live sources: the digest's JSON folder and the watchlist sheet, read through Google Drive ---------- */
+  dash.loader('digests', {
+    description: 'Lists the json folder (more pages if there are), downloads the newest 14 video-digest files and lays each file out as rows, one per item, with kind = meta, mention, video, target, theme, side, level or event.',
+    fn: async ({ answer, call, args }) => {
+      const parse = (x) => (typeof x === 'string' ? JSON.parse(x) : x);
+      const utf8 = (b64) => { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new TextDecoder('utf-8').decode(u); };
+      const columns = ['kind', 'day', 'video', 'ticker', 'name', 'view', 'text', 'detail', 'value', 'unit', 'horizon', 'date', 'timestamp', 'url', 'videos', 'first_published', 'last_published'];
+      const row = (o) => Object.fromEntries(columns.map((c) => [c, o[c] ?? null]));
+      const secs = (ts) => (ts || '').split(':').reduce((t, p) => t * 60 + Number(p), 0);
+      let page = parse(answer);
+      if (page && page.error) throw new Error(String(page.error.message || page.error));
+      const files = [...(page.files || [])];
+      for (let n = 0; page.nextPageToken && n < 4; n++) {
+        page = parse(await call('search_files', { ...args, pageToken: page.nextPageToken }));
+        files.push(...(page.files || []));
+      }
+      const picked = files.filter((f) => /^video-digest_\d{4}-\d{2}-\d{2}\.json$/.test(f.title)).sort((a, b) => b.title.localeCompare(a.title)).slice(0, 14);
+      const rows = [];
+      for (const f of picked) {
+        const got = parse(await call('download_file_content', { fileId: f.id }));
+        if (!got || !got.content) throw new Error('Google Drive gave no content for ' + f.title);
+        const d = JSON.parse(utf8(got.content));
+        const day = d.digest_date;
+        const pub = d.videos.map((v) => v.published_date).sort();
+        const url = Object.fromEntries(d.videos.map((v) => [v.number, v.url]));
+        rows.push(row({ kind: 'meta', day, name: (d.channels || []).join(', '), text: d.summary, value: d.video_count, detail: d.backfilled_from, first_published: pub[0], last_published: pub[pub.length - 1] }));
+        for (const v of d.videos) {
+          rows.push(row({ kind: 'video', day, video: v.number, name: v.title, text: v.summary, url: v.url, timestamp: v.duration,
+            detail: (v.speakers || []).map((s) => (s.role ? `${s.name} (${s.role})` : s.name)).join('; ') }));
+          const who = ((v.speakers || []).find((s) => !/host|interviewer|anchor/i.test(s.role || '')) || (v.speakers || [])[0] || {}).name;
+          for (const t of v.sp500_targets || []) rows.push(row({ kind: 'target', day, video: v.number, value: t.value, horizon: t.horizon, name: who || `Video #${v.number}` }));
+        }
+        for (const m of d.mentions) rows.push(row({ kind: 'mention', day, video: m.video, ticker: m.ticker, name: m.name, view: m.view, text: m.reason, detail: m.analyst, timestamp: m.timestamp, url: url[m.video] ? `${url[m.video]}&t=${secs(m.timestamp)}s` : null }));
+        for (const t of d.themes) rows.push(row({ kind: 'theme', day, name: t.name, text: t.summary, value: t.videos.length, videos: t.videos.join(',') }));
+        for (const b of d.debates) for (const s of b.sides) rows.push(row({ kind: 'side', day, name: b.topic, text: s.position, detail: s.analysts.join(', '), videos: s.videos.join(',') }));
+        for (const l of d.levels) rows.push(row({ kind: 'level', day, video: l.video, name: l.metric, value: l.value, unit: l.unit, text: l.display, detail: l.note, timestamp: l.timestamp }));
+        for (const e of d.upcoming) rows.push(row({ kind: 'event', day, name: e.event, date: e.date, text: e.date_text, videos: e.videos.join(',') }));
+      }
+      return { data: rows, columns };
+    },
+  });
+
+  dash.loader('market', {
+    description: 'Lists the json folder, downloads the newest market-data file and lays out its insight notes as rows, in their order.',
+    fn: async ({ answer, call, args }) => {
+      const parse = (x) => (typeof x === 'string' ? JSON.parse(x) : x);
+      const utf8 = (b64) => { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new TextDecoder('utf-8').decode(u); };
+      let page = parse(answer);
+      if (page && page.error) throw new Error(String(page.error.message || page.error));
+      const files = [...(page.files || [])];
+      for (let n = 0; page.nextPageToken && n < 4; n++) {
+        page = parse(await call('search_files', { ...args, pageToken: page.nextPageToken }));
+        files.push(...(page.files || []));
+      }
+      const newest = files.filter((f) => /^market-data_\d{4}-\d{2}-\d{2}\.json$/.test(f.title)).sort((a, b) => b.title.localeCompare(a.title))[0];
+      const columns = ['date', 'rank', 'type', 'tickers', 'text', 'look_at_next', 'video', 'timestamp', 'url'];
+      if (!newest) return { data: [], columns };
+      const got = parse(await call('download_file_content', { fileId: newest.id }));
+      if (!got || !got.content) throw new Error('Google Drive gave no content for ' + newest.title);
+      const d = JSON.parse(utf8(got.content));
+      return { data: d.insights.map((c, i) => ({ date: d.date, rank: i + 1, type: c.type, tickers: c.tickers.join(', '), text: c.text, look_at_next: c.look_at_next, video: c.video, timestamp: c.timestamp, url: c.url })), columns };
+    },
+  });
+
+  dash.loader('watchlist', {
+    description: 'The watchlist sheet as CSV, one row per line; prices and changes made numbers, empty or #N/A cells null.',
+    fn: ({ answer }) => {
+      const got = typeof answer === 'string' ? JSON.parse(answer) : answer;
+      if (!got || !got.content) throw new Error('Google Drive gave no content for the watchlist sheet');
+      const s = atob(got.content); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+      const csv = new TextDecoder('utf-8').decode(u).replace(/^﻿/, '');
+      const lines = []; let cell = '', line = [], q = false;
+      for (let i = 0; i < csv.length; i++) {
+        const c = csv[i];
+        if (q) { if (c === '"' && csv[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+        else if (c === '"') q = true;
+        else if (c === ',') { line.push(cell); cell = ''; }
+        else if (c === '\n' || c === '\r') { if (c === '\r' && csv[i + 1] === '\n') i++; line.push(cell); lines.push(line); line = []; cell = ''; }
+        else cell += c;
+      }
+      if (cell || line.length) { line.push(cell); lines.push(line); }
+      const names = { 'role': 'role', 'ticker': 'ticker', 'name': 'name', 'price': 'price', 'currency': 'currency', 'change % (day)': 'change_pct_day',
+        'close a week ago': 'close_week_ago', 'change % (week)': 'change_pct_week', '52-week high': 'high_52w', '52-week low': 'low_52w', 'p/e': 'pe', 'market cap': 'market_cap' };
+      const head = (lines[0] || []).map((h) => names[h.trim().toLowerCase()] || null);
+      const numeric = new Set(['price', 'change_pct_day', 'close_week_ago', 'change_pct_week', 'high_52w', 'low_52w', 'pe', 'market_cap']);
+      const columns = Object.values(names);
+      const data = lines.slice(1).filter((l) => l.some((x) => x.trim())).map((l) => {
+        const r = Object.fromEntries(columns.map((c) => [c, null]));
+        head.forEach((h, i) => {
+          if (!h) return;
+          const v = (l[i] || '').trim();
+          r[h] = numeric.has(h) ? (v === '' || /^#/.test(v) ? null : Number(v.replace(/[,%$\s]/g, ''))) : v || null;
+        });
+        return r;
+      });
+      return { data, columns };
+    },
+  });
+
+  /* ---------- the hub's rules (user story), as visible calculations ---------- */
+  dash.calc('latest', { inputs: ['digests'], title: 'Latest digest day', description: 'The newest digest day in the folder: its channels, number of videos, summary and video dates.',
+    fn: (digests) => digests.filter((r) => r.kind === 'meta').sort((a, b) => b.day.localeCompare(a.day)).slice(0, 1)
+      .map((m) => ({ day: m.day, channels: m.name, videos: m.value, summary: m.text, backfilled: m.detail, first_published: m.first_published, last_published: m.last_published })) });
+
+  dash.calc('mentions_today', { inputs: ['digests', 'latest'], title: "Today's stock calls", description: 'Every stock call in the latest digest, one row per call.',
+    fn: (digests, latest) => (latest[0] ? digests.filter((r) => r.kind === 'mention' && r.day === latest[0].day) : []) });
+
+  dash.calc('mood', { inputs: ['mentions_today'], title: 'Analyst mood', description: 'Bullish calls over bullish plus bearish calls; neutral and mixed are left out.',
+    fn: (calls) => {
+      const bullish = calls.filter((c) => c.view === 'bullish').length;
+      const bearish = calls.filter((c) => c.view === 'bearish').length;
+      return [{ bullish, bearish, other: calls.length - bullish - bearish, mood_pct: bullish + bearish ? Math.round((100 * bullish) / (bullish + bearish)) : null }];
+    } });
+
+  dash.calc('board', { inputs: ['mentions_today'], title: 'Calls per stock', description: 'Today\'s calls counted per ticker (per name where there is no ticker), with the hub\'s tag: Consensus 2+ bullish and 0 bearish; Split 1+ of each; Avoid 0 bullish and 1+ bearish or mixed; else Lean.',
+    fn: (calls) => {
+      const by = new Map();
+      for (const c of calls) {
+        const k = c.ticker || c.name;
+        const r = by.get(k) || { ticker: k, bullish: 0, bearish: 0, neutral: 0, mixed: 0 };
+        r[c.view] += 1;
+        by.set(k, r);
+      }
+      return [...by.values()].map((r) => ({ ...r, total: r.bullish + r.bearish + r.neutral + r.mixed,
+        tag: r.bullish >= 2 && r.bearish === 0 ? 'Consensus' : r.bullish >= 1 && r.bearish >= 1 ? 'Split' : r.bullish === 0 && r.bearish + r.mixed >= 1 ? 'Avoid' : 'Lean' }))
+        .sort((a, b) => b.total - a.total || b.bullish - a.bullish || a.ticker.localeCompare(b.ticker));
+    } });
+
+  dash.calc('picks', { inputs: ['board'], title: 'Consensus buys and avoid', description: 'Consensus: the 3 Consensus stocks with the most bullish calls. Avoid: the Avoid stock with the most bearish plus mixed calls.',
+    fn: (board) => {
+      const cons = board.filter((r) => r.tag === 'Consensus').sort((a, b) => b.bullish - a.bullish || a.ticker.localeCompare(b.ticker)).slice(0, 3);
+      const avoid = board.filter((r) => r.tag === 'Avoid').sort((a, b) => b.bearish + b.mixed - (a.bearish + a.mixed) || a.ticker.localeCompare(b.ticker))[0];
+      return [{ consensus: cons.map((r) => r.ticker).join(' · ') || null, avoid: avoid ? avoid.ticker : null,
+        avoid_detail: avoid ? `${avoid.bearish} bearish, ${avoid.mixed} mixed, 0 bullish` : 'No stock had only bearish or mixed calls today' }];
+    } });
+
+  dash.calc('bench', { inputs: ['watchlist'], title: 'S&P 500 and 10-year now', description: 'The sheet\'s S&P 500 level, and its 10-year yield (Google Finance quotes TNX as the yield times 10).',
+    fn: (watchlist) => {
+      const sp = watchlist.find((r) => r.role === 'sp500');
+      const ty = watchlist.find((r) => r.role === 'us10y');
+      const y = ty && ty.price != null ? (ty.price > 20 ? ty.price / 10 : ty.price) : null;
+      return [{ sp500: sp ? sp.price : null, us10y: y == null ? null : Math.round(y * 100) / 100 }];
+    } });
+
+  dash.calc('targets', { inputs: ['digests', 'latest', 'bench'], title: 'S&P 500 targets vs today', description: 'Each year-end or 12-month target in today\'s videos, and its upside: target over the S&P 500 now, minus 1.',
+    fn: (digests, latest, bench) => {
+      const close = bench[0] && bench[0].sp500;
+      return (latest[0] ? digests.filter((r) => r.kind === 'target' && r.day === latest[0].day) : [])
+        .map((t) => ({ video: t.video, who: t.name, horizon: t.horizon, target: t.value, upside_pct: close ? Math.round((t.value / close - 1) * 1000) / 10 : null }));
+    } });
+
+  dash.calc('upside', { inputs: ['targets'], title: 'S&P target upside range', description: 'The lowest and highest upside among today\'s targets.',
+    fn: (targets) => {
+      const u = targets.map((t) => t.upside_pct).filter((x) => x != null);
+      return u.length ? [{ low: Math.min(...u), high: Math.max(...u) }] : [];
+    } });
+
+  dash.calc('headroom', { inputs: ['digests', 'latest', 'bench'], title: 'Rate headroom', description: 'A 10-year yield level quoted today as a concern or threshold, minus the 10-year yield now, in basis points.',
+    fn: (digests, latest, bench) => {
+      const now = bench[0] && bench[0].us10y;
+      const lv = (latest[0] ? digests.filter((r) => r.kind === 'level' && r.day === latest[0].day) : [])
+        .find((r) => r.value != null && r.unit === '%' && /10[- ]?y(ea)?r|ten[- ]year/i.test(`${r.name} ${r.detail}`) && /concern|threshold|worr|danger|trouble|pain|break/i.test(`${r.name} ${r.detail}`));
+      return lv && now != null ? [{ level: lv.value, video: lv.video, bp: Math.round((lv.value - now) * 100) }] : [];
+    } });
+
+  dash.calc('trend', { inputs: ['digests'], title: 'Mood by digest day', description: 'For each digest day: bullish and bearish calls and the bullish share of the two.',
+    fn: (digests) => {
+      const by = new Map();
+      for (const r of digests.filter((x) => x.kind === 'mention')) {
+        const d = by.get(r.day) || { day: r.day, bullish: 0, bearish: 0, calls: 0 };
+        d.calls += 1; if (r.view === 'bullish') d.bullish += 1; if (r.view === 'bearish') d.bearish += 1;
+        by.set(r.day, d);
+      }
+      return [...by.values()].map((d) => ({ ...d, mood_pct: d.bullish + d.bearish ? Math.round((100 * d.bullish) / (d.bullish + d.bearish)) : null })).sort((a, b) => a.day.localeCompare(b.day));
+    } });
+
+  dash.calc('watch', { inputs: ['watchlist', 'digests', 'latest'], title: 'Watchlist with calls', description: 'Each watchlist stock with its price, today\'s bullish and bearish calls, and its mood over the last 7 digest days. GOOG counts the calls on GOOGL (same company).',
+    fn: (watchlist, digests, latest) => {
+      const same = { GOOG: 'GOOGL', 'BRK.A': 'BRK.B' };
+      const day = latest[0] && latest[0].day;
+      const from = day ? new Date(Date.parse(day + 'T00:00:00Z') - 6 * 864e5).toISOString().slice(0, 10) : null;
+      const calls = digests.filter((r) => r.kind === 'mention');
+      return watchlist.filter((w) => w.role === 'watch').map((w) => {
+        const t = same[w.ticker] || w.ticker;
+        const today = calls.filter((c) => c.ticker === t && c.day === day);
+        const week = calls.filter((c) => c.ticker === t && day && c.day >= from && c.day <= day);
+        const b = week.filter((c) => c.view === 'bullish').length, r = week.filter((c) => c.view === 'bearish').length;
+        return { ticker: w.ticker, name: w.name, price: w.price, change_pct_day: w.change_pct_day, change_pct_week: w.change_pct_week,
+          bull_today: today.filter((c) => c.view === 'bullish').length, bear_today: today.filter((c) => c.view === 'bearish').length,
+          mood_7d: b + r ? Math.round((100 * b) / (b + r)) : null };
+      });
+    } });
+
+  dash.calc('themes_today', { inputs: ['digests', 'latest'], title: "Today's themes", description: 'Themes in the latest digest and how many of its videos raised each.',
+    fn: (digests, latest) => (latest[0] ? digests.filter((r) => r.kind === 'theme' && r.day === latest[0].day).map((t) => ({ name: t.name, videos: t.value, of: latest[0].videos, summary: t.text })) : []) });
+
+  dash.calc('sides_today', { inputs: ['digests', 'latest'], title: "Today's debates", description: 'Each side of each disagreement in the latest digest.',
+    fn: (digests, latest) => (latest[0] ? digests.filter((r) => r.kind === 'side' && r.day === latest[0].day).map((s) => ({ topic: s.name, position: s.text, analysts: s.detail, videos: s.videos })) : []) });
+
+  dash.calc('events_today', { inputs: ['digests', 'latest'], title: 'Coming up', description: 'Events the latest digest\'s videos mention, one row per event.',
+    fn: (digests, latest) => (latest[0] ? digests.filter((r) => r.kind === 'event' && r.day === latest[0].day).map((e) => ({ event: e.name, when: e.date || e.text, videos: e.videos })) : []) });
+
+  dash.calc('videos_today', { inputs: ['digests', 'latest'], title: "Today's videos", description: 'The latest digest\'s videos in its order.',
+    fn: (digests, latest) => (latest[0] ? digests.filter((r) => r.kind === 'video' && r.day === latest[0].day).sort((a, b) => a.video - b.video).map((v) => ({ video: v.video, title: v.name, url: v.url, duration: v.timestamp, speakers: v.detail })) : []) });
+
+  /* ---------- drawing ---------- */
+  const fmtInt = d3.format(',');
+  const fmtPrice = d3.format(',.2f');
+  const fmtDay = (s) => d3.utcFormat('%b %-d, %Y')(new Date(s + 'T00:00:00Z'));
+  const fmtShort = (s) => d3.utcFormat('%b %-d')(new Date(s + 'T00:00:00Z'));
+  const signed = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x}%`);   // the value as stored, signed
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const one = (id) => { const g = dash.data(id); return g.status === 'ok' ? g.data[0] : undefined; };
+  const failed = (el) => { el.replaceChildren(); const d = document.createElement('div'); d.className = 'mvd-failed'; d.textContent = 'Failed to load'; el.append(d); };
+
+  // a single value: the field of row 0 of a source, formatted
+  const value = (name, id, field, format = (x) => String(x)) => dash.draw(name, (el) => {
+    const g = dash.data(id);
+    el.classList.toggle('dash-skeleton', g.status === 'loading');
+    const v = g.status === 'ok' && g.data[0] ? g.data[0][field] : null;
+    el.textContent = v == null ? '—' : format(v);
+  });
+  value('channels', 'latest', 'channels');
+  value('videos', 'latest', 'videos', fmtInt);
+  value('day', 'latest', 'day', fmtDay);
+  value('summary', 'latest', 'summary');
+  value('mood', 'mood', 'mood_pct', (x) => `${x}%`);
+  value('bull', 'mood', 'bullish', fmtInt);
+  value('bear', 'mood', 'bearish', fmtInt);
+  value('other', 'mood', 'other', fmtInt);
+  value('consensus', 'picks', 'consensus');
+  value('avoid', 'picks', 'avoid');
+  value('avoid-detail', 'picks', 'avoid_detail');
+  value('up-low', 'upside', 'low', signed);
+  value('up-high', 'upside', 'high', signed);
+  value('sp-close', 'bench', 'sp500', fmtPrice);
+  value('sp-close-2', 'bench', 'sp500', fmtPrice);
+  value('headroom', 'headroom', 'bp', (x) => `${x > 0 ? '+' : ''}${x}`);
+  value('yield', 'bench', 'us10y', (x) => `${x.toFixed(2)}%`);
+  value('yield-2', 'bench', 'us10y', (x) => `${x.toFixed(2)}%`);
+  value('concern', 'headroom', 'level', (x) => `${x}%`);
+  value('concern-video', 'headroom', 'video');
+  dash.draw('sw-bull', (el) => { el.style.background = dash.colors[0]; });
+
+  // which of two sentences shows, decided by whether the data has the rows
+  dash.onData(() => {
+    const has = (id) => { const g = dash.data(id); return g.status !== 'ok' || g.data.length > 0; };
+    const show = (sel, on) => document.querySelectorAll(sel).forEach((el) => { el.hidden = !on; });
+    const up = has('upside'), head = has('headroom'), tg = has('targets');
+    show('.mvd-has-upside', up); show('.mvd-no-upside', !up); show('.mvd-upside-to', up);
+    show('.mvd-has-headroom', head); show('.mvd-no-headroom', !head);
+    show('.mvd-no-targets', !tg);
+    const l = one('latest');
+    show('.mvd-backfilled', !!(l && l.backfilled));
+  });
+
+  // a tooltip inside a chart's box
+  const tip = (box) => {
+    let t = box.querySelector('.mvd-tip');
+    if (!t) { t = document.createElement('div'); t.className = 'mvd-tip'; t.hidden = true; box.append(t); }
+    return {
+      show(event, lines) {
+        t.replaceChildren(...lines.map(([k, v], i) => { const p = document.createElement('div'); if (i === 0) { p.className = 'k'; p.textContent = k; } else p.textContent = `${k}: ${v}`; return p; }));
+        t.hidden = false;
+        const r = box.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight;
+        let x = event.clientX - r.left + 12, y = event.clientY - r.top + 12;
+        if (x + w > r.width) x = Math.max(0, event.clientX - r.left - w - 12);
+        if (y + h > r.height) y = Math.max(0, event.clientY - r.top - h - 12);
+        t.style.left = `${x}px`; t.style.top = `${y}px`;
+      },
+      hide() { t.hidden = true; },
+    };
+  };
+
+  // conviction board: bearish and other to the left of the axis, bullish to the right
+  dash.draw('board', (el) => {
+    const g = dash.data('board');
+    if (g.status === 'error') return failed(el);
+    el.replaceChildren();
+    if (g.status !== 'ok' || !g.data.length) return;
+    const rows = g.data.slice(0, 20);
+    const width = el.clientWidth || 600, rowH = 24, top = 4;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${width} ${top + rows.length * rowH}`).attr('role', 'img').attr('aria-label', 'Bullish and bearish calls per stock');
+    const probe = svg.append('text').attr('font-size', 12);
+    const labelW = d3.max(rows, (r) => probe.text(r.ticker).node().getComputedTextLength()) + 12;
+    const tagW = d3.max(['Consensus', 'Split', 'Avoid', 'Lean'], (t) => probe.text(t).node().getComputedTextLength()) + 12;
+    const numW = probe.text('99').node().getComputedTextLength() + 8;
+    probe.remove();
+    const maxLeft = d3.max(rows, (r) => r.bearish + r.neutral + r.mixed) || 1, maxRight = d3.max(rows, (r) => r.bullish) || 1;
+    const plot = width - labelW - tagW - numW * 2;
+    const unit = plot / (maxLeft + maxRight);
+    const axis = labelW + numW + maxLeft * unit;
+    const fg = cssVar('--color-fg'), muted = cssVar('--color-fg-muted');
+    const colors = { bullish: dash.colors[0], bearish: cssVar('--cds-chart-status-critical'), other: cssVar('--cds-chart-muted') };
+    const tagColor = { Consensus: cssVar('--color-ok'), Split: cssVar('--color-warn'), Avoid: cssVar('--color-bad'), Lean: muted };
+    const tt = tip(el);
+    svg.append('line').attr('x1', axis).attr('x2', axis).attr('y1', 0).attr('y2', top + rows.length * rowH).attr('stroke', cssVar('--cds-chart-axis'));
+    rows.forEach((r, i) => {
+      const y = top + i * rowH, h = 14, cy = y + rowH / 2;
+      const gr = svg.append('g').attr('class', 'mvd-row');
+      gr.append('text').attr('x', 0).attr('y', cy).attr('dominant-baseline', 'middle').attr('font-size', 12).attr('fill', fg).text(r.ticker);
+      const other = r.neutral + r.mixed;
+      gr.append('rect').attr('x', axis - (r.bearish + other) * unit).attr('y', cy - h / 2).attr('width', other * unit).attr('height', h).attr('rx', 2).attr('fill', colors.other);
+      gr.append('rect').attr('x', axis - r.bearish * unit).attr('y', cy - h / 2).attr('width', r.bearish * unit).attr('height', h).attr('rx', 2).attr('fill', colors.bearish);
+      gr.append('rect').attr('x', axis).attr('y', cy - h / 2).attr('width', r.bullish * unit).attr('height', h).attr('rx', 2).attr('fill', colors.bullish);
+      if (r.bearish + other) gr.append('text').attr('x', axis - (r.bearish + other) * unit - 4).attr('y', cy).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').attr('font-size', 11).attr('fill', muted).text(r.bearish + other);
+      if (r.bullish) gr.append('text').attr('x', axis + r.bullish * unit + 4).attr('y', cy).attr('dominant-baseline', 'middle').attr('font-size', 11).attr('fill', muted).text(r.bullish);
+      gr.append('text').attr('x', width).attr('y', cy).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').attr('font-size', 12).attr('fill', tagColor[r.tag]).text(r.tag);
+      gr.append('rect').attr('x', 0).attr('y', y).attr('width', width).attr('height', rowH).attr('fill', 'transparent')
+        .on('mousemove', (event) => tt.show(event, [[r.ticker], ['Bullish', r.bullish], ['Bearish', r.bearish], ['Neutral', r.neutral], ['Mixed', r.mixed], ['Tag', r.tag]]))
+        .on('mouseleave', () => tt.hide());
+    });
+    svg.selectAll('text').attr('font-family', 'var(--font-anthropic-sans)');
+  });
+
+  // insight notes from the newest market-data file
+  dash.draw('insights', (el) => {
+    const g = dash.data('market');
+    el.replaceChildren();
+    if (g.status === 'error') { const li = document.createElement('li'); li.className = 'mvd-failed'; li.textContent = 'Failed to load'; el.append(li); return; }
+    if (g.status !== 'ok') return;
+    const tone = { experts_vs_price: 'warn', sentiment_shift: 'warn', split: 'warn', catalyst: 'ok', target_upside: 'ok', rate_headroom: 'bad', new_views: '', no_new_views: '' };
+    for (const c of g.data) {
+      const li = document.createElement('li');
+      if (tone[c.type]) li.className = tone[c.type];
+      const say = document.createElement('span');
+      say.textContent = c.text + ' ';
+      if (c.url) { const a = document.createElement('a'); a.href = c.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `[${c.timestamp || 'video'}]`; say.append(a); }
+      const look = document.createElement('span');
+      look.className = 'look';
+      look.textContent = 'Look at next: ' + c.look_at_next;
+      li.append(say, look);
+      el.append(li);
+    }
+  });
+
+  // watchlist table
+  dash.draw('watch', (el) => {
+    const g = dash.data('watch');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const w of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = w.ticker;
+      tr.title = w.name || '';
+      const td = (text, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; c.textContent = text; tr.append(c); return c; };
+      td(w.ticker);
+      td(w.price == null ? '—' : fmtPrice(w.price), 'num');
+      td(signed(w.change_pct_day), 'num ' + (w.change_pct_day > 0 ? 'mvd-up' : w.change_pct_day < 0 ? 'mvd-down' : ''));
+      td(signed(w.change_pct_week), 'num ' + (w.change_pct_week > 0 ? 'mvd-up' : w.change_pct_week < 0 ? 'mvd-down' : ''));
+      td(fmtInt(w.bull_today), 'num');
+      td(fmtInt(w.bear_today), 'num');
+      td(w.mood_7d == null ? '—' : `${w.mood_7d}%`, 'num');
+      el.append(tr);
+    }
+  });
+
+  // mood by digest day
+  dash.draw('trend', (el) => {
+    const g = dash.data('trend');
+    if (g.status === 'error') return failed(el);
+    el.replaceChildren();
+    if (g.status !== 'ok' || !g.data.length) return;
+    const rows = g.data.filter((r) => r.mood_pct != null).map((r) => ({ ...r, date: new Date(r.day + 'T00:00:00Z') }));
+    const width = el.clientWidth || 600, height = 200, m = { top: 12, right: 56, bottom: 26, left: 36 };
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${width} ${height}`).attr('role', 'img').attr('aria-label', 'Analyst mood by digest day');
+    const [d0, d1] = d3.extent(rows, (r) => r.date);
+    const pad = rows.length === 1 ? 3 * 864e5 : 0;
+    const x = d3.scaleUtc([new Date(+d0 - pad), new Date(+d1 + pad)], [m.left, width - m.right]);
+    const y = d3.scaleLinear([0, 100], [height - m.bottom, m.top]);
+    const grid = cssVar('--cds-chart-grid'), muted = cssVar('--color-fg-muted');
+    [0, 50, 100].forEach((v) => {
+      svg.append('line').attr('x1', m.left).attr('x2', width - m.right).attr('y1', y(v)).attr('y2', y(v)).attr('stroke', grid);
+      svg.append('text').attr('x', m.left - 6).attr('y', y(v)).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').attr('font-size', 11).attr('fill', muted).text(`${v}%`);
+    });
+    const ticks = rows.length <= 7 ? rows.map((r) => r.date) : x.ticks(Math.max(2, Math.floor(width / 90)));
+    ticks.forEach((t) => svg.append('text').attr('x', x(t)).attr('y', height - 6).attr('text-anchor', 'middle').attr('font-size', 11).attr('fill', muted).text(d3.utcFormat('%b %-d')(t)));
+    const color = dash.colors[0];
+    if (rows.length > 1) svg.append('path').datum(rows).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round').attr('d', d3.line((r) => x(r.date), (r) => y(r.mood_pct)));
+    const tt = tip(el);
+    svg.selectAll('circle').data(rows).join('circle').attr('cx', (r) => x(r.date)).attr('cy', (r) => y(r.mood_pct)).attr('r', 4).attr('fill', color)
+      .on('mousemove', (event, r) => tt.show(event, [[fmtDay(r.day)], ['Mood', `${r.mood_pct}%`], ['Bullish', r.bullish], ['Bearish', r.bearish], ['All calls', r.calls]]))
+      .on('mouseleave', () => tt.hide());
+    const last = rows[rows.length - 1];
+    svg.append('text').attr('x', x(last.date) + 8).attr('y', y(last.mood_pct)).attr('dominant-baseline', 'middle').attr('font-size', 12).attr('fill', cssVar('--color-fg')).text(`${last.mood_pct}%`);
+    svg.selectAll('text').attr('font-family', 'var(--font-anthropic-sans)');
+  });
+
+  // themes: videos per theme, out of today's videos
+  dash.draw('themes', (el) => {
+    const g = dash.data('themes_today');
+    if (g.status === 'error') return failed(el);
+    el.replaceChildren();
+    if (g.status !== 'ok' || !g.data.length) return;
+    const rows = g.data.slice().sort((a, b) => b.videos - a.videos);
+    const width = el.clientWidth || 400, rowH = 40;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${width} ${rows.length * rowH}`).attr('role', 'img').attr('aria-label', 'Videos per theme');
+    const probe = svg.append('text').attr('font-size', 11).text('9 of 9');
+    const numW = probe.node().getComputedTextLength() + 8;
+    probe.remove();
+    const of = rows[0].of || d3.max(rows, (r) => r.videos);
+    const x = d3.scaleLinear([0, of], [0, width - numW]);
+    const tt = tip(el);
+    rows.forEach((r, i) => {
+      const y = i * rowH;
+      svg.append('text').attr('x', 0).attr('y', y + 12).attr('font-size', 12).attr('fill', cssVar('--color-fg')).text(r.name.length > 60 ? r.name.slice(0, 58) + '…' : r.name);
+      svg.append('rect').attr('x', 0).attr('y', y + 18).attr('width', x(of)).attr('height', 12).attr('rx', 2).attr('fill', cssVar('--cds-chart-grid'));
+      svg.append('rect').attr('x', 0).attr('y', y + 18).attr('width', x(r.videos)).attr('height', 12).attr('rx', 2).attr('fill', dash.colors[0])
+        .on('mousemove', (event) => tt.show(event, [[r.name], ['Videos', `${r.videos} of ${of}`]])).on('mouseleave', () => tt.hide());
+      svg.append('text').attr('x', x(of) + 6).attr('y', y + 28).attr('font-size', 11).attr('fill', cssVar('--color-fg-muted')).text(`${r.videos} of ${of}`);
+    });
+    svg.selectAll('text').attr('font-family', 'var(--font-anthropic-sans)');
+  });
+
+  // S&P 500 targets table
+  dash.draw('targets', (el) => {
+    const g = dash.data('targets');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const t of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = `${t.video},${t.horizon}`;
+      [[t.video], [t.who], [t.horizon], [fmtInt(t.target), 'num'], [signed(t.upside_pct), 'num']].forEach(([text, cls]) => { const c = document.createElement('td'); if (cls) c.className = cls; c.textContent = text; tr.append(c); });
+      el.append(tr);
+    }
+  });
+
+  // debates, grouped by topic
+  dash.draw('debates', (el) => {
+    const g = dash.data('sides_today');
+    if (g.status === 'error') return failed(el);
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    const topics = d3.group(g.data, (s) => s.topic);
+    for (const [topic, sides] of topics) {
+      const box = document.createElement('div'); box.className = 'mvd-debate';
+      const b = document.createElement('b'); b.textContent = topic; box.append(b);
+      for (const s of sides) {
+        const p = document.createElement('p');
+        const vids = (s.videos || '').split(',').filter(Boolean).map((n) => '#' + n).join(', ');
+        p.textContent = (s.analysts ? s.analysts + ': ' : '') + s.position + (vids ? ` (video ${vids})` : '');
+        box.append(p);
+      }
+      el.append(box);
+    }
+  });
+
+  // coming up
+  dash.draw('events', (el) => {
+    const g = dash.data('events_today');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const e of g.data) {
+      const li = document.createElement('li');
+      const vids = (e.videos || '').split(',').filter(Boolean).map((n) => '#' + n).join(', ');
+      li.textContent = `${e.event}, ${e.when || 'date not given'}` + (vids ? ` (video ${vids})` : '');
+      el.append(li);
+    }
+  });
+
+  // today's videos
+  dash.draw('videolist', (el) => {
+    const g = dash.data('videos_today');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const v of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = String(v.video);
+      const n = document.createElement('td'); n.textContent = v.video;
+      const t = document.createElement('td'); const a = document.createElement('a'); a.href = v.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = v.title; t.append(a);
+      const d = document.createElement('td'); d.textContent = v.duration || '—';
+      const s = document.createElement('td'); s.textContent = v.speakers || '—';
+      tr.append(n, t, d, s);
+      el.append(tr);
+    }
+  });
+
+  // links to a section
+  const named = document.getElementById(location.hash.slice(1));
+  if (named) named.scrollIntoView();
+</script>

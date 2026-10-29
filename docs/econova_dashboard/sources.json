@@ -1,0 +1,40 @@
+{
+  "dash/meta": {
+    "title": "Analyst Video Digest"
+  },
+  "datasets/digests": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "search_files",
+      "args": {
+        "query": "parentId = '<json folder id>'",
+        "pageSize": 60,
+        "excludeContentSnippets": true
+      }
+    }
+  },
+  "datasets/market": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "search_files",
+      "args": {
+        "query": "parentId = '<json folder id>'",
+        "pageSize": 60,
+        "excludeContentSnippets": true
+      }
+    }
+  },
+  "datasets/watchlist": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "download_file_content",
+      "args": {
+        "fileId": "<watchlist sheet id>",
+        "exportMimeType": "text/csv"
+      }
+    }
+  }
+}

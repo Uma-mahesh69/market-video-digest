@@ -64,7 +64,7 @@ def number(value):
 def parse_level(display):
     """(value, unit) from a level as said, when it is a single figure: "5.45%" gives (5.45, "%"), "near 100" gives
     (100, None). (None, None) when it is not one figure, such as "between 4 and 5%"."""
-    m = re.fullmatch(r"(?:about|around|near|roughly|approximately|~)?\s*(\$)?\s*(-?[\d,]*\d(?:\.\d+)?)\s*(%|percent|bps?|basis points?)?",
+    m = re.fullmatch(r"(?:about|around|near|nearly|roughly|approximately|almost|close to|~)?\s*(\$)?\s*(-?[\d,]*\d(?:\.\d+)?)\s*(%|percent|bps?|basis points?)?",
                      text(display).lower())
     if not m or number(m.group(2)) is None:
         return None, None

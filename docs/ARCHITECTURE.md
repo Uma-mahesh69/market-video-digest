@@ -44,6 +44,8 @@ a plain-language summary.
 | **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. On a Mac, `run_digest.sh` also retries a failed run every 30 minutes, 3 times, as Task Scheduler does on Windows. |
 | **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
 | **Watchlist** | `market_data.py`, `market_schema.json`, `watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
+| **Backfill** | `email_backfill.py` | Turns digests already sent (saved HTML or the email) back into the day's JSON file, through the same export. |
+| **Dashboard page** | `docs/econova_dashboard/` | The Analyst Video Digest page that reads the daily files and the watchlist sheet live from Google Drive. |
 | **Tests** | `tests/test_digest_export.py`, `tests/test_digest_run.py` | `python -m unittest` in the project folder runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |
 
