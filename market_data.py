@@ -36,7 +36,11 @@ BIG_MOVE = 5.0    # a week's price change, in %, that counts as a big move
 MAX_CARDS = 5     # cards in the email; the "no new views" line comes on top
 COLUMNS = {"role": "role", "ticker": "ticker", "name": "name", "price": "price", "currency": "currency",
            "change % (day)": "change_pct_day", "close a week ago": "close_week_ago", "change % (week)": "change_pct_week",
-           "52-week high": "high_52w", "52-week low": "low_52w", "p/e": "pe", "market cap": "market_cap"}
+           "52-week high": "high_52w", "52-week low": "low_52w", "p/e": "pe", "market cap": "market_cap",
+           # The same columns in Google's own "Investment Tracker" template (its Watchlist tab)
+           "symbol": "ticker", "stock name": "name", "current price": "price", "% change": "change_pct_day",
+           "p/e ratio": "pe"}
+# Never read: what you own. Columns like "# Shares" and "Current Value" are not in COLUMNS, so they are skipped.
 NUMBERS = ("price", "change_pct_day", "close_week_ago", "change_pct_week", "high_52w", "low_52w", "pe", "market_cap")
 
 
@@ -75,11 +79,17 @@ def read_watchlist(source):
     if raw.lstrip().startswith("<"):
         raise MarketDataError("the link gave a web page, not CSV. In the sheet use File > Share > Publish to web, "
                               "choose Comma-separated values (.csv), and use that link")
+    lines = list(csv.reader(io.StringIO(raw)))
+    # The header is the first row with a Ticker or Symbol column; Google's template has instructions above it.
+    start = next((i for i, cells in enumerate(lines) if {c.strip().lower() for c in cells} & {"ticker", "symbol"}), None)
+    if start is None:
+        raise MarketDataError("the sheet has no 'Ticker' (or 'Symbol') column")
+    header = [c.strip().lower() for c in lines[start]]
     watchlist, benchmarks = [], {}
-    for row in csv.DictReader(io.StringIO(raw)):
-        r = {COLUMNS[k.strip().lower()]: v for k, v in row.items() if k and k.strip().lower() in COLUMNS}
+    for cells in lines[start + 1:]:
+        r = {COLUMNS[h]: v for h, v in zip(header, cells) if h in COLUMNS}
         symbol = text(r.get("ticker")).upper()
-        if not symbol:
+        if not symbol or symbol == "-":
             continue
         values = {k: cell_number(r.get(k)) for k in NUMBERS}
         role = text(r.get("role")).lower() or "watch"
@@ -162,9 +172,10 @@ def market_brief(day, prices, done, cache_dir, table=None, now=None):
 
     for w in prices["watchlist"]:
         t = w["ticker"]
-        today = [m for m in digest["mentions"] if m["ticker"] == t]
-        this_week = tally(v for d, v in past.get(t, []) if d >= week_start)
-        last_week = tally(v for d, v in past.get(t, []) if d < week_start)
+        key = resolve_ticker(t, "", table) or t   # GOOG (class C) is the same company as the calls on GOOGL
+        today = [m for m in digest["mentions"] if m["ticker"] == key]
+        this_week = tally(v for d, v in past.get(key, []) if d >= week_start)
+        last_week = tally(v for d, v in past.get(key, []) if d < week_start)
         rows.append(dict(w, calls_today=tally(m["view"] for m in today), calls_7d=this_week, mood_7d=mood(this_week)))
         if not today:
             quiet.append(t)
@@ -205,7 +216,7 @@ def market_brief(day, prices, done, cache_dir, table=None, now=None):
                               first["video"], first["timestamp"], link(first["video"], first["timestamp"])))
 
         # A catalyst for this stock among today's "Coming up"
-        names = aliases(t, w.get("name"), table)
+        names = aliases(key, w.get("name"), table)
         for ev in digest["upcoming"]:
             said = ev["event"].lower()
             if re.search(rf"\b{re.escape(t)}\b", ev["event"]) or any(re.search(rf"\b{re.escape(a)}\b", said) for a in names):
@@ -300,7 +311,7 @@ def coverage(tickers, cache_dir, day, days=14):
     ends = [(day - timedelta(days=7 * i)).strftime("%Y-%m-%d") for i in range(weeks)]
     rows, every_week = [], 0
     for t in tickers:
-        calls = past.get(t, [])
+        calls = past.get(resolve_ticker(t, "", table) or t, [])
         seen = sum(1 for s, e in zip(starts, ends) if any(s <= d <= e for d, _ in calls))
         every_week += seen == weeks
         rows.append((t, tally(v for _, v in calls), seen))

@@ -1,0 +1,431 @@
+{
+ "_about": "The 'Stocks mentioned' table of the real Oct 22, 2026 digest email (TheStreet, 9 videos): each stock as written, and its calls' views. The user story's reference page was built from this digest.",
+ "stocks": [
+  {
+   "name": "Nvidia",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish",
+    "bullish",
+    "neutral",
+    "bearish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Meta",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish",
+    "bullish",
+    "bearish"
+   ]
+  },
+  {
+   "name": "Apple",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish",
+    "bullish",
+    "bearish"
+   ]
+  },
+  {
+   "name": "Amazon",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Tesla",
+   "ticker": "",
+   "views": [
+    "bearish",
+    "bearish",
+    "mixed"
+   ]
+  },
+  {
+   "name": "Netflix",
+   "ticker": "",
+   "views": [
+    "bearish",
+    "bearish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Micron",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Alphabet",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish",
+    "mixed"
+   ]
+  },
+  {
+   "name": "IBM",
+   "ticker": "",
+   "views": [
+    "bearish",
+    "mixed"
+   ]
+  },
+  {
+   "name": "Palantir",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "GE Vernova",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "ASML",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Coreweave",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Microsoft",
+   "ticker": "",
+   "views": [
+    "bullish",
+    "bullish"
+   ]
+  },
+  {
+   "name": "Cardinal Health",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "SpaceX",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Oracle",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Broadcom",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Arista Networks",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Valero",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Coinbase",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Costco",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Procter & Gamble",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "McKesson",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Johnson & Johnson",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Jazz Pharmaceuticals",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Marvell",
+   "ticker": "",
+   "views": [
+    "neutral"
+   ]
+  },
+  {
+   "name": "GM",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "United Airlines",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Google",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Invesco S&P 500 Equal Weight ETF",
+   "ticker": "RSP",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Workday",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Nvidia",
+   "ticker": "NVDA",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Alphabet",
+   "ticker": "GOOGL",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Tesla",
+   "ticker": "TSLA",
+   "views": [
+    "mixed"
+   ]
+  },
+  {
+   "name": "Netflix",
+   "ticker": "NFLX",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Apple",
+   "ticker": "AAPL",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Microchip",
+   "ticker": "MCHP",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Kimberly-Clark",
+   "ticker": "KMB",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "AIG",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Dow",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Paramount",
+   "ticker": "PARA",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "SK Hynix",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Samsung Electronics",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Coherent",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Lumentum",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Marvell Technologies",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Bloom Energy",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Salesforce",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "J.P. Morgan",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Goldman Sachs",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Citi",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Wells Fargo",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "Core Weave",
+   "ticker": "",
+   "views": [
+    "bearish"
+   ]
+  },
+  {
+   "name": "TJX",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Progressive",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  },
+  {
+   "name": "Adobe",
+   "ticker": "",
+   "views": [
+    "bullish"
+   ]
+  }
+ ]
+}

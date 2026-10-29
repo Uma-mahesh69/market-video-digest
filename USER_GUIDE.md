@@ -174,6 +174,11 @@ the prices. To set it up once:
 **Privacy:** a published link can be opened by anyone who has it. The sheet holds only tickers and public prices,
 not how many shares you own. Do not add quantities or values to it.
 
+**Google's own "Investment Tracker" template works too** (its Watchlist tab: Symbol, Current Price, % Change). The
+digest never reads its "# Shares" or "Current Value" columns, but publishing that tab would show them to anyone with
+the link, so the sheet above is the safer choice. It also gives the week's change, which some notes need.
+Share classes are matched: a watchlist with `GOOG` picks up the analysts' calls on Alphabet (`GOOGL`).
+
 Each digest also saves `market-data_YYYY-MM-DD.json` next to the digest's JSON file, for the Econova hub.
 
 **Coverage check:** to see how often your stocks came up in the videos lately, run

@@ -19,6 +19,10 @@ Two files, in the same folder (`json_dir` in the digest's settings, for example 
 - Both schemas accept any `1.x` version: 1.x may add optional fields, never rename or remove one. Read fields by name
   and ignore ones you don't know.
 
+**Checked on real data:** applied to the real Oct 22, 2026 digest (TheStreet, 9 videos), these rules give the
+user story's reference values exactly: mood 74% (58 vs 20), consensus buys GOOGL, AMZN, MU, split NVDA, AAPL, META,
+CRWV, NFLX, avoid TSLA (2 bearish, 2 mixed), and Nvidia's 7 calls as 7 rows (`tests/test_reference_day.py`).
+
 Sample files to build against: [`samples/`](samples/). Their analyst calls are made up; the prices are the ones
 Google Finance gave on 29 Oct 2026.
 

@@ -128,9 +128,10 @@ class Export(unittest.TestCase):
                          ["bullish", "bearish", "neutral", "mixed", "mixed"])
 
     def test_company_name_forms(self):
-        for name in ("Apple Inc.", "NVIDIA Corporation", "Nvidia's", "Nvidia\u2019s", "Nvidia (NVDA)", "The Walt Disney Company"):
+        for name, expected in (("Apple Inc.", "AAPL"), ("NVIDIA Corporation", "NVDA"), ("Nvidia's", "NVDA"), ("Nvidia\u2019s", "NVDA"),
+                               ("Nvidia (NVDA)", "NVDA"), ("The Walt Disney Company", "DIS"), ("The Hershey Company", "HSY"),
+                               ("Occidental Petroleum (Oxy)", "OXY"), ("Acme Widgets Holdings", None)):
             with self.subTest(name=name):
-                expected = None if "Disney" in name else ("AAPL" if "Apple" in name else "NVDA")
                 self.assertEqual(dx.resolve_ticker(name, "", self.table), expected)
         self.assertEqual(dx.resolve_ticker("Some Bank", "JPM", self.table), "JPM")   # falls back to the ticker said
 

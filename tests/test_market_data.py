@@ -61,6 +61,27 @@ class ReadSheet(unittest.TestCase):
         self.assertEqual(data["benchmarks"]["sp500"]["value"], 7706.17)
         self.assertEqual(data["benchmarks"]["us10y"]["value"], 4.972)   # TNX is quoted as the yield times 10
 
+    def test_google_investment_tracker_layout(self):
+        """The Watchlist tab of Google's "Google Finance Investment Tracker" template, as published to CSV."""
+        tracker = (',"Instructions\nEnter stock symbols in column B to track stocks\nAdd shares in column H",,,,,,,POWERED BY\n'
+                   ',,,,,,,,Google Finance\n,,,,,,,,\n,Watchlist,,,,,,,\n,Current Value,,,,,,,\n,"1,420.50",,,,,,,\n,,,,,,,,\n'
+                   ',Symbol,Exchange (Optional),Stock Name,Current Price,Price Change,% Change,# Shares,Current Value\n'
+                   ',GOOG,NASDAQ,Alphabet Inc Class C,284.10,-37.79,-11.74%,5,"1,420.50"\n'
+                   ',,,-,-,-,-,,-\n,,,-,-,-,-,,-\n')
+        data = md.read_watchlist(str(write(self.dir, "tracker.csv", tracker)))
+        self.assertEqual(data["watchlist"], [{"ticker": "GOOG", "name": "Alphabet Inc Class C", "currency": None, "price": 284.1,
+                                              "change_pct_day": -11.74, "change_pct_week": None, "high_52w": None, "low_52w": None,
+                                              "pe": None, "market_cap": None}])   # no shares, no value
+        self.assertEqual(data["benchmarks"], {})
+
+    def test_goog_matches_calls_on_alphabet(self):
+        sheet = "Role,Ticker,Name,Price\nwatch,GOOG,Alphabet Inc Class C,284.10\n"
+        prices = md.read_watchlist(str(write(self.dir, "goog.csv", sheet)))
+        done = [{"video": video(1), "notes": notes(stocks=[stock("Alphabet", "bullish"), stock("Google", "bearish")])}]
+        b = md.market_brief(DAY, prices, done, self.dir, load_tickers(), now=NOW)
+        self.assertEqual(b["watchlist"][0]["calls_today"], {"bullish": 1, "bearish": 1, "neutral": 0, "mixed": 0})
+        self.assertIn("Experts split on GOOG today", b["insights"][0]["text"])
+
     def test_problems_are_explained(self):
         page = write(self.dir, "page.csv", "<!DOCTYPE html><html>Sign in</html>")
         with self.assertRaisesRegex(md.MarketDataError, "Publish to web"):
