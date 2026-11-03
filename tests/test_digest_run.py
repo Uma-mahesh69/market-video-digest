@@ -110,6 +110,20 @@ class DailyRun(unittest.TestCase):
         self.assertFalse((self.tmp / "json").exists())
         self.assertEqual(self.day_file("digests")["video_count"], 2)
 
+    def test_failed_email_leaves_the_videos_to_the_run_that_sends_them(self):
+        """Gmail refused the 31 Oct email; its videos went into that day's file and again into the next day's."""
+        def refuse(*a):
+            raise OSError("451 temporarily rejected")
+        digest.send = refuse
+        code, out = self.run_digest()
+        self.assertEqual(code, 1, out)   # so the launcher tries again
+        self.assertFalse((self.tmp / "json").exists())
+        self.assertIn("waits for the email", out)
+        digest.send = lambda *a: True
+        code, out = self.run_digest()   # the retry
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.day_file()["video_count"], 2)
+
     def test_rebuild_an_earlier_day(self):
         self.run_digest()
         today = f"{datetime.now():%Y-%m-%d}"

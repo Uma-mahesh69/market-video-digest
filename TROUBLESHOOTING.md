@@ -63,6 +63,13 @@ without asking. Check `digest.log` after the first scheduled run.
 
 ## No digest email
 
+### A failed run was not tried again on Windows (Verified, fixed 3 Nov 2026)
+- **Cause:** the log said "tries again in 30 minutes", but Task Scheduler's "restart on failure" ignores the
+  program's exit code, so nothing ran until the next day. On 31 Oct, Gmail refused the email (451) after that day's
+  JSON was saved; the queued videos then went into the 1 Nov file as well.
+- **Fix:** `run_digest.bat` now retries itself every 30 minutes, 3 times, and the JSON is saved only after the email
+  goes out. Run `install.bat -Unattended` once to get the new launcher (settings are kept).
+
 ### Nothing arrived, and `digest.log` says `getaddrinfo failed` (Verified)
 - **Cause:** the PC had just been switched on. Windows started the catch-up run before Wi-Fi was connected, so the
   run could reach neither YouTube nor Gmail.

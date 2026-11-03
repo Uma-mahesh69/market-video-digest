@@ -41,7 +41,7 @@ a plain-language summary.
 | **yt-dlp** | `bin\yt-dlp.exe` or already installed | Fetches caption files from YouTube for ytmd. |
 | **Installer** | `install.bat` + `install.ps1` (Windows), `install-mac.command` (Mac) | One-step setup: Python, yt-dlp, settings, tests, daily schedule (Task Scheduler on Windows, a launchd agent on a Mac), desktop shortcut. |
 | **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
-| **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. On a Mac, `run_digest.sh` also retries a failed run every 30 minutes, 3 times, as Task Scheduler does on Windows. |
+| **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. Both retry a failed run every 30 minutes, 3 times (Task Scheduler's own "restart on failure" ignores a program's exit code, so it cannot do this). |
 | **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
 | **Watchlist** | `market_data.py`, `market_schema.json`, `watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
 | **Backfill** | `email_backfill.py` | Turns digests already sent (saved HTML or the email) back into the day's JSON file, through the same export. |
@@ -88,6 +88,8 @@ a plain-language summary.
      redoes the overview; it never replaces the morning's videos. The video ids in today's file are kept in
      `digest_state.json` (`json_day`). A run with nothing new leaves the file as it is. A day with no videos at all
      still gets a file with `video_count: 0`.
+   - **Written after the email goes out.** When sending fails, no file is written and the videos stay queued, so
+     they land in the file of the run that sends them (the retry, or the next day) and no video is counted on two days.
    - **Checked before saving.** On any schema problem, or if the folder cannot be written, nothing is saved and the
      reason is logged with the date. Earlier days' files are never touched. The schema accepts any 1.x file, because
      1.x may add optional fields.
@@ -110,7 +112,7 @@ a plain-language summary.
      analysts said. A sheet that cannot be read gives a note in the email and no market file; the digest goes on.
 8. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
 9. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
-   out. If sending fails, nothing is marked, and the run exits with code 1 so Windows retries in 30 minutes.
+   out. If sending fails, nothing is marked, and the run exits with code 1 so the launcher tries again in 30 minutes.
 
 ## 4. Talking to Gemini (`call_gemini`)
 

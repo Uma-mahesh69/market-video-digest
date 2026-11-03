@@ -844,26 +844,6 @@ def main():
                    f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat page; start it with Digest chat on the desktop)</p>', page)
     out.write_text(local, encoding="utf-8")
     log(f"Saved {out}")
-    # The JSON copy for the Econova hub. A test run (--dry-run or --video) goes to the digests folder, so it can never
-    # replace the real day's file. With no videos and a channel that could not be read, we cannot say "no new videos".
-    if done or not unchecked:
-        try:
-            if args.dry_run or args.video:
-                export_digest(today, done, overview, OUT_DIR, log)
-                if prices:
-                    save_market(market, OUT_DIR, log)
-            else:
-                day = whole_day(cfg, state, today, done, overview)
-                if day is None:
-                    log(f"JSON digest for {today:%Y-%m-%d}: no new videos on this run, so today's file is kept as it is.")
-                else:
-                    folder = Path(cfg.get("json_dir") or JSON_DIR)
-                    export_digest(today, *day, folder, log)
-                    if prices:   # the market file covers the same videos as the day's digest file
-                        save_market(market if day[0] is done else market_brief(today, prices, day[0], CACHE_DIR), folder, log)
-                save_state(state)
-        except Exception as err:   # the email matters more than the JSON copy
-            log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
     subject = f"Market video digest, {today:%d %b %Y}: {len(done)} new video{'s' if len(done) != 1 else ''}"
     emailed = False
     if not args.dry_run:
@@ -885,6 +865,31 @@ def main():
                 save_state(state)
         else:
             log("Nothing new today, so no email was sent.")
+    # The JSON copy for the Econova hub, written once the digest is out: videos a failed email leaves queued go into
+    # the file of the run that sends them, so no video is counted on two days. A test run (--dry-run or --video) goes
+    # to the digests folder, so it can never replace the real day's file. With no videos and a channel that could not
+    # be read, we cannot say "no new videos".
+    if emailed is None:
+        if done:
+            log(f"JSON digest for {today:%Y-%m-%d} waits for the email: these videos go into the file of the run that sends them.")
+    elif done or not unchecked:
+        try:
+            if args.dry_run or args.video:
+                export_digest(today, done, overview, OUT_DIR, log)
+                if prices:
+                    save_market(market, OUT_DIR, log)
+            else:
+                day = whole_day(cfg, state, today, done, overview)
+                if day is None:
+                    log(f"JSON digest for {today:%Y-%m-%d}: no new videos on this run, so today's file is kept as it is.")
+                else:
+                    folder = Path(cfg.get("json_dir") or JSON_DIR)
+                    export_digest(today, *day, folder, log)
+                    if prices:   # the market file covers the same videos as the day's digest file
+                        save_market(market if day[0] is done else market_brief(today, prices, day[0], CACHE_DIR), folder, log)
+                save_state(state)
+        except Exception as err:   # a JSON problem must not turn a sent digest into a failed run
+            log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
     if args.open:
         if hasattr(os, "startfile"):   # Windows
             os.startfile(out)

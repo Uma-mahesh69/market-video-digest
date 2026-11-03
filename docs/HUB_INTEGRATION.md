@@ -26,6 +26,7 @@ Two files, in the same folder (`json_dir` in the digest's settings, for example 
 | `market-data_YYYY-MM-DD.json` | The watchlist with Google Finance prices, each stock's calls today and over 7 days, the S&P 500 and the 10-year yield, and up to 5 insight cards plus a "no new views" line. Only when a watchlist sheet is set up. | `market_schema.json` |
 
 - Both files cover the same videos. A second run on the same day rewrites both for the whole day.
+- A file is written once that run's email has gone out, so each video is in exactly one day's file.
 - A day with no videos still gets a digest file with `video_count: 0`.
 - A file is written only after it passes its schema, so a file that exists is complete.
 - Past days are never changed, so the folder is the history (mood over time and so on).
