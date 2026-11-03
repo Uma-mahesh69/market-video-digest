@@ -115,10 +115,12 @@ without asking. Check `digest.log` after the first scheduled run.
 - **Cause:** the video has no captions. Common for Shorts.
 - **Fix:** none needed. Such videos are listed once and not retried.
 
-### `FAILED to read the uploads feed`
-- **Cause:** YouTube's public feed was unreachable for a moment, or the channel id is wrong.
-- **Fix:** open the link printed under the error in a browser. If it shows a list of videos, try again later. If it
-  shows an error, check the channel link.
+### `FAILED to list its uploads` (was `FAILED to read the uploads feed`)
+- **Cause:** from 3 Nov 2026 YouTube's public uploads feed answered 404 (also in a browser). The digest now falls
+  back to yt-dlp, which reads the channel's Videos tab; the log says "listing the channel's videos with yt-dlp
+  instead". This error appears only when both fail.
+- **Fix:** open the link printed under the error in a browser. If it shows the videos, update yt-dlp
+  (`yt-dlp -U`) and try again. If it shows an error, check the channel link.
 
 ---
 

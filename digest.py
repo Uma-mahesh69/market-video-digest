@@ -16,6 +16,7 @@ import html
 import json
 import os
 import re
+import shutil
 import smtplib
 import socket
 import ssl
@@ -144,6 +145,38 @@ def channel_id(url, state):
 
 
 def latest_uploads(cid):
+    """A channel's latest uploads: YouTube's public feed, or yt-dlp when the feed is down (it answered 404 for every
+    channel from 3 Nov 2026)."""
+    try:
+        return feed_uploads(cid)
+    except (urllib.error.HTTPError, ET.ParseError) as err:
+        log(f"  YouTube's uploads feed failed ({err}); listing the channel's videos with yt-dlp instead")
+        return ytdlp_uploads(cid)
+
+
+def ytdlp_uploads(cid, count=12):
+    """The newest uploads on the channel's Videos tab, read by yt-dlp (slower than the feed: it opens each video)."""
+    exe = shutil.which("yt-dlp")
+    run = subprocess.run([*([exe] if exe else [sys.executable, "-m", "yt_dlp"]), "--skip-download", "--ignore-errors",
+                          "--no-warnings", "--encoding", "utf-8", "--playlist-end", str(count),
+                          "--print", "%(id)s\t%(timestamp)s\t%(channel)s\t%(title)s",
+                          f"https://www.youtube.com/channel/{cid}/videos"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
+                         env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
+    out = []
+    for line in run.stdout.splitlines():
+        parts = line.split("\t", 3)
+        if len(parts) == 4 and re.fullmatch(r"[\w-]{11}", parts[0]) and parts[1].isdigit():
+            vid, stamp, channel, title = parts
+            out.append({"id": vid, "title": title, "channel": channel,
+                        "published": datetime.fromtimestamp(int(stamp), timezone.utc).isoformat(),
+                        "url": f"https://www.youtube.com/watch?v={vid}", "short": False})
+    if not out:
+        raise RuntimeError("yt-dlp listed no videos either: " + ((run.stderr or "").strip().splitlines() or ["no output"])[-1])
+    return out
+
+
+def feed_uploads(cid):
     """YouTube's public feed of a channel's latest uploads. No API key needed."""
     ns = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
     root = ET.fromstring(fetch(f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}"))
@@ -613,11 +646,11 @@ def check(cfg, state):
         try:
             ups = latest_uploads(cid)
         except Exception as err:
-            print(f"  FAILED to read the uploads feed: {err}")
-            print(f"  Try opening https://www.youtube.com/feeds/videos.xml?channel_id={cid} in your browser.")
+            print(f"  FAILED to list its uploads (feed, then yt-dlp): {err}")
+            print(f"  Try opening https://www.youtube.com/channel/{cid}/videos in your browser.")
             ok = False
             continue
-        print(f"  uploads feed: {len(ups)} videos")
+        print(f"  uploads: {len(ups)} videos")
         for u in ups[:5]:
             age = datetime.now(timezone.utc) - datetime.fromisoformat(u["published"].replace("Z", "+00:00"))
             print(f"    {age.total_seconds() / 3600:6.1f} hours ago  {'(done) ' if u['id'] in state['done'] else ''}{u['title'][:70]}")

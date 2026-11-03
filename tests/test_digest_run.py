@@ -188,5 +188,31 @@ class DailyRun(unittest.TestCase):
         self.assertIn(f"JSON folder: {self.tmp / 'json'} (can write)", out)
 
 
+class UploadsWhenTheFeedIsDown(unittest.TestCase):
+    """YouTube's feed answered 404 for TheStreet from 3 Nov 2026; yt-dlp lists the Videos tab instead."""
+    def setUp(self):
+        self.saved = digest.feed_uploads, digest.subprocess.run
+
+    def tearDown(self):
+        digest.feed_uploads, digest.subprocess.run = self.saved
+
+    def test_yt_dlp_lists_the_uploads(self):
+        import subprocess, urllib.error
+        def down(cid):
+            raise urllib.error.HTTPError("https://www.youtube.com/feeds/videos.xml", 404, "Not Found", None, None)
+        digest.feed_uploads = down
+        calls = []
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "gTwZCpPhBac\t1793383200\tTheStreet\tAlphabet down? \u201cTrap\u201d\n"
+                                                       "WARNING: something\nM7wzUKgi1Kc\tNA\tTheStreet\tNo date\n", "")
+        digest.subprocess.run = fake_run
+        with redirect_stdout(io.StringIO()):
+            ups = digest.latest_uploads("UC" + "x" * 22)
+        self.assertEqual([(u["id"], u["title"], u["channel"]) for u in ups], [("gTwZCpPhBac", "Alphabet down? \u201cTrap\u201d", "TheStreet")])
+        self.assertEqual(ups[0]["published"], "2026-10-30T18:00:00+00:00")
+        self.assertTrue(calls[0][-1].endswith("/videos"))
+
+
 if __name__ == "__main__":
     unittest.main()
