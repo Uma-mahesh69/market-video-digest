@@ -191,7 +191,35 @@ The dashboard reads the two daily files from the Google Drive folder **Econova /
    `G:\My Drive\Econova\Video Digests\json`. `python digest.py --check` should say the JSON folder can be written.
 3. To add days from before the JSON export existed, from their saved digests:
    `python email_backfill.py digests\digest-2026-10-*.html --out "G:\My Drive\Econova\Video Digests\json"`.
-   Several digests on one day become one file, and a day that already has a file is left as it is.
+   Several digests on one day become one file, and a day that already has a file is left as it is. Saved digests
+   sit in the folder the run started from: `market-digest\digests` for scheduled runs, and the project folder's
+   `digests` for runs you started there. Give both patterns in one command, or a day can come out empty.
+
+### Scoring the calls, and your holdings, on the dashboard
+
+The dashboard also checks the calls against prices and shows your own holdings. It needs two more Google Sheets,
+read through Google Drive (nothing is published):
+
+1. **Market Digest Prices**: Google Finance prices and 120 days of closes for every ticker in `tickers.json`. Make
+   it with `python price_sheet.py --extra GOOG > price_sheet.csv` (add any holding that `tickers.json` lacks after
+   `--extra`), then in Google Sheets **File > Import > Upload**, **Replace spreadsheet**, with **Convert text to
+   numbers, dates, and formulas**. When `tickers.json` gains tickers, import a fresh CSV over the same sheet.
+2. **Google Finance Investment Tracker**: Google's template (Sheets > Template gallery > Investment tracker). Put
+   your stocks in its Watchlist tab and the number you hold in **# Shares**. The dashboard weights your holdings by
+   shares times price and shows the weights, never the counts.
+
+Each sheet's file id goes into the dashboard's `quotes`/`closes` and `holdings` sources
+(`docs/econova_dashboard/sources.json`). The dashboard then shows:
+
+- **What matters today**: a few sentences, such as *Your holding GOOG: 15 bullish and 2 bearish calls in 14 days, but
+  it moved -19.1% in a month; earlier calls on it were right 2 of 10 times.*
+- **Your holdings**: weight, day and 1-month move, distance from the 52-week high, calls in the last 14 days and the
+  latest call on each.
+- **Today's calls against the prices**: each stock called today with its 1-month move, 52-week-high distance, P/E
+  and the record of earlier calls on it.
+- **Did the calls work?**: each call scored from the close on its video's day to the latest close, against the
+  S&P 500; the hit rate and average edge of bullish and bearish calls, each analyst's record, and the best and worst
+  calls.
 
 **Coverage check:** to see how often your stocks came up in the videos lately, run
 `python market_data.py --coverage` (last 14 days) or `python market_data.py --coverage --days 28`. It lists the calls

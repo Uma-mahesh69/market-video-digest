@@ -6,15 +6,33 @@ page says what it writes and how the hub's KPIs map onto it.
 ## A working page
 
 [`econova_dashboard/`](econova_dashboard/) holds a working **Analyst Video Digest** page built on the Claude
-Dashboard artifact type: `index.html` (the page, its loaders and its calculations) and `sources.json` (its three
-live sources). It reads both daily files straight from the Google Drive folder through the Google Drive connector,
-and the watchlist sheet's prices the same way, so it refreshes itself whenever it is opened. Its headline cards are
-the user story's KPIs as visible calculations; on the Oct 22 file they give the reference page's values. To use it
-inside the hub, copy the page and its three sources, or link to it from the hub's sidebar.
+Dashboard artifact type: `index.html` (the page, its loaders and its calculations) and `sources.json` (its live
+sources). Everything is read through the Google Drive connector each time the page opens:
 
-Each live source runs with the reader's own Google Drive access, so a reader needs the Google Drive connector and
-read access to the folder and the sheet. In the dashboard's Settings, the owner can instead let readers see the
-owner's results.
+| Source | What it reads |
+|---|---|
+| `digests`, `market` | The newest 30 `video-digest_*.json` files and the newest `market-data_*.json` in the json folder |
+| `watchlist` | The watchlist sheet (Google Finance prices of the 10 watched stocks, the S&P 500 and the 10-year) |
+| `quotes`, `closes` | The **Market Digest Prices** sheet made by `price_sheet.py`: price, day change, 52-week high, P/E and 120 days of closes for every ticker in `tickers.json` |
+| `holdings` | The reader's **Google Finance Investment Tracker** (downloaded as .xlsx; the tab whose header has Symbol and # Shares) |
+
+Beyond the user story's KPIs, the page scores the calls against prices:
+
+- **Did the calls work?** Each bullish or bearish call is scored from the close on its video's publish day to the
+  latest close, against the S&P 500 over the same days. Edge = how far the stock beat the S&P 500 in the direction
+  called. The page shows the hit rate and average edge of bullish and bearish calls, each named analyst's record,
+  and the best and worst calls. First result (Oct 15 to Nov 3, 2026, 216 calls): 57 of 164 bullish calls beat the
+  S&P 500 (average edge -2.5 points); 27 of 52 bearish calls were right (+1.7 points).
+- **Today's calls against the prices**: each stock called today with its 1-month move, distance from the 52-week
+  high, P/E and the record of earlier calls on it, flagged when bulls call a stock near its high or after a 10% fall.
+- **Your holdings**: the Investment Tracker's holdings by weight (share counts are not shown), each with the last
+  14 days of calls, its latest call and the record of earlier calls on it.
+- **What matters today**: fixed rules turn the above into a few sentences, such as "Your holding GOOG: 15 bullish
+  and 2 bearish calls in 14 days, but it moved -19.1% in a month; earlier calls on it were right 2 of 10 times."
+
+Each live source runs with the reader's own Google Drive access. Claude runs connectors only for readers in the
+account that owns the dashboard; for anyone invited from outside it, the page shows "Live data isn't available in
+this view". Another person gets their own copy (Duplicate) pointed at Drive files they can read.
 
 ## What arrives each day
 

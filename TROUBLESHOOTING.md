@@ -63,6 +63,13 @@ without asking. Check `digest.log` after the first scheduled run.
 
 ## No digest email
 
+### A backfilled day has `video_count: 0` though its email had videos (Verified, fixed 4 Nov 2026)
+- **Cause:** `email_backfill.py` was given only `market-digest\digests`, but that day's digests were made by runs
+  started in the project folder, so they were saved in its own `digests` folder. The backfill found only an empty
+  run's page and wrote an empty day (Oct 22 and Oct 26).
+- **Fix:** delete the empty file from the json folder, then run the backfill again with both folders' patterns.
+  Oct 22 and Oct 26 were rebuilt from their digest emails.
+
 ### A failed run was not tried again on Windows (Verified, fixed 3 Nov 2026)
 - **Cause:** the log said "tries again in 30 minutes", but Task Scheduler's "restart on failure" ignores the
   program's exit code, so nothing ran until the next day. On 31 Oct, Gmail refused the email (451) after that day's

@@ -36,5 +36,38 @@
         "exportMimeType": "text/csv"
       }
     }
+  },
+  "datasets/quotes": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "download_file_content",
+      "args": {
+        "fileId": "<Market Digest Prices sheet id>",
+        "exportMimeType": "text/csv"
+      }
+    }
+  },
+  "datasets/closes": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "download_file_content",
+      "args": {
+        "fileId": "<Market Digest Prices sheet id>",
+        "exportMimeType": "text/csv"
+      }
+    }
+  },
+  "datasets/holdings": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "download_file_content",
+      "args": {
+        "fileId": "<Investment Tracker sheet id>",
+        "exportMimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    }
   }
 }

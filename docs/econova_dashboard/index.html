@@ -63,6 +63,12 @@
     </div>
   </header>
 
+  <section class="mvd-card" id="signals">
+    <h2>What matters today</h2>
+    <p class="mvd-note">Fixed rules over your holdings, today's calls, how earlier calls scored and Google Finance prices. Each line reports; none says buy or sell.</p>
+    <ul class="mvd-cards" data-draw="signals" data-source="signals"></ul>
+  </section>
+
   <section class="mvd-tiles" id="kpis" aria-label="Headline figures">
     <div class="mvd-tile">
       <p class="mvd-label">Analyst mood</p>
@@ -91,6 +97,25 @@
       <p class="mvd-sub mvd-has-headroom">10-year at <span data-draw="yield" data-source="bench" data-field="us10y" data-row="0">—</span> vs the <span data-draw="concern" data-source="headroom" data-field="level" data-row="0">—</span> concern level quoted in video #<span data-draw="concern-video" data-source="headroom" data-field="video" data-row="0">—</span></p>
       <p class="mvd-sub mvd-no-headroom" hidden>No 10-year concern level quoted today. The 10-year yield is <span data-draw="yield-2" data-source="bench" data-field="us10y" data-row="0">—</span>.</p>
     </div>
+    <div class="mvd-tile">
+      <p class="mvd-label">Bullish calls that beat the S&amp;P 500</p>
+      <p class="mvd-big"><span data-draw="hit" data-source="scorecard" data-field="bull_hit_pct" data-row="0" class="dash-skeleton">—</span></p>
+      <p class="mvd-sub"><span data-draw="hit-right" data-source="scorecard" data-field="bull_right" data-row="0">—</span> of <span data-draw="hit-n" data-source="scorecard" data-field="bull_n" data-row="0">—</span> since <span data-draw="hit-since" data-source="scorecard" data-field="since" data-row="0">—</span>; bearish calls right <span data-draw="bear-hit" data-source="scorecard" data-field="bear_hit_pct" data-row="0">—</span></p>
+    </div>
+  </section>
+
+  <section class="mvd-section" id="portfolio">
+    <h2>Your holdings</h2>
+    <p class="mvd-note">From the Watchlist tab of your Google Finance Investment Tracker. Weight is shares × price over the total; share counts stay in your sheet. Calls: the 14 days to the latest digest (GOOG counts the calls on GOOGL). <span class="mvd-has-exposure"><b data-draw="exp-bull" data-source="exposure" data-field="bullish_pct" data-row="0">—</b> of the portfolio leans bullish in those calls, <b data-draw="exp-bear" data-source="exposure" data-field="bearish_pct" data-row="0">—</b> bearish.</span></p>
+    <div class="mvd-card">
+      <div class="mvd-scroll">
+        <table class="mvd-table" data-source="portfolio" data-row-key="ticker">
+          <thead><tr><th data-field="ticker">Holding</th><th class="num" data-field="weight_pct">Weight</th><th class="num" data-field="change_pct_day">Day</th><th class="num" data-field="month_pct">1 month</th><th class="num" data-field="from_high_pct">From 52-wk high</th><th class="num" data-field="bull_14d">Bull</th><th class="num" data-field="bear_14d">Bear</th><th data-field="past_record">Earlier calls right</th><th data-field="latest_call">Latest call</th></tr></thead>
+          <tbody data-draw="portfolio"></tbody>
+        </table>
+      </div>
+      <p class="mvd-note mvd-no-holdings" hidden>No holding has shares in the Investment Tracker yet: add them in its # Shares column.</p>
+    </div>
   </section>
 
   <section class="mvd-card" id="conviction">
@@ -98,6 +123,17 @@
     <p class="mvd-note">Every call in today's videos, one per row in the data, grouped by ticker. Consensus: 2 or more bullish, none bearish. Split: both sides. Avoid: only bearish or mixed. Lean: the rest. The 20 stocks with the most calls are shown.</p>
     <ul class="mvd-legend"><li><i class="mvd-sw-bull" data-draw="sw-bull"></i>Bullish</li><li><i class="mvd-sw-bear"></i>Bearish</li><li><i class="mvd-sw-other"></i>Neutral or mixed</li></ul>
     <div class="mvd-chart" data-draw="board" data-source="board" style="min-height: 22rem"></div>
+  </section>
+
+  <section class="mvd-card" id="tape">
+    <h2>Today's calls against the prices</h2>
+    <p class="mvd-note">Each stock called today with its Google Finance move over a month (21 trading days), distance from its 52-week high and P/E, and how earlier calls on it scored against the S&amp;P 500.</p>
+    <div class="mvd-scroll">
+      <table class="mvd-table" data-source="tape" data-row-key="ticker">
+        <thead><tr><th data-field="ticker">Stock</th><th data-field="tag">Today</th><th class="num" data-field="bullish">Bull</th><th class="num" data-field="bearish">Bear</th><th class="num" data-field="month_pct">1 month</th><th class="num" data-field="from_high_pct">From 52-wk high</th><th class="num" data-field="pe">P/E</th><th data-field="past_record">Earlier calls right</th><th data-field="read">Read</th></tr></thead>
+        <tbody data-draw="tape"></tbody>
+      </table>
+    </div>
   </section>
 
   <section class="mvd-section" id="watchlist">
@@ -121,9 +157,47 @@
     </div>
   </section>
 
+  <section class="mvd-section" id="record">
+    <h2>Did the calls work?</h2>
+    <p class="mvd-note">Every bullish or bearish call with a ticker, from the close on its video's publish day to the latest close, against the S&amp;P 500 over the same days. Edge: how far the stock beat the S&amp;P 500 in the direction called, in percentage points. Most calls are days or weeks old, so this is early evidence.</p>
+    <div class="mvd-tiles">
+      <div class="mvd-tile">
+        <p class="mvd-label">Bullish calls</p>
+        <p class="mvd-big"><span data-draw="bull-edge" data-source="scorecard" data-field="bull_edge" data-row="0" class="dash-skeleton">—</span> pts</p>
+        <p class="mvd-sub">average edge; right <span data-draw="bull-right" data-source="scorecard" data-field="bull_right" data-row="0">—</span> of <span data-draw="bull-n" data-source="scorecard" data-field="bull_n" data-row="0">—</span></p>
+      </div>
+      <div class="mvd-tile">
+        <p class="mvd-label">Bearish calls</p>
+        <p class="mvd-big"><span data-draw="bear-edge" data-source="scorecard" data-field="bear_edge" data-row="0" class="dash-skeleton">—</span> pts</p>
+        <p class="mvd-sub">average edge; right <span data-draw="bear-right" data-source="scorecard" data-field="bear_right" data-row="0">—</span> of <span data-draw="bear-n" data-source="scorecard" data-field="bear_n" data-row="0">—</span></p>
+      </div>
+      <div class="mvd-tile">
+        <p class="mvd-label">Calls scored</p>
+        <p class="mvd-big"><span data-draw="scored-n" data-source="scorecard" data-field="calls" data-row="0" class="dash-skeleton">—</span></p>
+        <p class="mvd-sub">from <span data-draw="scored-since" data-source="scorecard" data-field="since" data-row="0">—</span> to the close of <span data-draw="scored-to" data-source="scorecard" data-field="to" data-row="0">—</span></p>
+      </div>
+    </div>
+    <div class="mvd-grid">
+      <div class="mvd-card" id="analysts">
+        <h2>Analysts by average edge</h2>
+        <p class="mvd-note">Named analysts with 2 or more scored calls; the right-hand label is how many were right.</p>
+        <div class="mvd-chart" data-draw="analysts" data-source="analysts" style="min-height: 12rem"></div>
+      </div>
+      <div class="mvd-card" id="extremes">
+        <h2>Best and worst calls so far</h2>
+        <div class="mvd-scroll">
+          <table class="mvd-table" data-source="call_extremes" data-row-key="key">
+            <thead><tr><th data-field="group">List</th><th data-field="ticker">Stock</th><th data-field="view">Call</th><th data-field="analyst">Who</th><th data-field="from">From</th><th class="num" data-field="edge_pct">Edge</th></tr></thead>
+            <tbody data-draw="extremes"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="mvd-card" id="trend">
     <h2>Analyst mood by digest day</h2>
-    <p class="mvd-note">Bullish share of bullish and bearish calls, one point per digest day in the folder (up to the last 14). Days build up as the daily run adds files.</p>
+    <p class="mvd-note">Bullish share of bullish and bearish calls, one point per digest day in the folder (up to the last 30). Days build up as the daily run adds files.</p>
     <div class="mvd-chart" data-draw="trend" data-source="trend" style="min-height: 14rem"></div>
   </section>
 
@@ -167,13 +241,13 @@
     </div>
   </section>
 
-  <p class="mvd-note">This page reports what the channels' analysts said and what prices did. It is not investment advice. Calls come from the digest's JSON files in Google Drive (Econova / Video Digests / json); prices from the watchlist sheet.</p>
+  <p class="mvd-note">This page reports what the channels' analysts said and what prices did. It is not investment advice. Calls come from the digest's JSON files in Google Drive (Econova / Video Digests / json); prices from the watchlist sheet and the Market Digest Prices sheet (Google Finance, delayed up to 20 minutes); holdings from your Investment Tracker.</p>
 </div>
 
 <script>
   /* ---------- live sources: the digest's JSON folder and the watchlist sheet, read through Google Drive ---------- */
   dash.loader('digests', {
-    description: 'Lists the json folder (more pages if there are), downloads the newest 14 video-digest files and lays each file out as rows, one per item, with kind = meta, mention, video, target, theme, side, level or event.',
+    description: 'Lists the json folder (more pages if there are), downloads the newest 30 video-digest files and lays each file out as rows, one per item, with kind = meta, mention, video, target, theme, side, level or event.',
     fn: async ({ answer, call, args }) => {
       const parse = (x) => (typeof x === 'string' ? JSON.parse(x) : x);
       const utf8 = (b64) => { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new TextDecoder('utf-8').decode(u); };
@@ -187,7 +261,7 @@
         page = parse(await call('search_files', { ...args, pageToken: page.nextPageToken }));
         files.push(...(page.files || []));
       }
-      const picked = files.filter((f) => /^video-digest_\d{4}-\d{2}-\d{2}\.json$/.test(f.title)).sort((a, b) => b.title.localeCompare(a.title)).slice(0, 14);
+      const picked = files.filter((f) => /^video-digest_\d{4}-\d{2}-\d{2}\.json$/.test(f.title)).sort((a, b) => b.title.localeCompare(a.title)).slice(0, 30);
       const rows = [];
       for (const f of picked) {
         const got = parse(await call('download_file_content', { fileId: f.id }));
@@ -196,6 +270,7 @@
         const day = d.digest_date;
         const pub = d.videos.map((v) => v.published_date).sort();
         const url = Object.fromEntries(d.videos.map((v) => [v.number, v.url]));
+        const published = Object.fromEntries(d.videos.map((v) => [v.number, v.published_date]));
         rows.push(row({ kind: 'meta', day, name: (d.channels || []).join(', '), text: d.summary, value: d.video_count, detail: d.backfilled_from, first_published: pub[0], last_published: pub[pub.length - 1] }));
         for (const v of d.videos) {
           rows.push(row({ kind: 'video', day, video: v.number, name: v.title, text: v.summary, url: v.url, timestamp: v.duration,
@@ -203,7 +278,7 @@
           const who = ((v.speakers || []).find((s) => !/host|interviewer|anchor/i.test(s.role || '')) || (v.speakers || [])[0] || {}).name;
           for (const t of v.sp500_targets || []) rows.push(row({ kind: 'target', day, video: v.number, value: t.value, horizon: t.horizon, name: who || `Video #${v.number}` }));
         }
-        for (const m of d.mentions) rows.push(row({ kind: 'mention', day, video: m.video, ticker: m.ticker, name: m.name, view: m.view, text: m.reason, detail: m.analyst, timestamp: m.timestamp, url: url[m.video] ? `${url[m.video]}&t=${secs(m.timestamp)}s` : null }));
+        for (const m of d.mentions) rows.push(row({ kind: 'mention', day, video: m.video, ticker: m.ticker, name: m.name, view: m.view, text: m.reason, detail: m.analyst, timestamp: m.timestamp, date: published[m.video], url: url[m.video] ? `${url[m.video]}&t=${secs(m.timestamp)}s` : null }));
         for (const t of d.themes) rows.push(row({ kind: 'theme', day, name: t.name, text: t.summary, value: t.videos.length, videos: t.videos.join(',') }));
         for (const b of d.debates) for (const s of b.sides) rows.push(row({ kind: 'side', day, name: b.topic, text: s.position, detail: s.analysts.join(', '), videos: s.videos.join(',') }));
         for (const l of d.levels) rows.push(row({ kind: 'level', day, video: l.video, name: l.metric, value: l.value, unit: l.unit, text: l.display, detail: l.note, timestamp: l.timestamp }));
@@ -267,6 +342,99 @@
         return r;
       });
       return { data, columns };
+    },
+  });
+
+  /* ---------- Google Finance prices (the Market Digest Prices sheet) and your holdings (the Investment Tracker) ---------- */
+  dash.loader('quotes', {
+    description: 'The Market Digest Prices sheet as CSV, one row per ticker: Google Finance price, day change, 52-week high and P/E; blanks null.',
+    fn: ({ answer }) => {
+      const got = typeof answer === 'string' ? JSON.parse(answer) : answer;
+      if (!got || !got.content) throw new Error('Google Drive gave no content for the Market Digest Prices sheet');
+      const s = atob(got.content); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+      const lines = new TextDecoder('utf-8').decode(u).replace(/^﻿/, '').split(/\r?\n/).map((l) => l.split(','));
+      const head = (lines[0] || []).map((h) => h.trim());
+      const at = (name) => head.indexOf(name);
+      const num = (v) => (v == null || v.trim() === '' || isNaN(Number(v)) ? null : Number(v));
+      const columns = ['ticker', 'google_finance', 'price', 'change_pct_day', 'high_52w', 'pe'];
+      const data = lines.slice(1).filter((l) => (l[0] || '').trim()).map((l) => ({ ticker: l[0].trim(), google_finance: (l[at('google_finance')] || '').trim(),
+        price: num(l[at('price')]), change_pct_day: num(l[at('change_pct_day')]), high_52w: num(l[at('high_52w')]), pe: num(l[at('pe')]) }));
+      return { data, columns };
+    },
+  });
+
+  dash.loader('closes', {
+    description: 'The same sheet\'s daily closes, one row per ticker and S&P 500 trading day (row 1 holds the dates as Google Sheets day numbers); missing closes left out.',
+    fn: ({ answer }) => {
+      const got = typeof answer === 'string' ? JSON.parse(answer) : answer;
+      if (!got || !got.content) throw new Error('Google Drive gave no content for the Market Digest Prices sheet');
+      const s = atob(got.content); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+      const lines = new TextDecoder('utf-8').decode(u).replace(/^﻿/, '').split(/\r?\n/).map((l) => l.split(','));
+      const dates = (lines[0] || []).map((h) => (/^\d{5}$/.test(h.trim()) ? new Date(Date.UTC(1899, 11, 30) + Number(h) * 864e5).toISOString().slice(0, 10) : null));
+      const data = [];
+      for (const l of lines.slice(1)) {
+        const ticker = (l[0] || '').trim();
+        if (!ticker) continue;
+        dates.forEach((date, i) => {
+          const v = (l[i] || '').trim();
+          if (date && v !== '' && !isNaN(Number(v))) data.push({ ticker, date, close: Number(v) });
+        });
+      }
+      return { data, columns: ['ticker', 'date', 'close'] };
+    },
+  });
+
+  dash.loader('holdings', {
+    description: 'Your Google Finance Investment Tracker, downloaded as an Excel file: the rows under the header with Symbol and # Shares (its Watchlist tab), with symbol, exchange, name, price and shares.',
+    fn: async ({ answer }) => {
+      const got = typeof answer === 'string' ? JSON.parse(answer) : answer;
+      if (!got || !got.content) throw new Error('Google Drive gave no content for the Investment Tracker');
+      const s = atob(got.content); const zip = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) zip[i] = s.charCodeAt(i);
+      const dv = new DataView(zip.buffer), text = (u) => new TextDecoder('utf-8').decode(u);
+      // an .xlsx file is a zip: its central directory lists each part, its compression and where it starts
+      let end = zip.length - 22;
+      while (end >= 0 && dv.getUint32(end, true) !== 0x06054b50) end--;
+      if (end < 0) throw new Error('The Investment Tracker download is not an Excel file');
+      const parts = new Map();
+      for (let p = dv.getUint32(end + 16, true), n = dv.getUint16(end + 10, true); n > 0; n--) {
+        const len = dv.getUint16(p + 28, true);
+        parts.set(text(zip.subarray(p + 46, p + 46 + len)), { method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), at: dv.getUint32(p + 42, true) });
+        p += 46 + len + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+      }
+      const part = async (name) => {
+        const f = parts.get(name);
+        if (!f) return '';
+        const from = f.at + 30 + dv.getUint16(f.at + 26, true) + dv.getUint16(f.at + 28, true);
+        const raw = zip.subarray(from, from + f.size);
+        if (f.method === 0) return text(raw);
+        return text(new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
+      };
+      const unxml = (v) => v.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, c) => String.fromCharCode(c)).replace(/&amp;/g, '&');
+      const shared = [...(await part('xl/sharedStrings.xml')).matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => unxml([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')));
+      const num = (x) => (x == null || String(x).trim() === '' || isNaN(Number(x)) ? null : Number(x));
+      for (const name of [...parts.keys()].filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()) {
+        const rows = new Map();
+        for (const c of (await part(name)).matchAll(/<c r="([A-Z]+)(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+          const v = ((c[4] || '').match(/<v>([\s\S]*?)<\/v>/) || (c[4] || '').match(/<t[^>]*>([\s\S]*?)<\/t>/) || [])[1];
+          if (v == null) continue;
+          if (!rows.has(+c[2])) rows.set(+c[2], {});
+          rows.get(+c[2])[c[1]] = /t="s"/.test(c[3]) ? shared[Number(v)] : unxml(v);
+        }
+        const label = (x) => String(x).trim().toLowerCase().replace(/\s+/g, ' ');
+        const head = [...rows.keys()].sort((a, b) => a - b).find((r) => { const l = Object.values(rows.get(r)).map(label); return l.includes('symbol') && l.includes('# shares'); });
+        if (head == null) continue;
+        const col = {};
+        for (const [letter, x] of Object.entries(rows.get(head))) {
+          const l = label(x);
+          if (l === 'symbol') col.symbol = letter; else if (l.startsWith('exchange')) col.exchange = letter; else if (l === 'stock name') col.name = letter;
+          else if (l === 'current price') col.price = letter; else if (l === '# shares') col.shares = letter;
+        }
+        const data = [...rows.keys()].sort((a, b) => a - b).filter((r) => r > head).map((r) => rows.get(r)).filter((r) => String(r[col.symbol] || '').trim())
+          .map((r) => ({ symbol: String(r[col.symbol]).trim().toUpperCase(), exchange: String(r[col.exchange] || '').trim() || null,
+            name: r[col.name] && r[col.name] !== '-' ? r[col.name] : null, price: num(r[col.price]), shares: num(r[col.shares]) }));
+        return { data, columns: ['symbol', 'exchange', 'name', 'price', 'shares'] };
+      }
+      throw new Error('No tab of the Investment Tracker has a header row with Symbol and # Shares');
     },
   });
 
@@ -376,6 +544,164 @@
   dash.calc('videos_today', { inputs: ['digests', 'latest'], title: "Today's videos", description: 'The latest digest\'s videos in its order.',
     fn: (digests, latest) => (latest[0] ? digests.filter((r) => r.kind === 'video' && r.day === latest[0].day).sort((a, b) => a.video - b.video).map((v) => ({ video: v.video, title: v.name, url: v.url, duration: v.timestamp, speakers: v.detail })) : []) });
 
+  /* ---------- the calls against Google Finance prices ---------- */
+  dash.calc('scored', { inputs: ['digests', 'closes'], title: 'Calls scored against the S&P 500',
+    description: 'Each bullish or bearish call with a ticker, from the close on its video\'s publish day (or the trading day before) to the latest close, against the S&P 500 over the same days. Edge: how far the stock beat the S&P 500 in the direction called. A call repeated in one video counts once.',
+    fn: (digests, closes) => {
+      const by = new Map();
+      for (const c of closes) { if (!by.has(c.ticker)) by.set(c.ticker, new Map()); by.get(c.ticker).set(c.date, c.close); }
+      const spx = by.get('SPX') || new Map();
+      const days = [...spx.keys()].sort();
+      const seen = new Set(), out = [];
+      for (const m of digests) {
+        if (m.kind !== 'mention' || !by.has(m.ticker) || (m.view !== 'bullish' && m.view !== 'bearish')) continue;
+        const key = `${(m.url || m.day).split('&t=')[0]}|${m.ticker}|${m.view}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const s = by.get(m.ticker), on = m.date || m.day;
+        let i = days.length - 1;
+        while (i >= 0 && (days[i] > on || s.get(days[i]) == null)) i--;
+        let j = days.length - 1;
+        while (j > i && s.get(days[j]) == null) j--;
+        if (i < 0 || j <= i) continue;
+        const r = s.get(days[j]) / s.get(days[i]) - 1, b = spx.get(days[j]) / spx.get(days[i]) - 1;
+        const edge = m.view === 'bullish' ? r - b : b - r;
+        out.push({ key, day: m.day, ticker: m.ticker, name: m.name, view: m.view, analyst: m.detail, reason: m.text, url: m.url, from: days[i], to: days[j], days: j - i,
+          return_pct: Math.round(r * 1000) / 10, spx_pct: Math.round(b * 1000) / 10, edge_pct: Math.round(edge * 1000) / 10, right: edge > 0 });
+      }
+      return out;
+    } });
+
+  dash.calc('scorecard', { inputs: ['scored'], title: 'Track record of the calls', description: 'Bullish and bearish calls scored so far: how many were right (beat, or for bearish lagged, the S&P 500) and their average edge in percentage points.',
+    fn: (scored) => {
+      const side = (view) => {
+        const c = scored.filter((s) => s.view === view), right = c.filter((s) => s.right).length;
+        return [c.length, right, c.length ? Math.round((100 * right) / c.length) : null, c.length ? Math.round((10 * c.reduce((t, s) => t + s.edge_pct, 0)) / c.length) / 10 : null];
+      };
+      const [bull_n, bull_right, bull_hit_pct, bull_edge] = side('bullish'), [bear_n, bear_right, bear_hit_pct, bear_edge] = side('bearish');
+      const from = scored.map((s) => s.from).sort(), to = scored.map((s) => s.to).sort();
+      return scored.length ? [{ calls: scored.length, since: from[0], to: to[to.length - 1], bull_n, bull_right, bull_hit_pct, bull_edge, bear_n, bear_right, bear_hit_pct, bear_edge }] : [];
+    } });
+
+  dash.calc('analysts', { inputs: ['scored'], title: 'Analysts by track record', description: 'Each named analyst (hosts left out) with 2 or more scored calls: calls, how many were right, and the average edge over the S&P 500 in percentage points.',
+    fn: (scored) => {
+      const by = new Map();
+      for (const s of scored) {
+        if (!s.analyst || /unnamed|unknown|host/i.test(s.analyst)) continue;
+        if (!by.has(s.analyst)) by.set(s.analyst, []);
+        by.get(s.analyst).push(s);
+      }
+      return [...by].filter(([, c]) => c.length >= 2).map(([analyst, c]) => {
+        const right = c.filter((s) => s.right).length;
+        return { analyst, calls: c.length, right, record: `${right} of ${c.length}`, hit_pct: Math.round((100 * right) / c.length),
+          edge_pct: Math.round((10 * c.reduce((t, s) => t + s.edge_pct, 0)) / c.length) / 10 };
+      }).sort((a, b) => b.edge_pct - a.edge_pct || b.calls - a.calls);
+    } });
+
+  dash.calc('call_extremes', { inputs: ['scored'], title: 'Best and worst calls so far', description: 'The 5 calls with the largest edge over the S&P 500 in the direction called, and the 5 with the largest shortfall.',
+    fn: (scored) => {
+      const sorted = scored.slice().sort((a, b) => b.edge_pct - a.edge_pct);
+      return [...sorted.slice(0, 5).filter((s) => s.edge_pct > 0).map((s) => ({ ...s, group: 'Best' })),
+        ...sorted.slice(-5).reverse().filter((s) => s.edge_pct < 0).map((s) => ({ ...s, group: 'Worst' }))];
+    } });
+
+  dash.calc('tape', { inputs: ['board', 'quotes', 'closes', 'scored', 'latest'], title: "Today's calls against the prices",
+    description: 'Each stock called today with Google Finance\'s 1-month move (21 trading days), distance from its 52-week high and P/E, and how earlier calls on it scored. Read: bullish within 5% of a 52-week high, bullish after a 1-month fall of 10% or more, bearish after a 1-month rise of 10% or more, or split.',
+    fn: (board, quotes, closes, scored, latest) => {
+      const day = latest[0] && latest[0].day;
+      const q = new Map(quotes.map((r) => [r.ticker, r]));
+      const series = new Map();
+      for (const c of closes) { if (!series.has(c.ticker)) series.set(c.ticker, []); series.get(c.ticker).push(c); }
+      return board.filter((b) => q.has(b.ticker)).map((b) => {
+        const s = (series.get(b.ticker) || []).slice().sort((x, y) => x.date.localeCompare(y.date));
+        const last = s[s.length - 1], back = s[Math.max(0, s.length - 22)], quote = q.get(b.ticker);
+        const month_pct = last && back && last !== back ? Math.round((last.close / back.close - 1) * 1000) / 10 : null;
+        const from_high_pct = quote.price != null && quote.high_52w ? Math.round((quote.price / quote.high_52w - 1) * 1000) / 10 : null;
+        const past = scored.filter((c) => c.ticker === b.ticker && c.day !== day), right = past.filter((c) => c.right).length;
+        const bull = b.bullish > b.bearish, bear = b.bearish > b.bullish;
+        const read = b.tag === 'Split' ? 'Split call'
+          : bull && from_high_pct != null && from_high_pct >= -5 ? 'Bullish near a 52-week high'
+          : bull && month_pct != null && month_pct <= -10 ? 'Bullish after a 1-month fall'
+          : bear && month_pct != null && month_pct >= 10 ? 'Bearish after a 1-month rise' : null;
+        return { ticker: b.ticker, tag: b.tag, bullish: b.bullish, bearish: b.bearish, month_pct, from_high_pct, pe: quote.pe,
+          past_record: past.length ? `${right} of ${past.length}` : null, read };
+      });
+    } });
+
+  dash.calc('portfolio', { inputs: ['holdings', 'quotes', 'closes', 'digests', 'latest', 'scored'], title: 'Your holdings and the analysts',
+    description: 'Each holding in your Investment Tracker with its weight (shares times price over the total), day and 1-month move, distance from its 52-week high, its calls in the 14 days to the latest digest, its latest call, and how earlier calls on it scored. GOOG counts the calls on GOOGL (same company).',
+    fn: (holdings, quotes, closes, digests, latest, scored) => {
+      const same = { GOOG: 'GOOGL', 'BRK.A': 'BRK.B' };
+      const day = latest[0] && latest[0].day;
+      const from = day ? new Date(Date.parse(day + 'T00:00:00Z') - 13 * 864e5).toISOString().slice(0, 10) : null;
+      const q = new Map(quotes.map((r) => [r.ticker, r]));
+      const held = holdings.filter((h) => h.shares > 0 && h.price != null);
+      const total = held.reduce((t, h) => t + h.shares * h.price, 0);
+      return held.map((h) => {
+        const t = same[h.symbol] || h.symbol, own = q.has(h.symbol) ? h.symbol : t;
+        const calls = digests.filter((r) => r.kind === 'mention' && r.ticker === t && day && r.day >= from && r.day <= day).sort((a, b) => b.day.localeCompare(a.day));
+        const s = closes.filter((c) => c.ticker === own).sort((a, b) => a.date.localeCompare(b.date));
+        const last = s[s.length - 1], back = s[Math.max(0, s.length - 22)], quote = q.get(own) || {};
+        const past = scored.filter((c) => c.ticker === t && c.day !== day), right = past.filter((c) => c.right).length;
+        const top = calls[0];
+        return { ticker: h.symbol, name: h.name, weight_pct: total ? Math.round((1000 * h.shares * h.price) / total) / 10 : null,
+          change_pct_day: quote.change_pct_day ?? null, month_pct: last && back && last !== back ? Math.round((last.close / back.close - 1) * 1000) / 10 : null,
+          from_high_pct: quote.price != null && quote.high_52w ? Math.round((quote.price / quote.high_52w - 1) * 1000) / 10 : null,
+          bull_14d: calls.filter((c) => c.view === 'bullish').length, bear_14d: calls.filter((c) => c.view === 'bearish').length, today: calls.filter((c) => c.day === day).length,
+          past_record: past.length ? `${right} of ${past.length}` : null,
+          latest_call: top ? `${top.view}${top.detail && !/unnamed|host/i.test(top.detail) ? ` (${top.detail})` : ''}: ${top.text}` : null, latest_view: top ? top.view : null, latest_url: top ? top.url : null };
+      }).sort((a, b) => b.weight_pct - a.weight_pct);
+    } });
+
+  dash.calc('exposure', { inputs: ['portfolio'], title: 'Your portfolio by the analysts\' lean', description: 'The weight of your holdings whose calls in the last 14 days lean bullish (more bullish than bearish), lean bearish, or neither.',
+    fn: (portfolio) => {
+      const w = (f) => Math.round(portfolio.filter(f).reduce((t, p) => t + (p.weight_pct || 0), 0) * 10) / 10;
+      return portfolio.length ? [{ holdings: portfolio.length, bullish_pct: w((p) => p.bull_14d > p.bear_14d), bearish_pct: w((p) => p.bear_14d > p.bull_14d), neither_pct: w((p) => p.bull_14d === p.bear_14d) }] : [];
+    } });
+
+  dash.calc('signals', { inputs: ['portfolio', 'tape', 'analysts', 'scorecard', 'mentions_today'], title: 'What matters today',
+    description: 'Sentences made by fixed rules from the other calculations: your holdings called today or leaning one way, today\'s strongest calls on stocks whose earlier calls scored 35% or worse (or 65% or better, 4 or more calls), today\'s calls by analysts whose earlier calls scored well or badly (3 or more), calls that run with or against the 1-month move, and the overall track record.',
+    fn: (portfolio, tape, analysts, scorecard, today) => {
+      const pct = (x) => `${x > 0 ? '+' : ''}${x}%`, pts = (x) => `${x > 0 ? '+' : ''}${x} pts`;
+      const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], date = (d) => `${mon[+d.slice(5, 7) - 1]} ${+d.slice(8, 10)}`;
+      const out = [];
+      for (const p of portfolio) {
+        if (p.today) out.push({ tone: p.latest_view === 'bearish' ? 'bad' : p.latest_view === 'bullish' ? 'ok' : 'warn', text: `New call today on your holding ${p.ticker}, ${p.latest_call}`, url: p.latest_url });
+        if (p.bull_14d + p.bear_14d < 2) continue;
+        const lean = p.bull_14d > p.bear_14d ? 1 : p.bear_14d > p.bull_14d ? -1 : 0, against = p.month_pct != null && lean * p.month_pct < 0;
+        out.push({ tone: against ? 'bad' : lean > 0 ? 'ok' : 'warn',
+          text: `Your holding ${p.ticker}: ${p.bull_14d} bullish and ${p.bear_14d} bearish calls in 14 days${p.month_pct != null ? `, ${against ? 'but' : 'and'} it moved ${pct(p.month_pct)} in a month` : ''}${p.past_record ? `; earlier calls on it were right ${p.past_record} times` : ''}.` });
+      }
+      for (const t of tape) {
+        const [right, n] = (t.past_record || '0 of 0').split(' of ').map(Number);
+        if ((t.bullish < 2 && t.bearish < 2) || n < 4) continue;
+        if (right / n <= 0.35) out.push({ tone: 'warn', text: `${t.ticker} got ${t.bullish} bullish and ${t.bearish} bearish calls today, but earlier calls on it were right only ${t.past_record} times.` });
+        else if (right / n >= 0.65) out.push({ tone: 'ok', text: `${t.ticker} got ${t.bullish} bullish and ${t.bearish} bearish calls today; earlier calls on it were right ${t.past_record} times.` });
+      }
+      const named = new Map(analysts.map((a) => [a.analyst, a])), byWho = new Map();
+      for (const c of today) {
+        if (!named.has(c.detail) || !c.ticker || (c.view !== 'bullish' && c.view !== 'bearish')) continue;
+        if (!byWho.has(c.detail)) byWho.set(c.detail, []);
+        byWho.get(c.detail).push(c);
+      }
+      for (const [who, calls] of byWho) {
+        const a = named.get(who), list = [...new Set(calls.map((c) => `${c.view} on ${c.ticker}`))].slice(0, 4).join(', ');
+        if (a.calls < 3) continue;
+        if (a.hit_pct >= 60 && a.edge_pct > 0) out.push({ tone: 'ok', text: `${who}'s earlier calls were right ${a.record} times (average edge ${pts(a.edge_pct)}). Today: ${list}.`, url: calls[0].url });
+        else if (a.hit_pct <= 40 && a.edge_pct < 0) out.push({ tone: 'warn', text: `${who}'s earlier calls were right only ${a.record} times (average edge ${pts(a.edge_pct)}). Today: ${list}.`, url: calls[0].url });
+      }
+      const list = (read, f) => tape.filter((t) => t.read === read).slice(0, 4).map((t) => `${t.ticker} (${f(t)})`).join(', ');
+      const near = list('Bullish near a 52-week high', (t) => `${pct(t.from_high_pct)} from its high`);
+      if (near) out.push({ tone: 'warn', text: `Bullish calls on stocks within 5% of their 52-week high: ${near}. Check what the bulls expect from here.` });
+      const dips = list('Bullish after a 1-month fall', (t) => `${pct(t.month_pct)} in a month`);
+      if (dips) out.push({ tone: 'warn', text: `Bullish calls on stocks that fell 10% or more in a month: ${dips}. Check whether the reason for the fall has changed.` });
+      const fades = list('Bearish after a 1-month rise', (t) => `${pct(t.month_pct)} in a month`);
+      if (fades) out.push({ tone: 'warn', text: `Bearish calls on stocks that rose 10% or more in a month: ${fades}.` });
+      const s = scorecard[0];
+      if (s) out.push({ tone: '', text: `Since ${date(s.since)}, ${s.bull_right} of ${s.bull_n} bullish calls beat the S&P 500 (average edge ${pts(s.bull_edge)}) and ${s.bear_right} of ${s.bear_n} bearish calls lagged it (average edge ${pts(s.bear_edge)}).` });
+      return out.slice(0, 8).map((o, i) => ({ rank: i + 1, tone: o.tone, text: o.text, url: o.url || null }));
+    } });
+
   /* ---------- drawing ---------- */
   const fmtInt = d3.format(',');
   const fmtPrice = d3.format(',.2f');
@@ -423,6 +749,7 @@
     show('.mvd-has-upside', up); show('.mvd-no-upside', !up); show('.mvd-upside-to', up);
     show('.mvd-has-headroom', head); show('.mvd-no-headroom', !head);
     show('.mvd-no-targets', !tg);
+    show('.mvd-no-holdings', !has('portfolio')); show('.mvd-has-exposure', has('exposure'));
     const l = one('latest');
     show('.mvd-backfilled', !!(l && l.backfilled));
   });
@@ -644,6 +971,154 @@
       const d = document.createElement('td'); d.textContent = v.duration || '—';
       const s = document.createElement('td'); s.textContent = v.speakers || '—';
       tr.append(n, t, d, s);
+      el.append(tr);
+    }
+  });
+
+  // the calls against prices: headline numbers
+  const pctOf = (x) => `${x}%`;
+  const signedPts = (x) => `${x > 0 ? '+' : ''}${x}`;
+  value('hit', 'scorecard', 'bull_hit_pct', pctOf);
+  value('hit-right', 'scorecard', 'bull_right', fmtInt);
+  value('hit-n', 'scorecard', 'bull_n', fmtInt);
+  value('hit-since', 'scorecard', 'since', fmtShort);
+  value('bear-hit', 'scorecard', 'bear_hit_pct', pctOf);
+  value('bull-edge', 'scorecard', 'bull_edge', signedPts);
+  value('bull-right', 'scorecard', 'bull_right', fmtInt);
+  value('bull-n', 'scorecard', 'bull_n', fmtInt);
+  value('bear-edge', 'scorecard', 'bear_edge', signedPts);
+  value('bear-right', 'scorecard', 'bear_right', fmtInt);
+  value('bear-n', 'scorecard', 'bear_n', fmtInt);
+  value('scored-n', 'scorecard', 'calls', fmtInt);
+  value('scored-since', 'scorecard', 'since', fmtShort);
+  value('scored-to', 'scorecard', 'to', fmtShort);
+  value('exp-bull', 'exposure', 'bullish_pct', pctOf);
+  value('exp-bear', 'exposure', 'bearish_pct', pctOf);
+
+  // a table cell, coloured by sign when asked
+  const cell = (tr, text, cls = '', sign = null) => {
+    const c = document.createElement('td');
+    c.className = [cls, sign > 0 ? 'mvd-up' : sign < 0 ? 'mvd-down' : ''].filter(Boolean).join(' ');
+    c.textContent = text;
+    tr.append(c);
+    return c;
+  };
+  const linkCell = (tr, text, url) => {
+    const c = cell(tr, '');
+    if (!text) { c.textContent = '—'; return c; }
+    if (!url) { c.textContent = text; return c; }
+    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = text; c.append(a);
+    return c;
+  };
+
+  // what matters today
+  dash.draw('signals', (el) => {
+    const g = dash.data('signals');
+    el.replaceChildren();
+    if (g.status === 'error') { const li = document.createElement('li'); li.className = 'mvd-failed'; li.textContent = 'Failed to load'; el.append(li); return; }
+    if (g.status !== 'ok') return;
+    for (const s of g.data) {
+      const li = document.createElement('li');
+      if (s.tone) li.className = s.tone;
+      const say = document.createElement('span');
+      say.textContent = s.text + (s.url ? ' ' : '');
+      if (s.url) { const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '[watch]'; say.append(a); }
+      li.append(say);
+      el.append(li);
+    }
+  });
+
+  // your holdings
+  dash.draw('portfolio', (el) => {
+    const g = dash.data('portfolio');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const p of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = p.ticker;
+      tr.title = p.name || '';
+      cell(tr, p.ticker);
+      cell(tr, p.weight_pct == null ? '—' : pctOf(p.weight_pct), 'num');
+      cell(tr, signed(p.change_pct_day), 'num', p.change_pct_day);
+      cell(tr, signed(p.month_pct), 'num', p.month_pct);
+      cell(tr, signed(p.from_high_pct), 'num');
+      cell(tr, fmtInt(p.bull_14d), 'num');
+      cell(tr, fmtInt(p.bear_14d), 'num');
+      cell(tr, p.past_record || '—');
+      linkCell(tr, p.latest_call, p.latest_url);
+      el.append(tr);
+    }
+  });
+
+  // today's calls against the prices
+  dash.draw('tape', (el) => {
+    const g = dash.data('tape');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    const tone = { Consensus: 'mvd-up', Avoid: 'mvd-down' };
+    for (const t of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = t.ticker;
+      cell(tr, t.ticker);
+      cell(tr, t.tag, tone[t.tag] || '');
+      cell(tr, fmtInt(t.bullish), 'num');
+      cell(tr, fmtInt(t.bearish), 'num');
+      cell(tr, signed(t.month_pct), 'num', t.month_pct);
+      cell(tr, signed(t.from_high_pct), 'num');
+      cell(tr, t.pe == null ? '—' : d3.format('.1f')(t.pe), 'num');
+      cell(tr, t.past_record || '—');
+      cell(tr, t.read || '');
+      el.append(tr);
+    }
+  });
+
+  // analysts by average edge: bars either side of zero
+  dash.draw('analysts', (el) => {
+    const g = dash.data('analysts');
+    if (g.status === 'error') return failed(el);
+    el.replaceChildren();
+    if (g.status !== 'ok' || !g.data.length) return;
+    const rows = g.data.slice(0, 12);
+    const width = el.clientWidth || 480, rowH = 26;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${width} ${rows.length * rowH + 4}`).attr('role', 'img').attr('aria-label', 'Average edge of each analyst\'s calls over the S&P 500');
+    const probe = svg.append('text').attr('font-size', 12);
+    const nameW = d3.max(rows, (r) => probe.text(r.analyst).node().getComputedTextLength()) + 12;
+    const recW = d3.max(rows, (r) => probe.text(`${r.record} right`).node().getComputedTextLength()) + 12;
+    const numW = probe.text('+00.0').node().getComputedTextLength() + 8;
+    probe.remove();
+    const ext = d3.max(rows, (r) => Math.abs(r.edge_pct)) || 1;
+    const x = d3.scaleLinear([-ext, ext], [nameW + numW, width - recW - numW]);
+    const fg = cssVar('--color-fg'), muted = cssVar('--color-fg-muted'), bad = cssVar('--cds-chart-status-critical');
+    const tt = tip(el);
+    svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', 0).attr('y2', rows.length * rowH + 4).attr('stroke', cssVar('--cds-chart-axis'));
+    rows.forEach((r, i) => {
+      const cy = 2 + i * rowH + rowH / 2, x0 = x(Math.min(0, r.edge_pct)), x1 = x(Math.max(0, r.edge_pct));
+      svg.append('text').attr('x', 0).attr('y', cy).attr('dominant-baseline', 'middle').attr('font-size', 12).attr('fill', fg).text(r.analyst);
+      svg.append('rect').attr('x', x0).attr('y', cy - 7).attr('width', Math.max(1, x1 - x0)).attr('height', 14).attr('rx', 2).attr('fill', r.edge_pct >= 0 ? dash.colors[0] : bad);
+      svg.append('text').attr('x', r.edge_pct >= 0 ? x1 + 4 : x0 - 4).attr('y', cy).attr('text-anchor', r.edge_pct >= 0 ? 'start' : 'end').attr('dominant-baseline', 'middle').attr('font-size', 11).attr('fill', muted).text(signedPts(r.edge_pct));
+      svg.append('text').attr('x', width).attr('y', cy).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').attr('font-size', 12).attr('fill', muted).text(`${r.record} right`);
+      svg.append('rect').attr('x', 0).attr('y', cy - rowH / 2).attr('width', width).attr('height', rowH).attr('fill', 'transparent')
+        .on('mousemove', (event) => tt.show(event, [[r.analyst], ['Scored calls', r.calls], ['Right', `${r.right} (${r.hit_pct}%)`], ['Average edge', `${signedPts(r.edge_pct)} pts`]]))
+        .on('mouseleave', () => tt.hide());
+    });
+    svg.selectAll('text').attr('font-family', 'var(--font-anthropic-sans)');
+  });
+
+  // best and worst calls
+  dash.draw('extremes', (el) => {
+    const g = dash.data('call_extremes');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const s of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = s.key;
+      tr.title = s.reason || '';
+      cell(tr, s.group, s.group === 'Best' ? 'mvd-up' : 'mvd-down');
+      linkCell(tr, s.ticker, s.url);
+      cell(tr, s.view);
+      cell(tr, s.analyst || '—');
+      cell(tr, fmtShort(s.from));
+      cell(tr, `${signedPts(s.edge_pct)} pts`, 'num', s.edge_pct);
       el.append(tr);
     }
   });
