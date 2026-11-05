@@ -19,7 +19,7 @@ class Fake:
     def start(self):
         pass
 
-    usage = {"tier": "free", "limit": 50, "remaining": 50}
+    usage = {"tier": "free", "used": 0, "limit": 50, "remaining": 50}
 
     def tools(self):
         return [TOOL, {"name": "get_my_usage"}]
@@ -122,6 +122,25 @@ class Daily(unittest.TestCase):
         self.assertIn("weekend", self.logs[-1])
         self.assertIsNotNone(tr.snapshot(self.cfg, self.state, DAY.replace(day=9), ["NVDA"], self.folder, self.logs.append, fake))  # Monday
         self.assertEqual(len(fake.calls), 2)
+
+    def test_a_check_leaves_the_day_s_look_up_alone(self):
+        import contextlib, io
+        class Checked(Fake):
+            def __init__(self, answer):
+                super().__init__(answer)
+                self.key = "tr_live_" + "x" * 32
+        fake = Checked({"assetsData": [{"ticker": "AAPL", "analystConsensus": "Buy", "priceTargetUpside": -0.0234}]})
+        real = tr.Client
+        tr.Client = lambda key, **kw: fake
+        try:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertTrue(tr.check(self.cfg, self.state))
+        finally:
+            tr.Client = real
+        self.assertIn("TipRanks says: 0 of 50 calls used this month (free tier)", out.getvalue())
+        self.assertNotIn("last_day", self.state["tipranks"])
+        self.assertIsNotNone(tr.snapshot(self.cfg, self.state, DAY, ["NVDA"], self.folder, self.logs.append, fake))
 
     def test_the_real_answer(self):
         """get_assets_data's answer for four stocks on 5 Nov 2026."""

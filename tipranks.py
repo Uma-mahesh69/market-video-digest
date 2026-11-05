@@ -354,11 +354,17 @@ def check(cfg, state, log=print):
         arg, is_list = ticker_argument(tool)
         print(f"  {TOOL} takes the tickers in '{arg}' ({'a list' if is_list else 'comma-separated text'})")
         print("  its inputs: " + json.dumps(tool.get("inputSchema", {}).get("properties", {}))[:600])
-        spend(state, datetime.now())
+        use = state.setdefault("tipranks", {})   # a check counts toward the month, but not as the day's look-up
+        use["calls"] = use.get("calls", 0) + 1
         data = payload(tr.call(TOOL, {arg: ["AAPL"] if is_list else "AAPL"}))
         print(f"  AAPL as the dashboard will read it: {json.dumps(rows(data)[:1])}")
         print("  the raw answer (first 1,500 characters): " + json.dumps(data, ensure_ascii=False)[:1500])
-        print(f"  {state['tipranks']['calls']} TipRanks calls used this month")
+        usage = usage_now(tr, tools)
+        if usage and usage.get("limit"):
+            print(f"  TipRanks says: {usage.get('used')} of {usage['limit']} calls used this month ({usage.get('tier', '?')} tier), "
+                  f"{usage.get('remaining')} left, resets {str(usage.get('resets_at', ''))[:10]}")
+        else:
+            print(f"  {use['calls']} TipRanks calls used this month (the digest's own count)")
         return True
     except Exception as err:
         print(f"TipRanks: FAILED: {err}")
