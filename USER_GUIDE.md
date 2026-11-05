@@ -225,6 +225,23 @@ Each sheet's file id goes into the dashboard's `quotes`/`closes` and `holdings` 
 `python market_data.py --coverage` (last 14 days) or `python market_data.py --coverage --days 28`. It lists the calls
 per stock (bullish, bearish, neutral, mixed) and says whether most of your stocks come up every week.
 
+### Wall Street's view from TipRanks (optional, free)
+
+TipRanks collects professional analysts' ratings and price targets. With a free TipRanks API key, each daily run makes
+**one** call for all your stocks (the watchlist and the stocks called most that day) and saves
+`tipranks_YYYY-MM-DD.json` next to the other daily files. The dashboard then shows Wall Street's consensus, price
+target upside and Smart Score next to the YouTube calls, and flags stocks where the two disagree.
+
+1. Get a free API key at https://mcp.tipranks.com/.
+2. Run the installer again and paste it at the TipRanks question, or put it in `digest_config.json` as
+   `tipranks_api_key`.
+3. Run `python digest.py --tipranks-check`. It connects, shows what TipRanks sends for AAPL, and uses 1 of the month's
+   calls.
+
+The free tier allows 50 calls a month and 10 a minute. The digest makes at most one call a day and stops at 40 a
+month (`tipranks_monthly_limit`), so a month of daily runs fits with room for checks. When the budget is used up, the
+day is skipped and the log says so; the digest itself is never held up.
+
 ## 6. Everyday use: the chat page
 
 1. Double-click **Digest chat** on the desktop. A black window opens, then the chat page opens in your browser at

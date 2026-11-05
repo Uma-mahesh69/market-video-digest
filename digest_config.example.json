@@ -14,5 +14,6 @@
   "smtp_port": 465,
 
   "json_dir": "",
-  "watchlist_csv": ""
+  "watchlist_csv": "",
+  "tipranks_api_key": ""
 }

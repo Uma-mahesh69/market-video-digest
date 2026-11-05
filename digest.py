@@ -35,6 +35,7 @@ from pathlib import Path
 
 from digest_export import export_digest, file_name, load_tickers, number, resolve_ticker, speakers as note_speakers
 from market_data import market_brief, read_watchlist, save_market
+import tipranks
 
 HERE = Path(__file__).resolve().parent
 YTMD = HERE / "ytmd"
@@ -432,6 +433,17 @@ def watchlist(cfg, day, done):
         return None, {"error": str(err)}
 
 
+def tipranks_tickers(prices, done):
+    """The stocks to look up on TipRanks: the watchlist, then the stocks called most in the day's videos."""
+    table, counts = load_tickers(), {}
+    for d in done:
+        for s in d["notes"].get("stocks", []):
+            t = resolve_ticker(str(s.get("name") or ""), s.get("ticker"), table)
+            if t:
+                counts[t] = counts.get(t, 0) + 1
+    return [w["ticker"] for w in (prices or {}).get("watchlist", [])] + sorted(counts, key=lambda t: -counts[t])
+
+
 def make_overview(cfg, done):
     if len(done) > 1:
         return day_summary(cfg, done)
@@ -688,6 +700,9 @@ def check(cfg, state):
         print("  Check json_dir in digest_config.json. For a Google Drive folder, Google Drive for desktop must be running.")
         ok = False
 
+    if cfg.get("tipranks_api_key"):
+        print("TipRanks: key set; run python digest.py --tipranks-check to test it (uses 1 of the month's free calls)")
+
     print("Email: ", end="", flush=True)
     if not (cfg.get("email_to") and cfg.get("smtp_user") and cfg.get("smtp_password")):
         print("not set up, so digests are only saved to the digests folder")
@@ -783,6 +798,7 @@ def main():
     ap.add_argument("--video", help="make a digest of one video link instead of checking channels")
     ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key, the watchlist sheet, the JSON folder and the email login, then stop")
     ap.add_argument("--open", action="store_true", help="open the digest in the browser when done")
+    ap.add_argument("--tipranks-check", action="store_true", help="test the TipRanks key and show what it sends (uses 1 of the month's free calls), then stop")
     ap.add_argument("--rebuild", metavar="YYYY-MM-DD", help="write the JSON file for an earlier day's digest from the saved notes, then stop")
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
@@ -801,6 +817,10 @@ def main():
         sys.exit(0 if check(cfg, state) else 1)
     if args.rebuild:
         sys.exit(0 if rebuild(cfg, state, args.rebuild, args.dry_run) else 1)
+    if args.tipranks_check:
+        ok = tipranks.check(cfg, state)
+        save_state(state)
+        sys.exit(0 if ok else 1)
     if args.video:
         vid = re.search(r"(?:v=|youtu\.be/|shorts/)([\w-]{11})", args.video)
         if not vid:
@@ -920,6 +940,8 @@ def main():
                     export_digest(today, *day, folder, log)
                     if prices:   # the market file covers the same videos as the day's digest file
                         save_market(market if day[0] is done else market_brief(today, prices, day[0], CACHE_DIR), folder, log)
+                    # Wall Street's view of the same stocks: one TipRanks call a day at most, inside the free tier
+                    tipranks.snapshot(cfg, state, today, tipranks_tickers(prices, day[0]), folder, log)
                 save_state(state)
         except Exception as err:   # a JSON problem must not turn a sent digest into a failed run
             log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")

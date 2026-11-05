@@ -1,6 +1,6 @@
 <meta name="dash-one-writer">
 <style>
-  .mvd { max-width: 72rem; margin-inline: auto; display: grid; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); }
+  .mvd { position: relative; max-width: 72rem; margin-inline: auto; display: grid; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); }
   .mvd-head { display: grid; gap: var(--cds-gap-sm); }
   .mvd-eyebrow { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .06em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
   .mvd-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
@@ -48,69 +48,142 @@
   .mvd a { color: inherit; }
   [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
   [data-dash-source-state=empty] { color: transparent; }
+  /* explanations: an (i) beside each number, column and chart; its note shows on hover, focus or tap */
+  .mvd-help { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; margin-left: .35rem; vertical-align: .12em; border: 1px solid var(--color-border-line); border-radius: 50%; color: var(--color-fg-muted); font: 600 .68rem/1 var(--font-anthropic-sans); font-style: italic; letter-spacing: 0; text-transform: none; cursor: help; }
+  .mvd-help:hover, .mvd-help:focus-visible { color: var(--color-fg); border-color: var(--color-fg-muted); outline: none; }
+  .mvd-pop { display: none; position: absolute; z-index: 20; width: max-content; max-width: min(21rem, calc(100% - 1rem)); padding: var(--cds-pad-sm) var(--cds-pad-md); background: var(--cds-surface-popover, var(--color-panel)); border: 1px solid var(--cds-border, var(--color-border-line)); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); color: var(--color-fg); font: 400 var(--cds-font-size-caption)/1.5 var(--font-anthropic-sans); font-style: normal; letter-spacing: normal; text-transform: none; text-align: left; white-space: normal; cursor: auto; }
+  .mvd-pop b { font-weight: var(--cds-font-weight-medium); }
+  .mvd-help:hover > .mvd-pop, .mvd-help:focus > .mvd-pop { display: block; }
+  /* the reading guide */
+  .mvd-guide { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); }
+  .mvd-guide > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
+  .mvd-guide > summary .mvd-guide-title { font-weight: var(--cds-font-weight-medium); }
+  .mvd-guide-body { display: grid; gap: var(--cds-gap-lg); grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); margin-top: var(--cds-gap-md); }
+  .mvd-guide h3 { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: 0 0 var(--cds-gap-xs); }
+  .mvd-guide p, .mvd-guide li, .mvd-guide dd { font-size: var(--cds-font-size-caption); line-height: 1.55; }
+  .mvd-guide p { margin: 0 0 var(--cds-gap-xs); }
+  .mvd-glossary { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: .3rem .75rem; }
+  .mvd-glossary dt { font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); }
+  .mvd-glossary dd { margin: 0; color: var(--color-fg-muted); }
+  .mvd-key { margin: 0; padding: 0; list-style: none; display: grid; gap: .4rem; }
+  .mvd-key li { display: flex; gap: .5rem; align-items: baseline; color: var(--color-fg-muted); }
+  .mvd-key .sw { flex: none; display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; vertical-align: -1px; }
+  .mvd-key .edge { flex: none; display: inline-block; width: 3px; height: .9rem; vertical-align: -2px; }
+  .mvd-key .txt { flex: none; font-weight: var(--cds-font-weight-medium); }
+  .mvd-steps { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; }
   .mvd-failed { display: flex; align-items: center; justify-content: center; gap: .4rem; min-height: inherit; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
   .mvd-failed::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
 </style>
 
 <div class="mvd">
   <header class="mvd-head" id="summary">
-    <p class="mvd-eyebrow">Analyst video digest · <span data-draw="channels" data-source="latest" data-field="channels" data-row="0" class="dash-skeleton">—</span> · <span data-draw="videos" data-source="latest" data-field="videos" data-row="0" class="dash-skeleton">—</span> videos · digest of <span data-draw="day" data-source="latest" data-field="day" data-row="0" class="dash-skeleton">—</span></p>
+    <p class="mvd-eyebrow">Analyst video digest · <span data-draw="channels" data-source="latest" data-field="channels" data-row="0" class="dash-skeleton">—</span> · <span data-draw="videos" data-source="latest" data-field="videos" data-row="0" class="dash-skeleton">—</span> videos · digest of <span data-draw="day" data-source="latest" data-field="day" data-row="0" class="dash-skeleton">—</span><span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The YouTube channel the digest follows, how many new videos it summarised, and the morning the digest ran. The videos came out in the day or two before.</span></span></p>
     <h1 class="mvd-title">What are the analysts saying?</h1>
     <div class="mvd-bottom">
-      <p class="mvd-label">Bottom line from today's videos</p>
+      <p class="mvd-label">Bottom line from today's videos<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">A short summary of all today's videos together, written by Gemini (Google's AI) from the video captions.</span></span></p>
       <p data-draw="summary" data-source="latest" data-field="summary" data-row="0" class="dash-skeleton">—</p>
       <p class="mvd-note mvd-backfilled" hidden>This day was rebuilt from its digest email, so who made each call is filled in only where a video had one speaker.</p>
     </div>
   </header>
 
+  <details class="mvd-guide" id="guide">
+    <summary><span class="mvd-guide-title">New here? How to read this page</span><span class="mvd-note">Or hover over (tap, on a phone) any <span class="mvd-help" aria-hidden="true">i</span> to see what a number means.</span></summary>
+    <div class="mvd-guide-body">
+      <section>
+        <h3>What this page is</h3>
+        <p>Every morning a program watches finance YouTube channels, has Gemini (Google's AI) turn each new video into notes, and saves the notes to Google Drive. This page reads those notes, live Google Finance prices and your own holdings.</p>
+        <p>It shows what the analysts said today, how much they agree, how it fits what prices are doing, and whether their earlier calls worked. It reports; it never says buy or sell.</p>
+        <h3>Use it in two minutes</h3>
+        <ol class="mvd-steps">
+          <li>Read <b>What matters today</b>, above all the lines about your holdings.</li>
+          <li>Glance at the headline tiles: mood, consensus, avoid.</li>
+          <li>Before trusting a call, check <b>Earlier calls right</b> for that stock and the analyst's bar in <b>Did the calls work?</b></li>
+          <li>Click <b>[watch]</b> or a stock to hear the reasoning in the video yourself.</li>
+        </ol>
+      </section>
+      <section>
+        <h3>Words you will see</h3>
+        <dl class="mvd-glossary">
+          <dt>Call</dt><dd>One analyst's opinion on one stock in one video, such as "I like Nvidia here".</dd>
+          <dt>Bullish / bearish</dt><dd>Expects the price to rise / to fall.</dd>
+          <dt>Neutral / mixed</dt><dd>No clear direction / good and bad points together.</dd>
+          <dt>Ticker</dt><dd>A stock's short code: NVDA is Nvidia; GOOGL and GOOG are both Alphabet (Google).</dd>
+          <dt>S&amp;P 500</dt><dd>An index of 500 large US companies: "the market".</dd>
+          <dt>Beat the S&amp;P 500</dt><dd>Did better than the market over the same days.</dd>
+          <dt>Edge, pts</dt><dd>By how many percentage points a call beat the market, in the direction called.</dd>
+          <dt>bp</dt><dd>Basis point: one hundredth of a percentage point.</dd>
+          <dt>52-week high</dt><dd>The highest price of the past year.</dd>
+          <dt>P/E</dt><dd>Share price ÷ yearly profit per share.</dd>
+          <dt>10-year yield</dt><dd>The US government's 10-year borrowing rate; a fast rise often weighs on stocks.</dd>
+          <dt>Wall St. consensus</dt><dd>What professional analysts at banks and research firms say, collected by TipRanks.</dd>
+          <dt>Weight</dt><dd>The share of your portfolio's value in one stock.</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>What the colours mean</h3>
+        <ul class="mvd-key">
+          <li><i class="sw" data-draw="key-bull"></i><span>Blue bar: bullish calls, or an analyst whose calls beat the market.</span></li>
+          <li><i class="sw" style="background: var(--cds-chart-status-critical)"></i><span>Red bar: bearish calls, or an analyst whose calls lagged the market.</span></li>
+          <li><i class="sw" style="background: var(--cds-chart-muted)"></i><span>Grey bar: neutral or mixed calls.</span></li>
+          <li><span class="txt mvd-up">+2.1%</span><span>Green number: up or ahead. <span class="mvd-down">Red number</span>: down or behind.</span></li>
+          <li><span class="txt mvd-up">Consensus</span><span>Analysts agree it is bullish. <span style="color: var(--color-warn)">Split</span>: both sides. <span class="mvd-down">Avoid</span>: only negative. Lean: the rest.</span></li>
+          <li><i class="edge" style="background: var(--color-ok)"></i><span>Green edge on a note: good news that fits the calls.</span></li>
+          <li><i class="edge" style="background: var(--color-bad)"></i><span>Red edge: a warning or a clash, such as bullish calls while the price fell.</span></li>
+          <li><i class="edge" style="background: var(--color-warn)"></i><span>Amber edge: worth a closer look.</span></li>
+          <li><i class="edge" style="background: var(--color-border-line)"></i><span>Grey edge: background.</span></li>
+        </ul>
+      </section>
+    </div>
+  </details>
+
   <section class="mvd-card" id="signals">
-    <h2>What matters today</h2>
+    <h2>What matters today<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The few things worth knowing first, found by fixed rules from everything below. The coloured edge: <b>green</b> = the news and the analysts point the same good way; <b>red</b> = a warning or a clash (for example, bullish calls while the price fell); <b>amber</b> = worth a closer look; <b>grey</b> = background. <b>[watch]</b> opens the video at the moment it was said. Nothing here says buy or sell.</span></span></h2>
     <p class="mvd-note">Fixed rules over your holdings, today's calls, how earlier calls scored and Google Finance prices. Each line reports; none says buy or sell.</p>
     <ul class="mvd-cards" data-draw="signals" data-source="signals"></ul>
   </section>
 
   <section class="mvd-tiles" id="kpis" aria-label="Headline figures">
     <div class="mvd-tile">
-      <p class="mvd-label">Analyst mood</p>
+      <p class="mvd-label">Analyst mood<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Of today's clear calls, the share that were <b>bullish</b> (expect the stock to rise): bullish ÷ (bullish + bearish). Neutral and mixed calls are left out. Above 50% = more optimism than pessimism; 72% means about 7 of every 10 clear calls were positive.</span></span></p>
       <p class="mvd-big"><span data-draw="mood" data-source="mood" data-field="mood_pct" data-row="0" class="dash-skeleton">—</span> bullish</p>
       <p class="mvd-sub"><span data-draw="bull" data-source="mood" data-field="bullish" data-row="0">—</span> bullish vs <span data-draw="bear" data-source="mood" data-field="bearish" data-row="0">—</span> bearish calls; <span data-draw="other" data-source="mood" data-field="other" data-row="0">—</span> neutral or mixed left out</p>
     </div>
     <div class="mvd-tile">
-      <p class="mvd-label">Consensus buys</p>
+      <p class="mvd-label">Consensus buys<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Stocks with <b>2 or more bullish calls today and no bearish ones</b>: the analysts agree. Up to 3, the most bullish first. Agreement is not a guarantee; "Did the calls work?" below shows how such calls have turned out.</span></span></p>
       <p class="mvd-big"><span data-draw="consensus" data-source="picks" data-field="consensus" data-row="0" class="dash-skeleton">—</span></p>
       <p class="mvd-sub">Most bullish calls, no bearish ones (2 or more bullish)</p>
     </div>
     <div class="mvd-tile">
-      <p class="mvd-label">Avoid</p>
+      <p class="mvd-label">Avoid<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The stock with <b>only negative calls today</b> (bearish or mixed, none bullish), the one with the most. The line under it counts them.</span></span></p>
       <p class="mvd-big"><span data-draw="avoid" data-source="picks" data-field="avoid" data-row="0" class="dash-skeleton">—</span></p>
       <p class="mvd-sub"><span data-draw="avoid-detail" data-source="picks" data-field="avoid_detail" data-row="0">—</span></p>
     </div>
     <div class="mvd-tile">
-      <p class="mvd-label">S&amp;P 500 target upside</p>
+      <p class="mvd-label">S&amp;P 500 target upside<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The <b>S&amp;P 500</b> is an index of 500 large US companies, the usual yardstick for "the market". When an analyst names a level for year-end or 12 months ahead, <b>upside</b> = target ÷ today's level − 1. +5% means they expect the index to rise about 5%. Two numbers = the lowest and highest target today.</span></span></p>
       <p class="mvd-big"><span data-draw="up-low" data-source="upside" data-field="low" data-row="0" class="dash-skeleton">—</span><span class="mvd-upside-to"> to </span><span data-draw="up-high" data-source="upside" data-field="high" data-row="0">—</span></p>
       <p class="mvd-sub mvd-has-upside">Year-end and 12-month targets vs today's S&amp;P 500 at <span data-draw="sp-close" data-source="bench" data-field="sp500" data-row="0">—</span></p>
       <p class="mvd-sub mvd-no-upside" hidden>No year-end or 12-month S&amp;P 500 target in today's videos. S&amp;P 500 now <span data-draw="sp-close-2" data-source="bench" data-field="sp500" data-row="0">—</span>.</p>
     </div>
     <div class="mvd-tile">
-      <p class="mvd-label">Rate headroom</p>
+      <p class="mvd-label">Rate headroom<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The <b>10-year yield</b> is the interest the US government pays to borrow for 10 years; when it climbs fast, stocks often struggle. An analyst named a worry level; headroom = that level − today's yield, in <b>bp</b> (basis points, 1 bp = 0.01 percentage point). Positive = room left before the worry level; negative = already past it.</span></span></p>
       <p class="mvd-big"><span data-draw="headroom" data-source="headroom" data-field="bp" data-row="0" class="dash-skeleton">—</span> bp</p>
       <p class="mvd-sub mvd-has-headroom">10-year at <span data-draw="yield" data-source="bench" data-field="us10y" data-row="0">—</span> vs the <span data-draw="concern" data-source="headroom" data-field="level" data-row="0">—</span> concern level quoted in video #<span data-draw="concern-video" data-source="headroom" data-field="video" data-row="0">—</span></p>
       <p class="mvd-sub mvd-no-headroom" hidden>No 10-year concern level quoted today. The 10-year yield is <span data-draw="yield-2" data-source="bench" data-field="us10y" data-row="0">—</span>.</p>
     </div>
     <div class="mvd-tile">
-      <p class="mvd-label">Bullish calls that beat the S&amp;P 500</p>
+      <p class="mvd-label">Bullish calls that beat the S&amp;P 500<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Of all bullish calls since the first digest, the share whose stock has done better than the S&amp;P 500 since the video came out. 50% would be a coin toss; above 50% means the bullish calls have been worth listening to so far.</span></span></p>
       <p class="mvd-big"><span data-draw="hit" data-source="scorecard" data-field="bull_hit_pct" data-row="0" class="dash-skeleton">—</span></p>
       <p class="mvd-sub"><span data-draw="hit-right" data-source="scorecard" data-field="bull_right" data-row="0">—</span> of <span data-draw="hit-n" data-source="scorecard" data-field="bull_n" data-row="0">—</span> since <span data-draw="hit-since" data-source="scorecard" data-field="since" data-row="0">—</span>; bearish calls right <span data-draw="bear-hit" data-source="scorecard" data-field="bear_hit_pct" data-row="0">—</span></p>
     </div>
   </section>
 
   <section class="mvd-section" id="portfolio">
-    <h2>Your holdings</h2>
-    <p class="mvd-note">From the Watchlist tab of your Google Finance Investment Tracker. Weight is shares × price over the total; share counts stay in your sheet. Calls: the 14 days to the latest digest (GOOG counts the calls on GOOGL). <span class="mvd-has-exposure"><b data-draw="exp-bull" data-source="exposure" data-field="bullish_pct" data-row="0">—</b> of the portfolio leans bullish in those calls, <b data-draw="exp-bear" data-source="exposure" data-field="bearish_pct" data-row="0">—</b> bearish.</span></p>
+    <h2>Your holdings<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The stocks in your Google Finance Investment Tracker that have a number in <b># Shares</b>, set against what the analysts said about them. Your share counts are only used to work out weights; they never appear here.</span></span></h2>
+    <p class="mvd-note">From the Watchlist tab of your Google Finance Investment Tracker. Weight is shares × price over the total; share counts stay in your sheet. Calls: the 14 days to the latest digest (GOOG counts the calls on GOOGL). <span class="mvd-has-exposure"><b data-draw="exp-bull" data-source="exposure" data-field="bullish_pct" data-row="0">—</b> of the portfolio leans bullish in those calls, <b data-draw="exp-bear" data-source="exposure" data-field="bearish_pct" data-row="0">—</b> bearish.<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Your holdings grouped by what the last 14 days of calls say: "leans bullish" = more bullish than bearish calls; "bearish" = the other way. Weighted by how much of your money is in each stock.</span></span></span></p>
     <div class="mvd-card">
       <div class="mvd-scroll">
         <table class="mvd-table" data-source="portfolio" data-row-key="ticker">
-          <thead><tr><th data-field="ticker">Holding</th><th class="num" data-field="weight_pct">Weight</th><th class="num" data-field="change_pct_day">Day</th><th class="num" data-field="month_pct">1 month</th><th class="num" data-field="from_high_pct">From 52-wk high</th><th class="num" data-field="bull_14d">Bull</th><th class="num" data-field="bear_14d">Bear</th><th data-field="past_record">Earlier calls right</th><th data-field="latest_call">Latest call</th></tr></thead>
+          <thead><tr><th data-field="ticker">Holding</th><th class="num" data-field="weight_pct">Weight<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How much of your portfolio's value is in this stock: shares × price ÷ the total of all your holdings.</span></span></th><th class="num" data-field="change_pct_day">Day<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The price change today, in %. Green = up, red = down. Prices can be up to 20 minutes late.</span></span></th><th class="num" data-field="month_pct">1 month<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The price change over the last 21 trading days (about a calendar month), in %. Green = up, red = down.</span></span></th><th class="num" data-field="from_high_pct">From 52-wk high<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How far today's price is below the highest price of the past year (52 weeks). −30% = 30% below that peak; close to 0% = near the peak.</span></span></th><th class="num" data-field="bull_14d">Bull<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish calls (expect the price to rise) on this stock in the 14 days up to the latest digest.</span></span></th><th class="num" data-field="bear_14d">Bear<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bearish calls (expect the price to fall) on this stock in the 14 days up to the latest digest.</span></span></th><th data-field="past_record">Earlier calls right<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Of the earlier calls on this stock that can be checked against prices, how many turned out right: a bullish call is right if the stock then beat the S&amp;P 500, a bearish call if it lagged it. "2 of 10" = right twice in ten tries.</span></span></th><th data-field="latest_call">Latest call<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The most recent call on this stock: bullish or bearish, who said it, and why. Click it to open the video at that moment.</span></span></th></tr></thead>
           <tbody data-draw="portfolio"></tbody>
         </table>
       </div>
@@ -119,37 +192,37 @@
   </section>
 
   <section class="mvd-card" id="conviction">
-    <h2>Conviction board: bullish vs bearish calls per stock</h2>
+    <h2>Conviction board: bullish vs bearish calls per stock<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">One row per stock called today. <b>Blue bar to the right</b> = bullish calls; <b>red</b> and <b>grey</b> bars to the left = bearish and neutral-or-mixed calls. Longer bar = more calls. The word on the right is its tag: <b>Consensus</b> (green) = 2+ bullish, none bearish; <b>Split</b> (amber) = calls on both sides; <b>Avoid</b> (red) = only bearish or mixed; <b>Lean</b> (grey) = the rest, such as a single bullish call. Hover a row for its counts.</span></span></h2>
     <p class="mvd-note">Every call in today's videos, one per row in the data, grouped by ticker. Consensus: 2 or more bullish, none bearish. Split: both sides. Avoid: only bearish or mixed. Lean: the rest. The 20 stocks with the most calls are shown.</p>
     <ul class="mvd-legend"><li><i class="mvd-sw-bull" data-draw="sw-bull"></i>Bullish</li><li><i class="mvd-sw-bear"></i>Bearish</li><li><i class="mvd-sw-other"></i>Neutral or mixed</li></ul>
     <div class="mvd-chart" data-draw="board" data-source="board" style="min-height: 22rem"></div>
   </section>
 
   <section class="mvd-card" id="tape">
-    <h2>Today's calls against the prices</h2>
+    <h2>Today's calls against the prices<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Puts today's calls next to what the price has been doing, so you can see whether the analysts are going with the market or against it.</span></span></h2>
     <p class="mvd-note">Each stock called today with its Google Finance move over a month (21 trading days), distance from its 52-week high and P/E, and how earlier calls on it scored against the S&amp;P 500.</p>
     <div class="mvd-scroll">
       <table class="mvd-table" data-source="tape" data-row-key="ticker">
-        <thead><tr><th data-field="ticker">Stock</th><th data-field="tag">Today</th><th class="num" data-field="bullish">Bull</th><th class="num" data-field="bearish">Bear</th><th class="num" data-field="month_pct">1 month</th><th class="num" data-field="from_high_pct">From 52-wk high</th><th class="num" data-field="pe">P/E</th><th data-field="past_record">Earlier calls right</th><th data-field="read">Read</th></tr></thead>
+        <thead><tr><th data-field="ticker">Stock</th><th data-field="tag">Today<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Today's tag for the stock, as on the conviction board: Consensus, Split, Avoid or Lean.</span></span></th><th class="num" data-field="bullish">Bull<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish calls on this stock today.</span></span></th><th class="num" data-field="bearish">Bear<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bearish calls on this stock today.</span></span></th><th class="num" data-field="month_pct">1 month<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The price change over the last 21 trading days (about a calendar month), in %. Green = up, red = down.</span></span></th><th class="num" data-field="from_high_pct">From 52-wk high<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How far today's price is below the highest price of the past year (52 weeks). −30% = 30% below that peak; close to 0% = near the peak.</span></span></th><th class="num" data-field="pe">P/E<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip"><b>Price ÷ earnings</b>: the share price divided by the company's yearly profit per share, so how many years of today's profit you pay for. Higher = investors expect more growth (or the stock is pricier). Compare it with companies in the same industry. Blank = no profit to divide by, or a fund.</span></span></th><th data-field="past_record">Earlier calls right<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Of the earlier calls on this stock that can be checked against prices, how many turned out right: a bullish call is right if the stock then beat the S&amp;P 500, a bearish call if it lagged it. "2 of 10" = right twice in ten tries.</span></span></th><th data-field="read">Read<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">A plain-words flag: <b>Bullish near a 52-week high</b> = bulls on a stock within 5% of its yearly peak; <b>Bullish after a 1-month fall</b> = bulls on a stock that fell 10% or more in a month; <b>Bearish after a 1-month rise</b> = bears on a stock that rose 10% or more; <b>Split call</b> = analysts on both sides.</span></span></th></tr></thead>
         <tbody data-draw="tape"></tbody>
       </table>
     </div>
   </section>
 
   <section class="mvd-section" id="watchlist">
-    <h2>Your watchlist</h2>
+    <h2>Your watchlist<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The 10 stocks in your Market Digest Watchlist sheet: their Google Finance prices next to the analysts' calls on them.</span></span></h2>
     <div class="mvd-grid">
       <div class="mvd-card">
-        <h2>What stands out today</h2>
+        <h2>What stands out today<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Notes the daily digest run writes by fixed rules, comparing the week's calls with the week's prices. Coloured edge: <b>amber</b> = a conflict or a change of mind worth a look; <b>green</b> = a date or target to note; <b>red</b> = a rate warning; <b>grey</b> = background. Each ends with what to look at next.</span></span></h2>
         <p class="mvd-note">Fixed rules set the analysts' calls against the week's prices. Each note ends with something to look at, never buy or sell.</p>
         <ul class="mvd-cards" data-draw="insights" data-source="market"></ul>
       </div>
       <div class="mvd-card">
-        <h2>Prices and today's calls</h2>
+        <h2>Prices and today's calls<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Live Google Finance prices for your watchlist with today's calls on each stock.</span></span></h2>
         <p class="mvd-note">Live from your watchlist sheet (Google Finance, can be delayed up to 20 minutes). Calls: today's digest. Mood: the last 7 digest days.</p>
         <div class="mvd-scroll">
           <table class="mvd-table" data-source="watch" data-row-key="ticker">
-            <thead><tr><th data-field="ticker">Stock</th><th class="num" data-field="price">Price</th><th class="num" data-field="change_pct_day">Day</th><th class="num" data-field="change_pct_week">Week</th><th class="num" data-field="bull_today">Bull</th><th class="num" data-field="bear_today">Bear</th><th class="num" data-field="mood_7d">7-day mood</th></tr></thead>
+            <thead><tr><th data-field="ticker">Stock</th><th class="num" data-field="price">Price<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The latest share price from Google Finance, in US dollars (can be up to 20 minutes late).</span></span></th><th class="num" data-field="change_pct_day">Day<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The price change today, in %. Green = up, red = down. Prices can be up to 20 minutes late.</span></span></th><th class="num" data-field="change_pct_week">Week<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The price change over the last 7 days, in %.</span></span></th><th class="num" data-field="bull_today">Bull<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish calls on this stock in today's videos.</span></span></th><th class="num" data-field="bear_today">Bear<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bearish calls on this stock in today's videos.</span></span></th><th class="num" data-field="mood_7d">7-day mood<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish ÷ (bullish + bearish) calls on this stock over the last 7 digest days. 100% = all positive, 0% = all negative, — = no clear calls.</span></span></th></tr></thead>
             <tbody data-draw="watch"></tbody>
           </table>
         </div>
@@ -158,36 +231,36 @@
   </section>
 
   <section class="mvd-section" id="record">
-    <h2>Did the calls work?</h2>
+    <h2>Did the calls work?<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">A check on the analysts: for every bullish or bearish call, did the stock do better or worse than the S&amp;P 500 from the day of the video until today? This turns opinions into a track record. Early days: most calls are only days or weeks old.</span></span></h2>
     <p class="mvd-note">Every bullish or bearish call with a ticker, from the close on its video's publish day to the latest close, against the S&amp;P 500 over the same days. Edge: how far the stock beat the S&amp;P 500 in the direction called, in percentage points. Most calls are days or weeks old, so this is early evidence.</p>
     <div class="mvd-tiles">
       <div class="mvd-tile">
-        <p class="mvd-label">Bullish calls</p>
+        <p class="mvd-label">Bullish calls<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip"><b>Edge</b> = how far the stock beat the S&amp;P 500 since the video, in the direction the analyst called, in <b>pts</b> (percentage points). +2 pts: the stock did 2% better than the market. Negative = the call lost to simply holding the market. "Right" = calls with a positive edge.</span></span></p>
         <p class="mvd-big"><span data-draw="bull-edge" data-source="scorecard" data-field="bull_edge" data-row="0" class="dash-skeleton">—</span> pts</p>
         <p class="mvd-sub">average edge; right <span data-draw="bull-right" data-source="scorecard" data-field="bull_right" data-row="0">—</span> of <span data-draw="bull-n" data-source="scorecard" data-field="bull_n" data-row="0">—</span></p>
       </div>
       <div class="mvd-tile">
-        <p class="mvd-label">Bearish calls</p>
+        <p class="mvd-label">Bearish calls<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">For a bearish call, edge is positive when the stock did <b>worse</b> than the S&amp;P 500, because that is what the analyst expected. "Right" = calls with a positive edge.</span></span></p>
         <p class="mvd-big"><span data-draw="bear-edge" data-source="scorecard" data-field="bear_edge" data-row="0" class="dash-skeleton">—</span> pts</p>
         <p class="mvd-sub">average edge; right <span data-draw="bear-right" data-source="scorecard" data-field="bear_right" data-row="0">—</span> of <span data-draw="bear-n" data-source="scorecard" data-field="bear_n" data-row="0">—</span></p>
       </div>
       <div class="mvd-tile">
-        <p class="mvd-label">Calls scored</p>
+        <p class="mvd-label">Calls scored<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How many calls could be checked: bullish or bearish calls with a known ticker and at least one trading day of prices since the video. The dates are the first video's day and the latest close.</span></span></p>
         <p class="mvd-big"><span data-draw="scored-n" data-source="scorecard" data-field="calls" data-row="0" class="dash-skeleton">—</span></p>
         <p class="mvd-sub">from <span data-draw="scored-since" data-source="scorecard" data-field="since" data-row="0">—</span> to the close of <span data-draw="scored-to" data-source="scorecard" data-field="to" data-row="0">—</span></p>
       </div>
     </div>
     <div class="mvd-grid">
       <div class="mvd-card" id="analysts">
-        <h2>Analysts by average edge</h2>
+        <h2>Analysts by average edge<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">One bar per analyst. <b>Blue to the right</b> = on average their calls beat the S&amp;P 500 by that many points; <b>red to the left</b> = they lagged it. The label on the right says how many of their calls were right. Few calls = luck matters a lot, so read it together with the count. Hover a bar for details.</span></span></h2>
         <p class="mvd-note">Named analysts with 2 or more scored calls; the right-hand label is how many were right.</p>
         <div class="mvd-chart" data-draw="analysts" data-source="analysts" style="min-height: 12rem"></div>
       </div>
       <div class="mvd-card" id="extremes">
-        <h2>Best and worst calls so far</h2>
+        <h2>Best and worst calls so far<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The 5 calls that worked out best and the 5 that went most wrong, measured by edge against the S&amp;P 500. Click a stock to watch the call.</span></span></h2>
         <div class="mvd-scroll">
           <table class="mvd-table" data-source="call_extremes" data-row-key="key">
-            <thead><tr><th data-field="group">List</th><th data-field="ticker">Stock</th><th data-field="view">Call</th><th data-field="analyst">Who</th><th data-field="from">From</th><th class="num" data-field="edge_pct">Edge</th></tr></thead>
+            <thead><tr><th data-field="group">List</th><th data-field="ticker">Stock</th><th data-field="view">Call<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">What the analyst said: bullish (expects a rise) or bearish (expects a fall).</span></span></th><th data-field="analyst">Who</th><th data-field="from">From<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The trading day the call is measured from: the day the video came out, or the trading day before.</span></span></th><th class="num" data-field="edge_pct">Edge<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How far the stock beat (+) or lagged (−) the S&amp;P 500 since the call, in the direction called, in percentage points.</span></span></th></tr></thead>
             <tbody data-draw="extremes"></tbody>
           </table>
         </div>
@@ -195,24 +268,36 @@
     </div>
   </section>
 
+  <section class="mvd-card" id="street">
+    <h2>Wall Street's view (TipRanks)<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks collects the ratings and price targets of thousands of professional Wall Street analysts at banks and research firms. The digest asks TipRanks once a day (its free tier allows 50 questions a month), so this table is as of the date in its last column. It sets that professional view next to what the YouTube analysts said.</span></span></h2>
+    <p class="mvd-note">Professional analysts' consensus from TipRanks next to the YouTube calls of the last 14 days. A difference is worth a closer look: one side knows something, or one side is late.</p>
+    <div class="mvd-scroll">
+      <table class="mvd-table" data-source="street" data-row-key="ticker">
+        <thead><tr><th data-field="ticker">Stock</th><th data-field="consensus">Wall St. consensus<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks' summary of professional analysts' ratings over the last 3 months: Strong Buy, Moderate Buy, Hold, Moderate Sell or Strong Sell.</span></span></th><th class="num" data-field="analysts">Analysts<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How many professional analysts the consensus is built from. More analysts = a sturdier consensus.</span></span></th><th class="num" data-field="upside_pct">Target upside<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The professional analysts' average 12-month price target compared with today's price. +20% = they expect the stock to rise about 20% in a year.</span></span></th><th class="num" data-field="smart_score">Smart Score<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks' 1 to 10 score that combines analysts, insiders, hedge funds, news, bloggers and price trends. 8 to 10 = outperform, 4 to 7 = neutral, 1 to 3 = underperform, in TipRanks' own model.</span></span></th><th class="num" data-field="bull_14d">YouTube bull<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish calls on the stock in the YouTube videos of the last 14 days.</span></span></th><th class="num" data-field="bear_14d">YouTube bear<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bearish calls on the stock in the YouTube videos of the last 14 days.</span></span></th><th data-field="agree">Agree?<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Agree = Wall Street and the YouTube analysts lean the same way. Differ = they lean opposite ways, or one says buy while the other is neutral. Blank = one side has no clear view.</span></span></th><th data-field="as_of">As of</th></tr></thead>
+        <tbody data-draw="street"></tbody>
+      </table>
+    </div>
+    <p class="mvd-note mvd-no-street" hidden>No TipRanks file yet. Add a free TipRanks API key to the digest's settings (tipranks_api_key) and the next daily run saves one.</p>
+  </section>
+
   <section class="mvd-card" id="trend">
-    <h2>Analyst mood by digest day</h2>
+    <h2>Analyst mood by digest day<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The analyst mood (share of bullish calls) for each digest day. A rising line = analysts getting more optimistic; falling = more cautious. Hover a dot for that day's counts.</span></span></h2>
     <p class="mvd-note">Bullish share of bullish and bearish calls, one point per digest day in the folder (up to the last 30). Days build up as the daily run adds files.</p>
     <div class="mvd-chart" data-draw="trend" data-source="trend" style="min-height: 14rem"></div>
   </section>
 
   <section class="mvd-grid" id="themes">
     <div class="mvd-card">
-      <h2>Themes: how many of today's videos raised them</h2>
+      <h2>Themes: how many of today's videos raised them<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The big topics running through today's videos. The bar shows how many of today's videos raised each one; a full bar = every video.</span></span></h2>
       <p class="mvd-note">Theme strength is videos per theme over today's videos.</p>
       <div class="mvd-chart" data-draw="themes" data-source="themes_today" style="min-height: 10rem"></div>
     </div>
     <div class="mvd-card">
-      <h2>S&amp;P 500 targets vs today</h2>
+      <h2>S&amp;P 500 targets vs today<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Each S&amp;P 500 level an analyst expects for year-end or 12 months ahead, and how far that is from today's level.</span></span></h2>
       <p class="mvd-note">Year-end and 12-month index targets stated in today's videos, against the S&amp;P 500 now.</p>
       <div class="mvd-scroll">
         <table class="mvd-table" data-source="targets" data-row-key="video,horizon">
-          <thead><tr><th data-field="video">Video</th><th data-field="who">Who</th><th data-field="horizon">Horizon</th><th class="num" data-field="target">Target</th><th class="num" data-field="upside_pct">Upside</th></tr></thead>
+          <thead><tr><th data-field="video">Video</th><th data-field="who">Who</th><th data-field="horizon">Horizon</th><th class="num" data-field="target">Target</th><th class="num" data-field="upside_pct">Upside<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Target ÷ today's S&amp;P 500 − 1. +5% = the analyst expects the index to rise about 5% from here.</span></span></th></tr></thead>
           <tbody data-draw="targets"></tbody>
         </table>
       </div>
@@ -222,17 +307,17 @@
 
   <section class="mvd-grid" id="debates">
     <div class="mvd-card">
-      <h2>Where the analysts disagree</h2>
+      <h2>Where the analysts disagree<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Topics where the videos took opposite sides, with who said what and in which video.</span></span></h2>
       <div data-draw="debates" data-source="sides_today"></div>
     </div>
     <div class="mvd-card">
-      <h2>Coming up</h2>
+      <h2>Coming up<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Dates and events the videos said to watch, such as earnings reports and central bank meetings.</span></span></h2>
       <ul class="mvd-list" data-draw="events" data-source="events_today"></ul>
     </div>
   </section>
 
   <section class="mvd-card" id="videos">
-    <h2>Today's videos</h2>
+    <h2>Today's videos<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The videos in today's digest. Click a title to watch it. # is the video number the rest of the page refers to.</span></span></h2>
     <div class="mvd-scroll">
       <table class="mvd-table" data-source="videos_today" data-row-key="video">
         <thead><tr><th data-field="video">#</th><th data-field="title">Video</th><th data-field="duration">Length</th><th data-field="speakers">Speaking</th></tr></thead>
@@ -435,6 +520,28 @@
         return { data, columns: ['symbol', 'exchange', 'name', 'price', 'shares'] };
       }
       throw new Error('No tab of the Investment Tracker has a header row with Symbol and # Shares');
+    },
+  });
+
+  dash.loader('tipranks', {
+    description: 'Lists the json folder, downloads the newest tipranks file the digest run saves (one TipRanks call a day) and lays out its rows: one per stock, with Wall Street\'s consensus, analyst count, average price target, upside and Smart Score.',
+    fn: async ({ answer, call, args }) => {
+      const parse = (x) => (typeof x === 'string' ? JSON.parse(x) : x);
+      const utf8 = (b64) => { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new TextDecoder('utf-8').decode(u); };
+      let page = parse(answer);
+      if (page && page.error) throw new Error(String(page.error.message || page.error));
+      const files = [...(page.files || [])];
+      for (let n = 0; page.nextPageToken && n < 4; n++) {
+        page = parse(await call('search_files', { ...args, pageToken: page.nextPageToken }));
+        files.push(...(page.files || []));
+      }
+      const newest = files.filter((f) => /^tipranks_\d{4}-\d{2}-\d{2}\.json$/.test(f.title)).sort((a, b) => b.title.localeCompare(a.title))[0];
+      const columns = ['date', 'ticker', 'consensus', 'analysts', 'buy', 'hold', 'sell', 'price_target', 'upside_pct', 'smart_score', 'price'];
+      if (!newest) return { data: [], columns };
+      const got = parse(await call('download_file_content', { fileId: newest.id }));
+      if (!got || !got.content) throw new Error('Google Drive gave no content for ' + newest.title);
+      const d = JSON.parse(utf8(got.content));
+      return { data: (d.rows || []).map((r) => Object.fromEntries(columns.map((c) => [c, c === 'date' ? d.date : r[c] ?? null]))), columns };
     },
   });
 
@@ -659,9 +766,29 @@
       return portfolio.length ? [{ holdings: portfolio.length, bullish_pct: w((p) => p.bull_14d > p.bear_14d), bearish_pct: w((p) => p.bear_14d > p.bull_14d), neither_pct: w((p) => p.bull_14d === p.bear_14d) }] : [];
     } });
 
-  dash.calc('signals', { inputs: ['portfolio', 'tape', 'analysts', 'scorecard', 'mentions_today'], title: 'What matters today',
-    description: 'Sentences made by fixed rules from the other calculations: your holdings called today or leaning one way, today\'s strongest calls on stocks whose earlier calls scored 35% or worse (or 65% or better, 4 or more calls), today\'s calls by analysts whose earlier calls scored well or badly (3 or more), calls that run with or against the 1-month move, and the overall track record.',
-    fn: (portfolio, tape, analysts, scorecard, today) => {
+  dash.calc('street', { inputs: ['tipranks', 'quotes', 'digests', 'latest'], title: 'Wall Street next to the YouTube analysts',
+    description: 'Each stock in the newest TipRanks file: Wall Street\'s consensus, analyst count, average price target and its upside from today\'s Google Finance price (TipRanks\' own upside when there is no price), Smart Score, and the YouTube calls on it in the 14 days to the latest digest. Agree: both lean the same way (a Buy consensus and more bullish than bearish calls, or a Sell consensus and more bearish).',
+    fn: (tipranks, quotes, digests, latest) => {
+      const same = { GOOG: 'GOOGL', 'BRK.A': 'BRK.B' };
+      const day = latest[0] && latest[0].day;
+      const from = day ? new Date(Date.parse(day + 'T00:00:00Z') - 13 * 864e5).toISOString().slice(0, 10) : null;
+      const q = new Map(quotes.map((r) => [r.ticker, r]));
+      return tipranks.map((t) => {
+        const yt = same[t.ticker] || t.ticker;
+        const calls = digests.filter((r) => r.kind === 'mention' && r.ticker === yt && day && r.day >= from && r.day <= day);
+        const bull = calls.filter((c) => c.view === 'bullish').length, bear = calls.filter((c) => c.view === 'bearish').length;
+        const price = (q.get(t.ticker) || q.get(yt) || {}).price ?? t.price;
+        const upside = t.price_target != null && price ? Math.round((t.price_target / price - 1) * 1000) / 10 : t.upside_pct;
+        const street = /buy/i.test(t.consensus || '') ? 1 : /sell/i.test(t.consensus || '') ? -1 : 0;
+        const tube = bull > bear ? 1 : bear > bull ? -1 : 0;
+        return { ticker: t.ticker, consensus: t.consensus, analysts: t.analysts, price_target: t.price_target, upside_pct: upside, smart_score: t.smart_score,
+          bull_14d: bull, bear_14d: bear, agree: !tube || !t.consensus ? null : street === tube ? 'Agree' : 'Differ', as_of: t.date };
+      }).sort((a, b) => (b.bull_14d + b.bear_14d) - (a.bull_14d + a.bear_14d) || a.ticker.localeCompare(b.ticker));
+    } });
+
+  dash.calc('signals', { inputs: ['portfolio', 'tape', 'analysts', 'scorecard', 'mentions_today', 'street'], title: 'What matters today',
+    description: 'Sentences made by fixed rules from the other calculations (and TipRanks, where the YouTube lean and Wall Street\'s consensus differ): your holdings called today or leaning one way, today\'s strongest calls on stocks whose earlier calls scored 35% or worse (or 65% or better, 4 or more calls), today\'s calls by analysts whose earlier calls scored well or badly (3 or more), calls that run with or against the 1-month move, and the overall track record.',
+    fn: (portfolio, tape, analysts, scorecard, today, street) => {
       const pct = (x) => `${x > 0 ? '+' : ''}${x}%`, pts = (x) => `${x > 0 ? '+' : ''}${x} pts`;
       const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], date = (d) => `${mon[+d.slice(5, 7) - 1]} ${+d.slice(8, 10)}`;
       const out = [];
@@ -672,6 +799,8 @@
         out.push({ tone: against ? 'bad' : lean > 0 ? 'ok' : 'warn',
           text: `Your holding ${p.ticker}: ${p.bull_14d} bullish and ${p.bear_14d} bearish calls in 14 days${p.month_pct != null ? `, ${against ? 'but' : 'and'} it moved ${pct(p.month_pct)} in a month` : ''}${p.past_record ? `; earlier calls on it were right ${p.past_record} times` : ''}.` });
       }
+      for (const w of street.filter((x) => x.agree === 'Differ' && x.bull_14d + x.bear_14d >= 2).slice(0, 2))
+        out.push({ tone: 'warn', text: `${w.ticker}: the YouTube analysts lean ${w.bull_14d > w.bear_14d ? 'bullish' : 'bearish'} (${w.bull_14d} bullish, ${w.bear_14d} bearish in 14 days), but Wall Street's consensus on TipRanks is ${w.consensus}${w.analysts ? ` (${w.analysts} analysts)` : ''}.` });
       for (const t of tape) {
         const [right, n] = (t.past_record || '0 of 0').split(' of ').map(Number);
         if ((t.bullish < 2 && t.bearish < 2) || n < 4) continue;
@@ -699,7 +828,7 @@
       if (fades) out.push({ tone: 'warn', text: `Bearish calls on stocks that rose 10% or more in a month: ${fades}.` });
       const s = scorecard[0];
       if (s) out.push({ tone: '', text: `Since ${date(s.since)}, ${s.bull_right} of ${s.bull_n} bullish calls beat the S&P 500 (average edge ${pts(s.bull_edge)}) and ${s.bear_right} of ${s.bear_n} bearish calls lagged it (average edge ${pts(s.bear_edge)}).` });
-      return out.slice(0, 8).map((o, i) => ({ rank: i + 1, tone: o.tone, text: o.text, url: o.url || null }));
+      return out.slice(0, 10).map((o, i) => ({ rank: i + 1, tone: o.tone, text: o.text, url: o.url || null }));
     } });
 
   /* ---------- drawing ---------- */
@@ -749,7 +878,7 @@
     show('.mvd-has-upside', up); show('.mvd-no-upside', !up); show('.mvd-upside-to', up);
     show('.mvd-has-headroom', head); show('.mvd-no-headroom', !head);
     show('.mvd-no-targets', !tg);
-    show('.mvd-no-holdings', !has('portfolio')); show('.mvd-has-exposure', has('exposure'));
+    show('.mvd-no-holdings', !has('portfolio')); show('.mvd-no-street', !has('street')); show('.mvd-has-exposure', has('exposure'));
     const l = one('latest');
     show('.mvd-backfilled', !!(l && l.backfilled));
   });
@@ -1119,6 +1248,43 @@
       cell(tr, s.analyst || '—');
       cell(tr, fmtShort(s.from));
       cell(tr, `${signedPts(s.edge_pct)} pts`, 'num', s.edge_pct);
+      el.append(tr);
+    }
+  });
+
+  // explanations: place each note just under its (i), inside the page; it shows on hover, focus or tap (CSS)
+  const root = document.querySelector('.mvd');
+  const place = (help) => {
+    const pop = help.querySelector('.mvd-pop');
+    if (!pop || !root) return;
+    const box = root.getBoundingClientRect(), r = help.getBoundingClientRect();
+    pop.style.left = `${Math.max(0, Math.min(r.left - box.left - 8, box.width - pop.offsetWidth))}px`;
+    pop.style.top = `${r.bottom - box.top + 6}px`;
+  };
+  document.querySelectorAll('.mvd-help').forEach((help) => {
+    help.addEventListener('mouseenter', () => requestAnimationFrame(() => place(help)));
+    help.addEventListener('focus', () => requestAnimationFrame(() => place(help)));
+    help.addEventListener('keydown', (event) => { if (event.key === 'Escape') help.blur(); });
+  });
+  dash.draw('key-bull', (el) => { el.style.background = dash.colors[0]; });
+
+  // Wall Street next to the YouTube analysts
+  dash.draw('street', (el) => {
+    const g = dash.data('street');
+    el.replaceChildren();
+    if (g.status !== 'ok') return;
+    for (const w of g.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = w.ticker;
+      cell(tr, w.ticker);
+      cell(tr, w.consensus || '—', /buy/i.test(w.consensus || '') ? 'mvd-up' : /sell/i.test(w.consensus || '') ? 'mvd-down' : '');
+      cell(tr, w.analysts == null ? '—' : fmtInt(w.analysts), 'num');
+      cell(tr, signed(w.upside_pct), 'num', w.upside_pct);
+      cell(tr, w.smart_score == null ? '—' : String(w.smart_score), 'num');
+      cell(tr, fmtInt(w.bull_14d), 'num');
+      cell(tr, fmtInt(w.bear_14d), 'num');
+      cell(tr, w.agree || '', w.agree === 'Differ' ? 'mvd-down' : w.agree === 'Agree' ? 'mvd-up' : '');
+      cell(tr, w.as_of ? fmtShort(w.as_of) : '—');
       el.append(tr);
     }
   });

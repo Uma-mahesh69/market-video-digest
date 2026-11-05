@@ -7,7 +7,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $src = $PSScriptRoot
-$files = "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
+$files = "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "tipranks.py", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "STOPPED: $text" -ForegroundColor Red; exit 1 }
@@ -129,6 +129,8 @@ try {
         $jsonDir = Ask "Folder for the daily JSON file (blank = digest_json in the program folder)" ""
         Write-Host "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
         $watchlist = Ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" ""
+        Write-Host "Optional: a free TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus and price targets."
+        $tipranks = AskSecret "TipRanks API key (press Enter to skip)" 0
         $settings = [ordered]@{
             channels = @($channels -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
             gemini_api_key = $key
@@ -142,6 +144,7 @@ try {
             smtp_port = 465
             json_dir = $jsonDir
             watchlist_csv = $watchlist
+            tipranks_api_key = $tipranks
         }
         [IO.File]::WriteAllText($config, ($settings | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
         Write-Host "Saved."

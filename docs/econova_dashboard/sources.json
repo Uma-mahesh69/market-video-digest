@@ -69,5 +69,17 @@
         "exportMimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
     }
+  },
+  "datasets/tipranks": {
+    "source": {
+      "kind": "query",
+      "connector": "Google Drive",
+      "tool": "search_files",
+      "args": {
+        "query": "parentId = '<json folder id>'",
+        "pageSize": 60,
+        "excludeContentSnippets": true
+      }
+    }
   }
 }
