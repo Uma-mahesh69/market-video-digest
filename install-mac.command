@@ -131,7 +131,7 @@ if [ "$write" = yes ]; then
     jsondir="$(ask "Folder for the daily JSON file (blank = digest_json in the program folder)" "")"
     echo "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
     watchlist="$(ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" "")"
-    echo "Optional: a free TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus and price targets."
+    echo "Optional: a TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus, price targets and earnings dates."
     tipranks="$(ask_secret "TipRanks API key (press Enter to skip)" 0)"
     KEY="$key" CHANNELS="$channels" TO="$to" SMTP_USER="$user" SMTP_PASS="$pass" JSON_DIR="$jsondir" WATCHLIST="$watchlist" TIPRANKS="$tipranks" "$PY" - "$CONFIG" <<'EOF' || fail "Could not save the settings."
 import json, os, sys

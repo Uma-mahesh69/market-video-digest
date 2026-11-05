@@ -14,7 +14,7 @@ sources). Everything is read through the Google Drive connector each time the pa
 | `digests`, `market` | The newest 30 `video-digest_*.json` files and the newest `market-data_*.json` in the json folder |
 | `watchlist` | The watchlist sheet (Google Finance prices of the 10 watched stocks, the S&P 500 and the 10-year) |
 | `quotes`, `closes` | The **Market Digest Prices** sheet made by `price_sheet.py`: price, day change, 52-week high, P/E and 120 days of closes for every ticker in `tickers.json` |
-| `tipranks` | The newest `tipranks_YYYY-MM-DD.json` (Wall Street consensus, price targets, Smart Score; one TipRanks call a day) |
+| `tipranks` | The newest `tipranks_YYYY-MM-DD.json` (consensus of all and of top-rated analysts, price target, Smart Score, next earnings; one TipRanks call per look-up, weekly on the basic plan's 10 calls a month) |
 | `holdings` | The reader's **Google Finance Investment Tracker** (downloaded as .xlsx; the tab whose header has Symbol and # Shares) |
 
 Beyond the user story's KPIs, the page scores the calls against prices:
@@ -28,8 +28,10 @@ Beyond the user story's KPIs, the page scores the calls against prices:
   high, P/E and the record of earlier calls on it, flagged when bulls call a stock near its high or after a 10% fall.
 - **Your holdings**: the Investment Tracker's holdings by weight (share counts are not shown), each with the last
   14 days of calls, its latest call and the record of earlier calls on it.
-- **Wall Street's view (TipRanks)**: the professional consensus, analyst count, target upside and Smart Score of each
-  stock next to its YouTube calls, marked Agree or Differ.
+- **Wall Street's view (TipRanks)**: the professional consensus (all analysts and the top-rated ones), target upside,
+  Smart Score and days to earnings of each stock next to its YouTube calls, marked Agree or Differ. First look
+  (5 Nov 2026): the YouTube analysts lean bearish on ORCL (1 bullish, 7 bearish in 14 days) while Wall Street says
+  Strong Buy with a target 96% above the price.
 - **A guide for beginners**: every number, column, chart and colour has an (i) that explains it on hover or tap, and
   a "How to read this page" panel holds a glossary and a colour key.
 - **What matters today**: fixed rules turn the above into a few sentences, such as "Your holding GOOG: 15 bullish

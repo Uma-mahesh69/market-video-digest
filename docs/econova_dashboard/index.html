@@ -33,6 +33,7 @@
   .mvd-table .sub { display: block; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
   .mvd-up { color: var(--color-ok); }
   .mvd-down { color: var(--color-bad); }
+  .mvd-warn { color: var(--color-warn); }
   .mvd-cards { display: grid; gap: var(--cds-gap-sm); margin: 0; padding: 0; list-style: none; }
   .mvd-cards li { border-left: 3px solid var(--color-border-line); padding: var(--cds-pad-xs) 0 var(--cds-pad-xs) var(--cds-pad-md); display: grid; gap: 2px; }
   .mvd-cards li.warn { border-left-color: var(--color-warn); }
@@ -269,15 +270,15 @@
   </section>
 
   <section class="mvd-card" id="street">
-    <h2>Wall Street's view (TipRanks)<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks collects the ratings and price targets of thousands of professional Wall Street analysts at banks and research firms. The digest asks TipRanks once a day (its free tier allows 50 questions a month), so this table is as of the date in its last column. It sets that professional view next to what the YouTube analysts said.</span></span></h2>
+    <h2>Wall Street's view (TipRanks)<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks collects the ratings and price targets of thousands of professional Wall Street analysts at banks and research firms. TipRanks limits how often it can be asked (10 questions a month on the basic plan), so the digest asks about once a week for all your stocks at once; the date in the last column says how fresh the table is. It sets that professional view next to what the YouTube analysts said.</span></span></h2>
     <p class="mvd-note">Professional analysts' consensus from TipRanks next to the YouTube calls of the last 14 days. A difference is worth a closer look: one side knows something, or one side is late.</p>
     <div class="mvd-scroll">
       <table class="mvd-table" data-source="street" data-row-key="ticker">
-        <thead><tr><th data-field="ticker">Stock</th><th data-field="consensus">Wall St. consensus<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks' summary of professional analysts' ratings over the last 3 months: Strong Buy, Moderate Buy, Hold, Moderate Sell or Strong Sell.</span></span></th><th class="num" data-field="analysts">Analysts<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">How many professional analysts the consensus is built from. More analysts = a sturdier consensus.</span></span></th><th class="num" data-field="upside_pct">Target upside<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The professional analysts' average 12-month price target compared with today's price. +20% = they expect the stock to rise about 20% in a year.</span></span></th><th class="num" data-field="smart_score">Smart Score<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks' 1 to 10 score that combines analysts, insiders, hedge funds, news, bloggers and price trends. 8 to 10 = outperform, 4 to 7 = neutral, 1 to 3 = underperform, in TipRanks' own model.</span></span></th><th class="num" data-field="bull_14d">YouTube bull<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish calls on the stock in the YouTube videos of the last 14 days.</span></span></th><th class="num" data-field="bear_14d">YouTube bear<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bearish calls on the stock in the YouTube videos of the last 14 days.</span></span></th><th data-field="agree">Agree?<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Agree = Wall Street and the YouTube analysts lean the same way. Differ = they lean opposite ways, or one says buy while the other is neutral. Blank = one side has no clear view.</span></span></th><th data-field="as_of">As of</th></tr></thead>
+        <thead><tr><th data-field="ticker">Stock</th><th data-field="consensus">Wall St. consensus<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks' summary of all professional analysts covering the stock: Strong Buy, Buy, Neutral (hold), Sell or Strong Sell.</span></span></th><th data-field="best_consensus">Top analysts<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The consensus of only the best-performing analysts on TipRanks (those whose past calls worked best). When it differs from the overall consensus, that difference is itself worth a look.</span></span></th><th class="num" data-field="upside_pct">Target upside<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">The professional analysts' average 12-month price target compared with today's price. +20% = they expect the stock to rise about 20% in a year.</span></span></th><th class="num" data-field="smart_score">Smart Score<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">TipRanks' 1 to 10 score that combines analysts, insiders, hedge funds, news, bloggers and price trends. 8 to 10 = outperform, 4 to 7 = neutral, 1 to 3 = underperform, in TipRanks' own model.</span></span></th><th class="num" data-field="bull_14d">YouTube bull<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bullish calls on the stock in the YouTube videos of the last 14 days.</span></span></th><th class="num" data-field="bear_14d">YouTube bear<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Bearish calls on the stock in the YouTube videos of the last 14 days.</span></span></th><th class="num" data-field="earnings_in">Earnings in<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Days until the company's next quarterly earnings report. Prices often jump or drop on that day, so a call made just before it carries more risk.</span></span></th><th data-field="agree">Agree?<span class="mvd-help" tabindex="0"><span aria-hidden="true">i</span><span class="mvd-pop" role="tooltip">Agree = Wall Street and the YouTube analysts lean the same way. Differ = they lean opposite ways, or one says buy while the other is neutral. Blank = one side has no clear view.</span></span></th><th data-field="as_of">As of</th></tr></thead>
         <tbody data-draw="street"></tbody>
       </table>
     </div>
-    <p class="mvd-note mvd-no-street" hidden>No TipRanks file yet. Add a free TipRanks API key to the digest's settings (tipranks_api_key) and the next daily run saves one.</p>
+    <p class="mvd-note mvd-no-street" hidden>No TipRanks file yet. Add a TipRanks API key to the digest's settings (tipranks_api_key) and the next run saves one.</p>
   </section>
 
   <section class="mvd-card" id="trend">
@@ -524,7 +525,7 @@
   });
 
   dash.loader('tipranks', {
-    description: 'Lists the json folder, downloads the newest tipranks file the digest run saves (one TipRanks call a day) and lays out its rows: one per stock, with Wall Street\'s consensus, analyst count, average price target, upside and Smart Score.',
+    description: 'Lists the json folder, downloads the newest tipranks file (saved by the digest run, or by Claude, from TipRanks\' get_assets_data) and lays out its rows: one per stock, with the consensus of all analysts and of the top-rated ones, average price target, upside, Smart Score and next earnings date.',
     fn: async ({ answer, call, args }) => {
       const parse = (x) => (typeof x === 'string' ? JSON.parse(x) : x);
       const utf8 = (b64) => { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new TextDecoder('utf-8').decode(u); };
@@ -536,7 +537,7 @@
         files.push(...(page.files || []));
       }
       const newest = files.filter((f) => /^tipranks_\d{4}-\d{2}-\d{2}\.json$/.test(f.title)).sort((a, b) => b.title.localeCompare(a.title))[0];
-      const columns = ['date', 'ticker', 'consensus', 'analysts', 'buy', 'hold', 'sell', 'price_target', 'upside_pct', 'smart_score', 'price'];
+      const columns = ['date', 'ticker', 'name', 'consensus', 'best_consensus', 'price_target', 'upside_pct', 'smart_score', 'price', 'next_earnings', 'days_to_earnings', 'url'];
       if (!newest) return { data: [], columns };
       const got = parse(await call('download_file_content', { fileId: newest.id }));
       if (!got || !got.content) throw new Error('Google Drive gave no content for ' + newest.title);
@@ -767,7 +768,7 @@
     } });
 
   dash.calc('street', { inputs: ['tipranks', 'quotes', 'digests', 'latest'], title: 'Wall Street next to the YouTube analysts',
-    description: 'Each stock in the newest TipRanks file: Wall Street\'s consensus, analyst count, average price target and its upside from today\'s Google Finance price (TipRanks\' own upside when there is no price), Smart Score, and the YouTube calls on it in the 14 days to the latest digest. Agree: both lean the same way (a Buy consensus and more bullish than bearish calls, or a Sell consensus and more bearish).',
+    description: 'Each stock in the newest TipRanks file: the consensus of all covering analysts and of the top-rated ones, the average price target and its upside from today\'s Google Finance price (TipRanks\' own upside when there is no price), Smart Score, days to the next earnings report, and the YouTube calls on it in the 14 days to the latest digest. Agree: both lean the same way (a Buy consensus and more bullish than bearish calls, or a Sell consensus and more bearish).',
     fn: (tipranks, quotes, digests, latest) => {
       const same = { GOOG: 'GOOGL', 'BRK.A': 'BRK.B' };
       const day = latest[0] && latest[0].day;
@@ -781,13 +782,14 @@
         const upside = t.price_target != null && price ? Math.round((t.price_target / price - 1) * 1000) / 10 : t.upside_pct;
         const street = /buy/i.test(t.consensus || '') ? 1 : /sell/i.test(t.consensus || '') ? -1 : 0;
         const tube = bull > bear ? 1 : bear > bull ? -1 : 0;
-        return { ticker: t.ticker, consensus: t.consensus, analysts: t.analysts, price_target: t.price_target, upside_pct: upside, smart_score: t.smart_score,
-          bull_14d: bull, bear_14d: bear, agree: !tube || !t.consensus ? null : street === tube ? 'Agree' : 'Differ', as_of: t.date };
+        return { ticker: t.ticker, consensus: t.consensus, best_consensus: t.best_consensus, price_target: t.price_target, upside_pct: upside, smart_score: t.smart_score,
+          earnings_in: t.days_to_earnings, next_earnings: t.next_earnings, bull_14d: bull, bear_14d: bear,
+          agree: !tube || !t.consensus ? null : street === tube ? 'Agree' : 'Differ', as_of: t.date, url: t.url };
       }).sort((a, b) => (b.bull_14d + b.bear_14d) - (a.bull_14d + a.bear_14d) || a.ticker.localeCompare(b.ticker));
     } });
 
   dash.calc('signals', { inputs: ['portfolio', 'tape', 'analysts', 'scorecard', 'mentions_today', 'street'], title: 'What matters today',
-    description: 'Sentences made by fixed rules from the other calculations (and TipRanks, where the YouTube lean and Wall Street\'s consensus differ): your holdings called today or leaning one way, today\'s strongest calls on stocks whose earlier calls scored 35% or worse (or 65% or better, 4 or more calls), today\'s calls by analysts whose earlier calls scored well or badly (3 or more), calls that run with or against the 1-month move, and the overall track record.',
+    description: 'Sentences made by fixed rules from the other calculations (and TipRanks: where the YouTube lean and Wall Street\'s consensus differ, earnings within 14 days, and top-rated analysts who differ from the rest): your holdings called today or leaning one way, today\'s strongest calls on stocks whose earlier calls scored 35% or worse (or 65% or better, 4 or more calls), today\'s calls by analysts whose earlier calls scored well or badly (3 or more), calls that run with or against the 1-month move, and the overall track record.',
     fn: (portfolio, tape, analysts, scorecard, today, street) => {
       const pct = (x) => `${x > 0 ? '+' : ''}${x}%`, pts = (x) => `${x > 0 ? '+' : ''}${x} pts`;
       const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], date = (d) => `${mon[+d.slice(5, 7) - 1]} ${+d.slice(8, 10)}`;
@@ -800,7 +802,11 @@
           text: `Your holding ${p.ticker}: ${p.bull_14d} bullish and ${p.bear_14d} bearish calls in 14 days${p.month_pct != null ? `, ${against ? 'but' : 'and'} it moved ${pct(p.month_pct)} in a month` : ''}${p.past_record ? `; earlier calls on it were right ${p.past_record} times` : ''}.` });
       }
       for (const w of street.filter((x) => x.agree === 'Differ' && x.bull_14d + x.bear_14d >= 2).slice(0, 2))
-        out.push({ tone: 'warn', text: `${w.ticker}: the YouTube analysts lean ${w.bull_14d > w.bear_14d ? 'bullish' : 'bearish'} (${w.bull_14d} bullish, ${w.bear_14d} bearish in 14 days), but Wall Street's consensus on TipRanks is ${w.consensus}${w.analysts ? ` (${w.analysts} analysts)` : ''}.` });
+        out.push({ tone: 'warn', text: `${w.ticker}: the YouTube analysts lean ${w.bull_14d > w.bear_14d ? 'bullish' : 'bearish'} (${w.bull_14d} bullish, ${w.bear_14d} bearish in 14 days), but Wall Street's consensus on TipRanks is ${w.consensus}.` });
+      const soon = street.filter((x) => x.earnings_in != null && x.earnings_in >= 0 && x.earnings_in <= 14).sort((a, b) => a.earnings_in - b.earnings_in);
+      if (soon.length) out.push({ tone: 'warn', text: `Earnings soon: ${soon.slice(0, 5).map((x) => `${x.ticker} in ${x.earnings_in} day${x.earnings_in === 1 ? '' : 's'}`).join(', ')}. Prices often move sharply on the report; check what the calls expect from it.` });
+      for (const w of street.filter((x) => x.best_consensus && x.consensus && x.best_consensus !== x.consensus).slice(0, 2))
+        out.push({ tone: 'warn', text: `${w.ticker}: Wall Street's top-rated analysts say ${w.best_consensus}, all analysts together say ${w.consensus}.`, url: w.url });
       for (const t of tape) {
         const [right, n] = (t.past_record || '0 of 0').split(' of ').map(Number);
         if ((t.bullish < 2 && t.bearish < 2) || n < 4) continue;
@@ -1278,11 +1284,12 @@
       tr.dataset.key = w.ticker;
       cell(tr, w.ticker);
       cell(tr, w.consensus || '—', /buy/i.test(w.consensus || '') ? 'mvd-up' : /sell/i.test(w.consensus || '') ? 'mvd-down' : '');
-      cell(tr, w.analysts == null ? '—' : fmtInt(w.analysts), 'num');
+      cell(tr, w.best_consensus || '—', /buy/i.test(w.best_consensus || '') ? 'mvd-up' : /sell/i.test(w.best_consensus || '') ? 'mvd-down' : '');
       cell(tr, signed(w.upside_pct), 'num', w.upside_pct);
       cell(tr, w.smart_score == null ? '—' : String(w.smart_score), 'num');
       cell(tr, fmtInt(w.bull_14d), 'num');
       cell(tr, fmtInt(w.bear_14d), 'num');
+      cell(tr, w.earnings_in == null ? '—' : `${w.earnings_in} d`, 'num' + (w.earnings_in != null && w.earnings_in <= 14 ? ' mvd-warn' : ''));
       cell(tr, w.agree || '', w.agree === 'Differ' ? 'mvd-down' : w.agree === 'Agree' ? 'mvd-up' : '');
       cell(tr, w.as_of ? fmtShort(w.as_of) : '—');
       el.append(tr);

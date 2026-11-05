@@ -129,7 +129,7 @@ try {
         $jsonDir = Ask "Folder for the daily JSON file (blank = digest_json in the program folder)" ""
         Write-Host "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
         $watchlist = Ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" ""
-        Write-Host "Optional: a free TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus and price targets."
+        Write-Host "Optional: a TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus, price targets and earnings dates."
         $tipranks = AskSecret "TipRanks API key (press Enter to skip)" 0
         $settings = [ordered]@{
             channels = @($channels -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })

@@ -701,7 +701,7 @@ def check(cfg, state):
         ok = False
 
     if cfg.get("tipranks_api_key"):
-        print("TipRanks: key set; run python digest.py --tipranks-check to test it (uses 1 of the month's free calls)")
+        print("TipRanks: key set; run python digest.py --tipranks-check to test it (uses 1 of the month's calls)")
 
     print("Email: ", end="", flush=True)
     if not (cfg.get("email_to") and cfg.get("smtp_user") and cfg.get("smtp_password")):
@@ -798,7 +798,7 @@ def main():
     ap.add_argument("--video", help="make a digest of one video link instead of checking channels")
     ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key, the watchlist sheet, the JSON folder and the email login, then stop")
     ap.add_argument("--open", action="store_true", help="open the digest in the browser when done")
-    ap.add_argument("--tipranks-check", action="store_true", help="test the TipRanks key and show what it sends (uses 1 of the month's free calls), then stop")
+    ap.add_argument("--tipranks-check", action="store_true", help="test the TipRanks key and show what it sends (uses 1 of the month's calls), then stop")
     ap.add_argument("--rebuild", metavar="YYYY-MM-DD", help="write the JSON file for an earlier day's digest from the saved notes, then stop")
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):

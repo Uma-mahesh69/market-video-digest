@@ -19,10 +19,14 @@ class Fake:
     def start(self):
         pass
 
+    usage = {"tier": "free", "limit": 50, "remaining": 50}
+
     def tools(self):
-        return [TOOL]
+        return [TOOL, {"name": "get_my_usage"}]
 
     def call(self, name, arguments):
+        if name == "get_my_usage":
+            return {"content": [{"type": "text", "text": json.dumps(self.usage)}]}
         self.calls.append((name, arguments))
         return {"content": [{"type": "text", "text": json.dumps(self.answer)}]}
 
@@ -35,13 +39,9 @@ class Reading(unittest.TestCase):
         with self.assertRaises(tr.TipRanksError):
             tr.Client._answer('{"jsonrpc":"2.0","id":3,"error":{"message":"bad key"}}')
 
-    def test_fields_found_in_different_shapes(self):
-        nested = {"data": [{"ticker": "NVDA", "analystConsensus": {"consensus": "Strong Buy", "buy": 30, "hold": 2, "sell": 0},
-                            "priceTarget": {"average": "$260.50", "upside": "21.3%"}, "smartScore": 8, "numberOfAnalysts": 32}]}
-        by_ticker = {"AAPL": {"consensusRating": "Moderate Buy", "averagePriceTarget": 300, "upsidePercent": -4.1, "smart_score": 6}}
-        n, a = tr.rows(nested)[0], tr.rows(by_ticker)[0]
-        self.assertEqual((n["ticker"], n["consensus"], n["buy"], n["hold"], n["sell"], n["analysts"], n["smart_score"]), ("NVDA", "Strong Buy", 30, 2, 0, 32, 8))
-        self.assertEqual((n["price_target"], n["upside_pct"]), (260.5, 21.3))
+    def test_fields_found_in_another_shape(self):
+        by_ticker = {"AAPL": {"consensusRating": "ModerateBuy", "averagePriceTarget": 300, "upsidePercent": -4.1, "smart_score": 6}}
+        a = tr.rows(by_ticker)[0]
         self.assertEqual((a["ticker"], a["consensus"], a["price_target"], a["upside_pct"], a["smart_score"]), ("AAPL", "Moderate Buy", 300, -4.1, 6))
 
     def test_ticker_argument_from_the_schema(self):
@@ -64,15 +64,27 @@ class Daily(unittest.TestCase):
         self.assertEqual(len(fake.calls), 1)
         self.assertIn("already fetched today", self.logs[-1])
 
-    def test_monthly_budget_and_no_key(self):
-        self.state["tipranks"] = {"month": "2026-11", "calls": 40}
+    def test_the_quota_sets_the_pace(self):
         fake = Fake({})
-        self.assertIsNone(tr.snapshot(self.cfg, self.state, DAY, ["NVDA"], self.folder, self.logs.append, fake))
-        self.assertEqual(fake.calls, [])
-        self.assertIn("40 TipRanks calls are used", self.logs[-1])
-        self.state["tipranks"]["month"] = "2026-10"   # a new month starts again
+        fake.usage = {"tier": "basic", "limit": 10, "remaining": 9}   # the basic tier: weekly
         self.assertIsNotNone(tr.snapshot(self.cfg, self.state, DAY, ["NVDA"], self.folder, self.logs.append, fake))
-        self.assertIsNone(tr.snapshot({}, {}, DAY, ["NVDA"], self.folder, self.logs.append, fake))
+        later = DAY.replace(day=9)
+        self.assertIsNone(tr.snapshot(self.cfg, self.state, later, ["NVDA"], self.folder, self.logs.append, fake))
+        self.assertIn("due 7 days after 2026-11-05", self.logs[-1])
+        self.assertIsNotNone(tr.snapshot(self.cfg, self.state, DAY.replace(day=12), ["NVDA"], self.folder, self.logs.append, fake))
+        fake.usage = {"limit": 10, "remaining": 3}                     # the last 3 stay for questions in Claude
+        self.assertIsNone(tr.snapshot(self.cfg, self.state, DAY.replace(day=20), ["NVDA"], self.folder, self.logs.append, fake))
+        self.assertIn("3 are kept", self.logs[-1])
+        self.assertEqual(len(fake.calls), 2)
+        self.assertIsNone(tr.snapshot({}, {}, DAY, ["NVDA"], self.folder, self.logs.append, fake))   # no key, no call
+
+    def test_the_real_answer(self):
+        """get_assets_data's answer for four stocks on 5 Nov 2026."""
+        data = json.loads((Path(__file__).parent / "fixtures" / "tipranks_assets_2026-11-05.json").read_text(encoding="utf-8"))
+        r = {x["ticker"]: x for x in tr.rows(data)}
+        self.assertEqual((r["GOOG"]["consensus"], r["GOOG"]["upside_pct"], r["GOOG"]["smart_score"]), ("Strong Buy", 48.4, 8))
+        self.assertEqual((r["CRWV"]["consensus"], r["CRWV"]["best_consensus"], r["CRWV"]["days_to_earnings"]), ("Buy", "Strong Buy", 5))
+        self.assertEqual((r["AAPL"]["upside_pct"], r["QCOM"]["consensus"]), (-2.3, "Neutral"))
 
     def test_a_failure_is_logged_not_raised(self):
         class Broken(Fake):

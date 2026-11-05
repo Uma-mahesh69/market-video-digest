@@ -1,10 +1,12 @@
-"""Wall Street's view of the stocks, from TipRanks, once a day and inside the free tier.
+"""Wall Street's view of the stocks, from TipRanks, inside the account's monthly quota.
 
-TipRanks runs an MCP server (https://mcp.tipranks.com/mcp/). Its free tier allows 50 tool calls a month and 10 a
-minute, so the digest makes ONE call per day: get_assets_data for every stock it cares about at once (the watchlist
-and the stocks called most in today's videos). The answer is saved as tipranks_YYYY-MM-DD.json next to the digest's
-other daily files, where the Econova dashboard reads it. A monthly budget (tipranks_monthly_limit, default 40) keeps a
-margin for --tipranks-check; past it, the day is skipped and logged, never an error.
+TipRanks runs an MCP server (https://mcp.tipranks.com/mcp/). Every tool call counts against a monthly quota (10 on
+the basic tier, checked on 5 Nov 2026; more on others); the handshake and get_my_usage are free. So the digest asks
+get_my_usage first and makes at most ONE counted call per look-up: get_assets_data for every stock it cares about at
+once (the watchlist and the stocks called most in the day's videos). With 40 or more calls a month it looks up once a
+day, with fewer once a week (tipranks_every_days overrides), and it always leaves 3 calls for questions asked in
+Claude. The answer is saved as tipranks_YYYY-MM-DD.json next to the digest's other daily files, where the Econova
+dashboard reads the newest one. A skipped look-up is logged, never an error.
 
 Set it up: get a free API key at https://mcp.tipranks.com/ and put it in digest_config.json as tipranks_api_key.
 Then run `python digest.py --tipranks-check` (uses 1 of the month's calls) and look at what it prints.
@@ -20,8 +22,9 @@ from pathlib import Path
 
 URL = "https://mcp.tipranks.com/mcp/"
 TOOL = "get_assets_data"
-MONTHLY_LIMIT = 40          # of the free tier's 50, leaving room for checks
+MONTHLY_LIMIT = 10          # used only when TipRanks does not report the account's own limit
 MAX_TICKERS = 30
+RESERVE = 3             # calls left untouched each month, for questions asked in Claude
 SCHEMA_VERSION = "1.0"
 NON_US = re.compile(r"\.(KS|KQ|PA|T|HK|L|TO|DE|AS|SW|MI)$")   # TipRanks names these differently; left out for now
 
@@ -171,25 +174,38 @@ def _records(data):
     return []
 
 
+def label(x):
+    """TipRanks writes ratings as one word ("StrongBuy"); the page shows "Strong Buy"."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", x.strip()) if isinstance(x, str) and x.strip() else None
+
+
 def rows(data):
-    """One row per stock with the fields the dashboard shows. Fields TipRanks does not send stay None."""
+    """One row per stock with the fields the dashboard shows. get_assets_data's own fields first (checked against a
+    real answer on 5 Nov 2026: priceTargetUpside is a decimal, 0.05 = +5%); other shapes by their field names."""
     out = []
     for rec in _records(data):
-        flat = _flat(rec)
         ticker = str(rec.get("ticker") or rec.get("symbol") or "").upper()
         if not ticker:
             continue
+        if "analystConsensus" in rec or "priceTargetUpside" in rec:
+            up = _num(rec.get("priceTargetUpside"))
+            out.append({"ticker": ticker, "name": rec.get("companyName"), "consensus": label(rec.get("analystConsensus")),
+                        "best_consensus": label(rec.get("bestAnalystConsensus")), "price_target": _num(rec.get("priceTarget")),
+                        "upside_pct": None if up is None else round(up * 100, 1), "smart_score": _num(rec.get("smartScore")),
+                        "price": _num(rec.get("price")), "next_earnings": rec.get("nextEarningsDate"),
+                        "days_to_earnings": _num(rec.get("daysUntilEarnings")), "news_sentiment": _num(rec.get("newsSentiment")),
+                        "url": rec.get("url")})
+            continue
+        flat = _flat(rec)
         out.append({
-            "ticker": ticker,
-            "consensus": _pick(flat, r"consensus(rating|text|label)?$", r"analystconsensus", r"^rating$", number=False),
-            "analysts": _pick(flat, r"(numberof|num|total)analysts", r"analystscount", r"analystcount"),
-            "buy": _pick(flat, r"(^|consensus|ratings?)buy(s|count)?$"),
-            "hold": _pick(flat, r"(^|consensus|ratings?)hold(s|count)?$"),
-            "sell": _pick(flat, r"(^|consensus|ratings?)sell(s|count)?$"),
-            "price_target": _pick(flat, r"(average|avg|mean|consensus)?pricetarget$", r"pricetarget(average|avg|mean|value)$", r"^pt$"),
-            "upside_pct": _pick(flat, r"upside(percent|pct)?$", r"pricetargetupside"),
-            "smart_score": _pick(flat, r"smartscore$", r"smartscore(value|score)?$"),
-            "price": _pick(flat, r"^(last|current)?price$", r"pricelast"),
+            "ticker": ticker, "name": rec.get("companyName") or rec.get("name"),
+            "consensus": label(_pick(flat, r"consensus(rating|text|label)?$", r"analystconsensus", r"^rating$", number=False)),
+            "best_consensus": None,
+            "price_target": _pick(flat, r"(average|avg|mean|consensus)?pricetarget$", r"pricetarget(average|avg|mean|value)$"),
+            "upside_pct": _pick(flat, r"upside(percent|pct)$"),
+            "smart_score": _pick(flat, r"smartscore$"),
+            "price": _pick(flat, r"^(last|current)?price$"), "next_earnings": None, "days_to_earnings": None,
+            "news_sentiment": None, "url": rec.get("url"),
         })
     return out
 
@@ -204,18 +220,37 @@ def usable(tickers):
     return [t for t in dict.fromkeys(t.upper() for t in tickers if t) if not NON_US.search(t)][:MAX_TICKERS]
 
 
-def budget(state, cfg, day):
-    """(may call now, why not). One call a day, and no more than tipranks_monthly_limit a month."""
+def budget(state, cfg, day, usage=None):
+    """(may call now, why not). TipRanks' own count (get_my_usage, which is free) decides the pace: with 40 or more
+    calls a month, once a day; with fewer (the basic tier has 10), once a week, keeping 3 for questions in Claude.
+    Our own count is the backstop when TipRanks does not say."""
     use = state.setdefault("tipranks", {})
     month = f"{day:%Y-%m}"
     if use.get("month") != month:
         use.update(month=month, calls=0)
-    limit = int(cfg.get("tipranks_monthly_limit") or MONTHLY_LIMIT)
     if use.get("last_day") == f"{day:%Y-%m-%d}":
         return False, "already fetched today"
-    if use.get("calls", 0) >= limit:
-        return False, f"this month's {limit} TipRanks calls are used"
+    limit = (usage or {}).get("limit") or int(cfg.get("tipranks_monthly_limit") or MONTHLY_LIMIT)
+    left = (usage or {}).get("remaining")
+    left = limit - use.get("calls", 0) if left is None else left
+    every = int(cfg.get("tipranks_every_days") or (1 if limit >= 40 else 7))
+    last = use.get("last_day")
+    if last and (day.date() - datetime.strptime(last, "%Y-%m-%d").date()).days < every:
+        return False, f"next TipRanks look-up is due {every} days after {last}"
+    if left <= RESERVE:
+        return False, f"{left} TipRanks calls left this month; {RESERVE} are kept for questions"
     return True, ""
+
+
+def usage_now(tr, tools):
+    """{"limit", "remaining", ...} from get_my_usage, which TipRanks never counts; None when it is not offered."""
+    if not any(t.get("name") == "get_my_usage" for t in tools):
+        return None
+    try:
+        data = payload(tr.call("get_my_usage", {}))
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
 
 
 def spend(state, day):
@@ -229,16 +264,21 @@ def snapshot(cfg, state, day, tickers, folder, log, client=None):
     if not cfg.get("tipranks_api_key"):
         return None
     tickers = usable(tickers)
-    ok, why = budget(state, cfg, day)
-    if not ok or not tickers:
-        log(f"TipRanks: skipped ({why or 'no US tickers to look up'})")
+    if not tickers or (state.get("tipranks") or {}).get("last_day") == f"{day:%Y-%m-%d}":
+        log(f"TipRanks: skipped ({'already fetched today' if tickers else 'no US tickers to look up'})")
         return None
     try:
         tr = client or Client(cfg["tipranks_api_key"])
         tr.start()
-        tool = next((t for t in tr.tools() if t.get("name") == TOOL), None)
+        tools = tr.tools()
+        tool = next((t for t in tools if t.get("name") == TOOL), None)
         if tool is None:
             raise TipRanksError(f"TipRanks has no {TOOL} tool any more")
+        usage = usage_now(tr, tools)
+        ok, why = budget(state, cfg, day, usage)
+        if not ok:
+            log(f"TipRanks: skipped ({why})")
+            return None
         arg, is_list = ticker_argument(tool)
         spend(state, day)   # counted before the call: a call that fails still uses the month's budget
         data = payload(tr.call(TOOL, {arg: tickers if is_list else ",".join(tickers)}))

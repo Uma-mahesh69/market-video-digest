@@ -225,22 +225,24 @@ Each sheet's file id goes into the dashboard's `quotes`/`closes` and `holdings` 
 `python market_data.py --coverage` (last 14 days) or `python market_data.py --coverage --days 28`. It lists the calls
 per stock (bullish, bearish, neutral, mixed) and says whether most of your stocks come up every week.
 
-### Wall Street's view from TipRanks (optional, free)
+### Wall Street's view from TipRanks (optional)
 
-TipRanks collects professional analysts' ratings and price targets. With a free TipRanks API key, each daily run makes
-**one** call for all your stocks (the watchlist and the stocks called most that day) and saves
-`tipranks_YYYY-MM-DD.json` next to the other daily files. The dashboard then shows Wall Street's consensus, price
-target upside and Smart Score next to the YouTube calls, and flags stocks where the two disagree.
+TipRanks collects professional analysts' ratings and price targets. With a TipRanks API key, the digest looks up all
+your stocks in **one** call (the watchlist and the stocks called most that day) and saves `tipranks_YYYY-MM-DD.json`
+next to the other daily files. The dashboard then shows Wall Street's consensus (all analysts, and the top-rated ones
+alone), price-target upside, Smart Score and the next earnings date next to the YouTube calls, and flags stocks
+where the two disagree or that report earnings within 14 days.
 
-1. Get a free API key at https://mcp.tipranks.com/.
-2. Run the installer again and paste it at the TipRanks question, or put it in `digest_config.json` as
-   `tipranks_api_key`.
-3. Run `python digest.py --tipranks-check`. It connects, shows what TipRanks sends for AAPL, and uses 1 of the month's
-   calls.
+TipRanks counts every tool call against a monthly quota: 10 on the basic plan (checked on 5 Nov 2026), more on
+others. Before each look-up the digest asks TipRanks how many calls are left (that question is free). With 40 or
+more a month it looks up once a day; with fewer, once a week. It always leaves 3 calls for questions you ask Claude
+through the TipRanks connector. A skipped look-up is logged; the digest itself is never held up.
 
-The free tier allows 50 calls a month and 10 a minute. The digest makes at most one call a day and stops at 40 a
-month (`tipranks_monthly_limit`), so a month of daily runs fits with room for checks. When the budget is used up, the
-day is skipped and the log says so; the digest itself is never held up.
+1. In claude.ai, connect TipRanks (Settings > Connectors) to ask Claude about stocks, and get an API key at
+   https://mcp.tipranks.com/ for the daily program.
+2. Run the installer again and paste the key at the TipRanks question, or put it in `digest_config.json` as
+   `tipranks_api_key`. `tipranks_every_days` sets the pace by hand.
+3. Run `python digest.py --tipranks-check`. It connects, shows what TipRanks sends for AAPL, and uses 1 call.
 
 ## 6. Everyday use: the chat page
 
