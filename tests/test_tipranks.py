@@ -44,6 +44,31 @@ class Reading(unittest.TestCase):
         a = tr.rows(by_ticker)[0]
         self.assertEqual((a["ticker"], a["consensus"], a["price_target"], a["upside_pct"], a["smart_score"]), ("AAPL", "Moderate Buy", 300, -4.1, 6))
 
+    def test_a_refused_header_is_retried_with_the_key_in_the_address(self):
+        import io, urllib.error, urllib.request
+        key, sent = "tr_live_" + "k" * 32, []
+
+        def fake_open(req, timeout=None):
+            sent.append((req.full_url, req.headers.get("Authorization")))
+            if len(sent) == 1:
+                raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, io.BytesIO(b'{"error":"invalid_token"}'))
+
+            class Answer(io.BytesIO):
+                headers = {"Content-Type": "application/json"}
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    pass
+            return Answer(b'{"jsonrpc":"2.0","id":1,"result":{"ok":true}}')
+        saved, urllib.request.urlopen = urllib.request.urlopen, fake_open
+        try:
+            self.assertEqual(tr.Client(key).call("get_assets_data", {"tickers": "AAPL"}), {"ok": True})
+        finally:
+            urllib.request.urlopen = saved
+        self.assertEqual(sent, [(tr.URL, "Bearer " + key), (tr.URL + "?apikey=" + key, None)])
+
     def test_ticker_argument_from_the_schema(self):
         self.assertEqual(tr.ticker_argument(TOOL), ("tickers", False))
         self.assertEqual(tr.ticker_argument({"inputSchema": {"properties": {"symbols": {"type": "array"}}}}), ("symbols", True))

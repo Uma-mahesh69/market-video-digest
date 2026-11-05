@@ -18,6 +18,7 @@ Python standard library only. The key is sent in the Authorization header and ne
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -57,6 +58,12 @@ class Client:
         if problem:
             raise TipRanksError(f"tipranks_api_key in digest_config.json looks wrong: {problem}.")
         self.key, self.url, self.timeout, self.session, self.ids = key, url, timeout, None, 0
+        self.in_url = False   # TipRanks takes a key as a Bearer header or as ?apikey=; the header first
+
+    def _address(self):
+        if not self.in_url:
+            return self.url
+        return self.url + ("&" if "?" in self.url else "?") + urllib.parse.urlencode({"apikey": self.key})
 
     def _post(self, method, params=None, notify=False):
         body = {"jsonrpc": "2.0", "method": method}
@@ -65,11 +72,12 @@ class Client:
         if not notify:
             self.ids += 1
             body["id"] = self.ids
-        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
-                   "Authorization": f"Bearer {self.key}", "User-Agent": "market-video-digest"}
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "User-Agent": "market-video-digest"}
+        if not self.in_url:
+            headers["Authorization"] = f"Bearer {self.key}"
         if self.session:
             headers["Mcp-Session-Id"] = self.session
-        req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers=headers, method="POST")
+        req = urllib.request.Request(self._address(), data=json.dumps(body).encode(), headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 self.session = r.headers.get("Mcp-Session-Id") or self.session
@@ -79,8 +87,15 @@ class Client:
             detail = err.read().decode("utf-8", "replace")[:300]
             if err.code == 400:
                 raise TipRanksError(f"TipRanks could not read the request (HTTP 400): {detail}") from None
+            if err.code in (401, 403) and not self.in_url:   # TipRanks also takes the key in the address: try that once
+                self.in_url = True
+                if not notify:
+                    self.ids -= 1
+                return self._post(method, params, notify)
             if err.code in (401, 403):
-                raise TipRanksError(f"TipRanks refused the API key (HTTP {err.code}). Check tipranks_api_key. {detail}") from None
+                raise TipRanksError(f"TipRanks refused the API key (HTTP {err.code}), both as a header and in the address. The key is "
+                                    f"well formed, so it is probably revoked or not yet active: test it under Keys on https://mcp.tipranks.com/dev/keys "
+                                    f"and create a new one if needed. {detail}") from None
             if err.code == 429:
                 raise TipRanksError(f"TipRanks rate limit reached (HTTP 429): {detail}") from None
             raise TipRanksError(f"TipRanks answered HTTP {err.code}: {detail}") from None
@@ -328,6 +343,7 @@ def check(cfg, state, log=print):
         return True
     try:
         tr = Client(cfg["tipranks_api_key"])
+        print(f"TipRanks key: looks right (tr_live_..., {len(tr.key)} characters)")
         tr.start()
         tools = tr.tools()
         print(f"TipRanks: connected, {len(tools)} tools")
