@@ -1,10 +1,12 @@
 """Wall Street's view of the stocks, from TipRanks, inside the account's monthly quota.
 
-TipRanks runs an MCP server (https://mcp.tipranks.com/mcp/). Every tool call counts against a monthly quota (10 on
-the basic tier, checked on 5 Nov 2026; more on others); the handshake and get_my_usage are free. So the digest asks
+TipRanks runs an MCP server (https://mcp.tipranks.com/mcp/). Every tool call counts against a monthly quota; the
+handshake and get_my_usage are free. An API key (tr_live_..., from https://mcp.tipranks.com/dev/keys) has its own pool,
+50 calls a month on the free tier, separate from the 10 a month of the claude.ai connector on a free or basic TipRanks
+plan (TipRanks' MCP page, 5 Nov 2026). So the digest asks
 get_my_usage first and makes at most ONE counted call per look-up: get_assets_data for every stock it cares about at
 once (the watchlist and the stocks called most in the day's videos). With 40 or more calls a month it looks up once a
-day, with fewer once a week (tipranks_every_days overrides), and it always leaves 3 calls for questions asked in
+weekday (about 22 calls), with fewer once a week (tipranks_every_days overrides), and it always leaves 3 calls for questions asked in
 Claude. The answer is saved as tipranks_YYYY-MM-DD.json next to the digest's other daily files, where the Econova
 dashboard reads the newest one. A skipped look-up is logged, never an error.
 
@@ -234,6 +236,8 @@ def budget(state, cfg, day, usage=None):
     left = (usage or {}).get("remaining")
     left = limit - use.get("calls", 0) if left is None else left
     every = int(cfg.get("tipranks_every_days") or (1 if limit >= 40 else 7))
+    if every == 1 and day.weekday() >= 5:
+        return False, "weekend: Wall Street's ratings barely move, so the call is saved"
     last = use.get("last_day")
     if last and (day.date() - datetime.strptime(last, "%Y-%m-%d").date()).days < every:
         return False, f"next TipRanks look-up is due {every} days after {last}"

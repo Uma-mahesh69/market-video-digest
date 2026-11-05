@@ -78,6 +78,14 @@ class Daily(unittest.TestCase):
         self.assertEqual(len(fake.calls), 2)
         self.assertIsNone(tr.snapshot({}, {}, DAY, ["NVDA"], self.folder, self.logs.append, fake))   # no key, no call
 
+    def test_a_50_call_key_looks_up_on_weekdays(self):
+        fake = Fake({})   # its get_my_usage says 50 a month
+        self.assertIsNotNone(tr.snapshot(self.cfg, self.state, DAY, ["NVDA"], self.folder, self.logs.append, fake))           # Thursday
+        self.assertIsNone(tr.snapshot(self.cfg, self.state, DAY.replace(day=7), ["NVDA"], self.folder, self.logs.append, fake))  # Saturday
+        self.assertIn("weekend", self.logs[-1])
+        self.assertIsNotNone(tr.snapshot(self.cfg, self.state, DAY.replace(day=9), ["NVDA"], self.folder, self.logs.append, fake))  # Monday
+        self.assertEqual(len(fake.calls), 2)
+
     def test_the_real_answer(self):
         """get_assets_data's answer for four stocks on 5 Nov 2026."""
         data = json.loads((Path(__file__).parent / "fixtures" / "tipranks_assets_2026-11-05.json").read_text(encoding="utf-8"))

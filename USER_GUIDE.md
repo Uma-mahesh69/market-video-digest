@@ -233,13 +233,14 @@ next to the other daily files. The dashboard then shows Wall Street's consensus 
 alone), price-target upside, Smart Score and the next earnings date next to the YouTube calls, and flags stocks
 where the two disagree or that report earnings within 14 days.
 
-TipRanks counts every tool call against a monthly quota: 10 on the basic plan (checked on 5 Nov 2026), more on
-others. Before each look-up the digest asks TipRanks how many calls are left (that question is free). With 40 or
-more a month it looks up once a day; with fewer, once a week. It always leaves 3 calls for questions you ask Claude
-through the TipRanks connector. A skipped look-up is logged; the digest itself is never held up.
+TipRanks counts every tool call against a monthly quota, and keeps two separate pools: an **API key** gets 50 calls
+a month on the free tier, and the **claude.ai connector** gets 10 on a free or basic TipRanks plan. Before each
+look-up the digest asks TipRanks how many calls are left (that question is free). With 40 or more a month it looks
+up once a weekday (about 22 calls); with fewer, once a week. It always leaves 3 calls spare. A skipped look-up is
+logged; the digest itself is never held up.
 
-1. In claude.ai, connect TipRanks (Settings > Connectors) to ask Claude about stocks, and get an API key at
-   https://mcp.tipranks.com/ for the daily program.
+1. Signed in at https://mcp.tipranks.com/, open **Keys** and create a key. It starts with `tr_live_` and is shown only
+   once, so copy it straight into step 2. (The claude.ai connector is separate: it is for asking Claude about stocks.)
 2. Run the installer again and paste the key at the TipRanks question, or put it in `digest_config.json` as
    `tipranks_api_key`. `tipranks_every_days` sets the pace by hand.
 3. Run `python digest.py --tipranks-check`. It connects, shows what TipRanks sends for AAPL, and uses 1 call.
