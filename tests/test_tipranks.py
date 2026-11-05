@@ -49,6 +49,18 @@ class Reading(unittest.TestCase):
         self.assertEqual(tr.ticker_argument({"inputSchema": {"properties": {"symbols": {"type": "array"}}}}), ("symbols", True))
 
 
+class Keys(unittest.TestCase):
+    def test_a_key_pasted_wrong_is_named_not_sent(self):
+        good = "tr_live_" + "a1B2" * 8
+        self.assertIsNone(tr.key_problem(good))
+        self.assertIn("Ctrl+V", tr.key_problem("\x16"))                 # what Ctrl+V types into a Windows prompt
+        self.assertIn("starts with tr_live_", tr.key_problem("abc" + good))
+        self.assertIn("40 characters", tr.key_problem(good[:-1]))
+        self.assertIn("space", tr.key_problem(good[:-2] + " x"))
+        with self.assertRaises(tr.TipRanksError):
+            tr.Client("\x16")
+
+
 class Daily(unittest.TestCase):
     def setUp(self):
         self.folder, self.logs = Path(tempfile.mkdtemp()), []

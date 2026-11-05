@@ -35,10 +35,27 @@ class TipRanksError(RuntimeError):
     pass
 
 
+def key_problem(key):
+    """What is wrong with an API key as typed, without showing it; None when it looks right (tr_live_..., 40 characters)."""
+    if any(ord(c) < 32 or ord(c) == 127 for c in key):
+        return ("the key holds an invisible control character, which happens when Ctrl+V is pressed in a Windows "
+                "prompt. Enter it again and paste with a right-click")
+    if not key.startswith("tr_live_"):
+        return f"a TipRanks key starts with tr_live_, but this one starts with {key[:3]!r}... Copy the whole key again"
+    if not re.fullmatch(r"tr_live_[A-Za-z0-9_\-]+", key):
+        return "the key holds a space or another character a key cannot have. Copy it again"
+    if len(key) != 40:
+        return f"a TipRanks key is 40 characters long, this one is {len(key)}. Copy the whole key again"
+    return None
+
+
 class Client:
     """The smallest MCP client over Streamable HTTP: JSON-RPC posts, answered as JSON or as server-sent events."""
 
     def __init__(self, key, url=URL, timeout=60):
+        problem = key_problem(key)
+        if problem:
+            raise TipRanksError(f"tipranks_api_key in digest_config.json looks wrong: {problem}.")
         self.key, self.url, self.timeout, self.session, self.ids = key, url, timeout, None, 0
 
     def _post(self, method, params=None, notify=False):
@@ -60,6 +77,8 @@ class Client:
                 kind = r.headers.get("Content-Type", "")
         except urllib.error.HTTPError as err:
             detail = err.read().decode("utf-8", "replace")[:300]
+            if err.code == 400:
+                raise TipRanksError(f"TipRanks could not read the request (HTTP 400): {detail}") from None
             if err.code in (401, 403):
                 raise TipRanksError(f"TipRanks refused the API key (HTTP {err.code}). Check tipranks_api_key. {detail}") from None
             if err.code == 429:
