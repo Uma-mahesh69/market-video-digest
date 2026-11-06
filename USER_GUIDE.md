@@ -80,6 +80,30 @@ If step 5 says **FAILED**, the installer stops before scheduling anything. Read 
 `install.bat` again and re-enter the setting that failed. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) explains each
 message.
 
+### Installing on a Mac
+
+The Mac installer does the same steps as the Windows one, in Terminal.
+
+1. Install **Python 3.9 or newer** if you don't have it: https://www.python.org/downloads/macos/ (the "macOS 64-bit
+   universal" installer). The installer checks this and opens that page if Python is missing.
+2. Double-click `market-digest-setup.zip` in Finder to unzip it.
+3. Open **Terminal** (press Cmd+Space, type `Terminal`, press Return).
+4. Type `bash ` (with a space after it), then drag **`install-mac.command`** from the unzipped folder into the
+   Terminal window, and press Return. Starting it this way avoids macOS's "unidentified developer" warning.
+5. Answer the same questions as on Windows. **Cmd+V** pastes; the key and password stay hidden. For the JSON folder
+   you can drag a folder from Finder into the window; the installer shows where your Google Drive is.
+
+What is different on a Mac:
+
+- The program goes to `~/market-digest` (your home folder, `market-digest`).
+- The daily run is a **launchd** job (`~/Library/LaunchAgents/com.nugenix.market-digest.plist`) instead of a Task
+  Scheduler task. It runs while you are logged in. If the Mac is asleep at that time, it runs when it wakes; if
+  it is shut down, the next run covers everything since the last digest. A failed run is retried every 30 minutes,
+  3 times, like on Windows.
+- **Digest chat** on the desktop is `Digest chat.command`. Double-click it; a Terminal window opens and must stay
+  open while you use the chat.
+- If macOS asks whether Terminal may access your Desktop or Google Drive, click **Allow**.
+
 ## 4. Your settings
 
 The installer saves your answers in `C:\Users\<you>\market-digest\digest_config.json`. **This file contains your
@@ -96,6 +120,8 @@ If you prefer to edit the file in Notepad, these are the settings:
 | `email_to` | Who receives the digest. | |
 | `smtp_user`, `smtp_password` | The Gmail account that sends it, and its app password. | |
 | `smtp_host`, `smtp_port` | The mail server. Leave as is for Gmail. | smtp.gmail.com, 465 |
+| `watchlist_csv` | The CSV link of your watchlist Google Sheet (see section 5a), or the path of a CSV file. Empty = no watchlist. | |
+| `json_dir` | Folder for the daily JSON file (`video-digest_YYYY-MM-DD.json`) that feeds the Econova hub. Use a Google Drive for desktop folder to share it. | `digest_json` in the program folder |
 
 After editing, run `python digest.py --check` (see section 7) to test your changes.
 
@@ -114,6 +140,110 @@ After editing, run `python digest.py --check` (see section 7) to test your chang
 **How to read it safely:** captions are made automatically and can mishear names and numbers. A figure Gemini was
 unsure of is marked **(check)**. Click the time next to any point to hear it said in the video. The digest
 reports each channel's opinion. It is not investment advice.
+
+## 5a. Your watchlist (prices from Google Finance)
+
+Optional. With a watchlist, every digest starts with a **Your watchlist** section: today's price and the week's move
+for each of your stocks, what the analysts said about them, and up to five short notes such as:
+
+- *Experts stayed bullish on GOOGL (2 of 2 calls this week), but the stock fell 12.7% this week.*
+- *Experts turned cautious on NFLX: 0 of 2 calls bullish this week, against 3 of 3 the week before.*
+- *Experts split on NVDA today: 1 bullish, 1 bearish.* (with a link to each side's moment in the video)
+- *NVDA: 'Nvidia earnings' (2026-11-19) was flagged in video #1.*
+- *Sam Stovall's year-end S&P 500 target of 8,050 is +4.5% from today's level (7,706).*
+- *No new expert views today on 4 of your 6 stocks: ...*
+
+Each note ends with **Look at next** (watch the clip, check the news, note a date). It never says buy or sell: the
+digest reports what analysts said and what prices did.
+
+Google Finance cannot export a watchlist, so the list lives in a Google Sheet whose `GOOGLEFINANCE()` formulas fetch
+the prices. To set it up once:
+
+1. Open https://sheets.new (a new Google Sheet), then **File > Import > Upload** and choose `watchlist_template.csv`
+   from the program folder. Choose **Replace current sheet** and **Convert text to numbers, dates, and formulas**.
+2. Change the tickers in column **B** to your own stocks (keep column A as `watch`). Add or delete rows as you like.
+   Keep the two last rows (`sp500` and `us10y`): they give the S&P 500 level and the 10-year Treasury yield.
+   Non-US stocks need Google Finance's form, for example `KRX:000660` for SK Hynix.
+3. **File > Settings > Calculation > Recalculation: On change and every minute**, so the prices stay fresh.
+4. **File > Share > Publish to web**: choose the sheet, **Comma-separated values (.csv)**, tick **Automatically
+   republish when changes are made**, click **Publish**, and copy the link.
+5. Run the installer again (answer `y` to "Enter them again?") and paste the link at the watchlist question, or put
+   it in `digest_config.json` as `watchlist_csv`. Then run `python digest.py --check`: it should say
+   `Watchlist sheet: 10 stocks, 10 with prices`.
+
+**Privacy:** a published link can be opened by anyone who has it. The sheet holds only tickers and public prices,
+not how many shares you own. Do not add quantities or values to it.
+
+**Google's own "Investment Tracker" template works too** (its Watchlist tab: Symbol, Current Price, % Change). The
+digest never reads its "# Shares" or "Current Value" columns, but publishing that tab would show them to anyone with
+the link, so the sheet above is the safer choice. It also gives the week's change, which some notes need.
+Share classes are matched: a watchlist with `GOOG` picks up the analysts' calls on Alphabet (`GOOGL`).
+
+Each digest also saves `market-data_YYYY-MM-DD.json` next to the digest's JSON file, for the Econova hub.
+
+### Feeding the Econova dashboard
+
+The dashboard reads the two daily files from the Google Drive folder **Econova / Video Digests / json**.
+
+1. Install **Google Drive for desktop** (https://www.google.com/drive/download/) and sign in. Your Drive then shows up
+   as a drive letter on Windows (often `G:\My Drive`) or under `~/Library/CloudStorage/GoogleDrive-<you>/My Drive` on a Mac.
+2. Run the installer again and give that folder as the JSON folder, for example
+   `G:\My Drive\Econova\Video Digests\json`. `python digest.py --check` should say the JSON folder can be written.
+3. To add days from before the JSON export existed, from their saved digests:
+   `python email_backfill.py digests\digest-2026-10-*.html --out "G:\My Drive\Econova\Video Digests\json"`.
+   Several digests on one day become one file, and a day that already has a file is left as it is. Saved digests
+   sit in the folder the run started from: `market-digest\digests` for scheduled runs, and the project folder's
+   `digests` for runs you started there. Give both patterns in one command, or a day can come out empty.
+
+### Scoring the calls, and your holdings, on the dashboard
+
+The dashboard also checks the calls against prices and shows your own holdings. It needs two more Google Sheets,
+read through Google Drive (nothing is published):
+
+1. **Market Digest Prices**: Google Finance prices and 120 days of closes for every ticker in `tickers.json`. Make
+   it with `python price_sheet.py --extra GOOG > price_sheet.csv` (add any holding that `tickers.json` lacks after
+   `--extra`), then in Google Sheets **File > Import > Upload**, **Replace spreadsheet**, with **Convert text to
+   numbers, dates, and formulas**. When `tickers.json` gains tickers, import a fresh CSV over the same sheet.
+2. **Google Finance Investment Tracker**: Google's template (Sheets > Template gallery > Investment tracker). Put
+   your stocks in its Watchlist tab and the number you hold in **# Shares**. The dashboard weights your holdings by
+   shares times price and shows the weights, never the counts.
+
+Each sheet's file id goes into the dashboard's `quotes`/`closes` and `holdings` sources
+(`docs/econova_dashboard/sources.json`). The dashboard then shows:
+
+- **What matters today**: a few sentences, such as *Your holding GOOG: 15 bullish and 2 bearish calls in 14 days, but
+  it moved -19.1% in a month; earlier calls on it were right 2 of 10 times.*
+- **Your holdings**: weight, day and 1-month move, distance from the 52-week high, calls in the last 14 days and the
+  latest call on each.
+- **Today's calls against the prices**: each stock called today with its 1-month move, 52-week-high distance, P/E
+  and the record of earlier calls on it.
+- **Did the calls work?**: each call scored from the close on its video's day to the latest close, against the
+  S&P 500; the hit rate and average edge of bullish and bearish calls, each analyst's record, and the best and worst
+  calls.
+
+**Coverage check:** to see how often your stocks came up in the videos lately, run
+`python market_data.py --coverage` (last 14 days) or `python market_data.py --coverage --days 28`. It lists the calls
+per stock (bullish, bearish, neutral, mixed) and says whether most of your stocks come up every week.
+
+### Wall Street's view from TipRanks (optional)
+
+TipRanks collects professional analysts' ratings and price targets. With a TipRanks API key, the digest looks up all
+your stocks in **one** call (the watchlist and the stocks called most that day) and saves `tipranks_YYYY-MM-DD.json`
+next to the other daily files. The dashboard then shows Wall Street's consensus (all analysts, and the top-rated ones
+alone), price-target upside, Smart Score and the next earnings date next to the YouTube calls, and flags stocks
+where the two disagree or that report earnings within 14 days.
+
+TipRanks counts every tool call against a monthly quota, and keeps two separate pools: an **API key** gets 50 calls
+a month on the free tier, and the **claude.ai connector** gets 10 on a free or basic TipRanks plan. Before each
+look-up the digest asks TipRanks how many calls are left (that question is free). With 40 or more a month it looks
+up once a weekday (about 22 calls); with fewer, once a week. It always leaves 3 calls spare. A skipped look-up is
+logged; the digest itself is never held up.
+
+1. Signed in at https://mcp.tipranks.com/, open **Keys** and create a key. It starts with `tr_live_` and is shown only
+   once, so copy it straight into step 2. (The claude.ai connector is separate: it is for asking Claude about stocks.)
+2. Run the installer again and paste the key at the TipRanks question, or put it in `digest_config.json` as
+   `tipranks_api_key`. `tipranks_every_days` sets the pace by hand.
+3. Run `python digest.py --tipranks-check`. It connects, shows what TipRanks sends for AAPL, and uses 1 call.
 
 ## 6. Everyday use: the chat page
 
@@ -149,14 +279,19 @@ cd $env:USERPROFILE\market-digest
 
 | Command | What it does |
 |---|---|
-| `python digest.py --check` | Tests every channel, the Gemini key and the Gmail login. Sends nothing. |
+| `python digest.py --check` | Tests every channel, the Gemini key, the JSON folder and the Gmail login. Sends nothing. |
 | `python digest.py --open` | Makes and emails a digest now, then opens it in the browser. |
 | `python digest.py --hours 48 --open` | The same, covering the last 48 hours. |
 | `python digest.py --hours 72 --dry-run --open` | A test digest of the last 3 days: **not emailed**, and videos are not marked as done. |
 | `python digest.py --video https://www.youtube.com/watch?v=... --dry-run --open` | A digest of one video. |
+| `python digest.py --rebuild 2026-10-22 --dry-run` | The Econova JSON file for an earlier day's digest, written to `digests\` to look at. Without `--dry-run` it goes to the JSON folder, unless that day already has a file. |
 
 To run the scheduled task exactly as Windows would: open **Task Scheduler**, click **Task Scheduler Library**,
 right-click **Market video digest**, choose **Run**. Its log is in `digest.log` in the program folder.
+
+**On a Mac**, open Terminal, run `cd ~/market-digest`, and use the same commands with `python3` instead of `python`,
+for example `python3 digest.py --check`. To start the scheduled run now:
+`launchctl kickstart gui/$(id -u)/com.nugenix.market-digest`. Its log is `~/market-digest/digest.log`.
 
 ## 8. Changing, updating and removing it
 
@@ -170,6 +305,10 @@ right-click **Market video digest**, choose **Run**. Its log is in `digest.log` 
   2. Delete the folder `C:\Users\<you>\market-digest`.
   3. Delete the **Digest chat** shortcut from the desktop.
   4. Optional: delete `C:\Users\<you>\ytmd` (the saved transcripts).
+- **Remove it from a Mac:** in Terminal run
+  `launchctl bootout gui/$(id -u)/com.nugenix.market-digest; rm ~/Library/LaunchAgents/com.nugenix.market-digest.plist`,
+  then delete the folders `~/market-digest` and (optional) `~/ytmd`, and `Digest chat.command` from the desktop.
+- **Update on a Mac:** unzip the new version and run its `install-mac.command` the same way as the first time.
 
 ## 9. If something goes wrong
 

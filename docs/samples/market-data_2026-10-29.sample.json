@@ -1,0 +1,239 @@
+{
+  "schema_version": "1.0",
+  "date": "2026-10-29",
+  "generated_at": "2026-10-29T07:30:00+00:00",
+  "source": "Google Finance, through GOOGLEFINANCE() in a Google Sheet. Prices can be delayed by up to 20 minutes and are for information only, not for trading.",
+  "benchmarks": {
+    "sp500": {
+      "value": 7706.17,
+      "change_pct_day": -0.49,
+      "change_pct_week": 0.56
+    },
+    "us10y": {
+      "value": 4.972,
+      "unit": "%",
+      "change_pct_day": -1.45
+    }
+  },
+  "watchlist": [
+    {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corp",
+      "currency": "USD",
+      "price": 213.25,
+      "change_pct_day": -0.99,
+      "change_pct_week": 0.49,
+      "high_52w": 243.37,
+      "low_52w": 164.27,
+      "pe": 26.99,
+      "market_cap": 5137394749450,
+      "calls_today": {
+        "bullish": 1,
+        "bearish": 1,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "calls_7d": {
+        "bullish": 1,
+        "bearish": 1,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "mood_7d": 0.5
+    },
+    {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc Class A",
+      "currency": "USD",
+      "price": 283.18,
+      "change_pct_day": -12.84,
+      "change_pct_week": -12.66,
+      "high_52w": 408.61,
+      "low_52w": 270.7,
+      "pe": 14.77,
+      "market_cap": 3448837803598,
+      "calls_today": {
+        "bullish": 0,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "calls_7d": {
+        "bullish": 2,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "mood_7d": 1.0
+    },
+    {
+      "ticker": "MU",
+      "name": "Micron Technology Inc",
+      "currency": "USD",
+      "price": 1947.63,
+      "change_pct_day": -3.62,
+      "change_pct_week": 10.64,
+      "high_52w": 1255,
+      "low_52w": 192.59,
+      "pe": 12.79,
+      "market_cap": 1072169435384,
+      "calls_today": {
+        "bullish": 0,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "calls_7d": {
+        "bullish": 0,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "mood_7d": null
+    },
+    {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "currency": "USD",
+      "price": 349.32,
+      "change_pct_day": 1.6,
+      "change_pct_week": 0.32,
+      "high_52w": 351.73,
+      "low_52w": 243.42,
+      "pe": 40.02,
+      "market_cap": 5098039064490,
+      "calls_today": {
+        "bullish": 1,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "calls_7d": {
+        "bullish": 1,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "mood_7d": 1.0
+    },
+    {
+      "ticker": "NFLX",
+      "name": "Netflix Inc",
+      "currency": "USD",
+      "price": 61.82,
+      "change_pct_day": -0.27,
+      "change_pct_week": -7.8,
+      "high_52w": 116.73,
+      "low_52w": 61.4,
+      "pe": 17.87,
+      "market_cap": 253976194984,
+      "calls_today": {
+        "bullish": 0,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "calls_7d": {
+        "bullish": 0,
+        "bearish": 2,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "mood_7d": 0.0
+    },
+    {
+      "ticker": "CRWV",
+      "name": "CoreWeave Inc",
+      "currency": "USD",
+      "price": null,
+      "change_pct_day": null,
+      "change_pct_week": null,
+      "high_52w": null,
+      "low_52w": null,
+      "pe": null,
+      "market_cap": null,
+      "calls_today": {
+        "bullish": 0,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "calls_7d": {
+        "bullish": 0,
+        "bearish": 0,
+        "neutral": 0,
+        "mixed": 0
+      },
+      "mood_7d": null
+    }
+  ],
+  "insights": [
+    {
+      "type": "no_new_views",
+      "tickers": [
+        "GOOGL",
+        "MU",
+        "NFLX",
+        "CRWV"
+      ],
+      "text": "No new expert views today on 4 of your 6 stocks: GOOGL, MU, NFLX, CRWV.",
+      "look_at_next": "Nothing to look at for these today.",
+      "video": null,
+      "timestamp": null,
+      "url": null
+    },
+    {
+      "type": "experts_vs_price",
+      "tickers": [
+        "GOOGL"
+      ],
+      "text": "Experts stayed bullish on GOOGL (2 of 2 calls this week), but the stock fell 12.7% this week.",
+      "look_at_next": "Check what changed since last week: news, guidance, earnings.",
+      "video": null,
+      "timestamp": null,
+      "url": null
+    },
+    {
+      "type": "sentiment_shift",
+      "tickers": [
+        "NFLX"
+      ],
+      "text": "Experts turned cautious on NFLX: 0 of 2 calls bullish this week, against 3 of 3 the week before.",
+      "look_at_next": "Watch this week's clips to see what changed their minds.",
+      "video": null,
+      "timestamp": null,
+      "url": null
+    },
+    {
+      "type": "split",
+      "tickers": [
+        "NVDA"
+      ],
+      "text": "Experts split on NVDA today: 1 bullish, 1 bearish.",
+      "look_at_next": "Hear both sides: video #2 [2:00] and video #2 [5:00].",
+      "video": 2,
+      "timestamp": "2:00",
+      "url": "https://www.youtube.com/watch?v=vid00000002&t=120s"
+    },
+    {
+      "type": "catalyst",
+      "tickers": [
+        "NVDA"
+      ],
+      "text": "NVDA: 'Nvidia earnings' (2026-11-19) was flagged in video #1.",
+      "look_at_next": "Note the date and look at the position before it.",
+      "video": 1,
+      "timestamp": null,
+      "url": "https://www.youtube.com/watch?v=vid00000001"
+    },
+    {
+      "type": "target_upside",
+      "tickers": [],
+      "text": "Sam Stovall's year-end S&P 500 target of 8,050 is +4.5% from today's level (7,706).",
+      "look_at_next": "Compare it with the other targets in today's videos.",
+      "video": 1,
+      "timestamp": null,
+      "url": "https://www.youtube.com/watch?v=vid00000001"
+    }
+  ]
+}

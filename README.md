@@ -11,7 +11,15 @@ Every morning it:
    levels quoted, predictions, risks and upcoming events,
 4. emails you one digest, where every point links to the exact moment in the video where it was said.
 
-It runs on your own Windows PC, uses only free services, and keeps your keys and data on your computer.
+It runs on your own Windows PC or Mac, uses only free services, and keeps your keys and data on your computer.
+
+Optional extras, each set up once (USER_GUIDE.md, section 5a):
+
+- **Prices**: a Google Sheet of Google Finance prices puts your watchlist's moves next to the analysts' calls.
+- **The Econova dashboard**: each run saves the day's notes as JSON in a Google Drive folder; a Claude dashboard reads
+  them with live prices, scores whether past calls beat the S&P 500, and shows your own holdings.
+- **Wall Street's view**: with a TipRanks API key, one look-up a weekday adds the professional consensus, price
+  targets and earnings dates, inside TipRanks' free 50 calls a month.
 
 ## Quick start (Windows)
 
@@ -21,6 +29,17 @@ address with an app password** (Google Account > Security > 2-Step Verification 
 1. Unzip `market-digest-setup.zip` (right-click > Extract All).
 2. Double-click **`install.bat`**. If Windows says "Windows protected your PC", click **More info > Run anyway**.
 3. Answer the questions. **Paste with a right-click**; Ctrl+V does not work in the hidden key prompts.
+4. Say **yes** to the test digest at the end. It opens in your browser.
+
+## Quick start (Mac)
+
+You need the same Gemini key and Gmail app password, and **Python 3.9 or newer**
+(https://www.python.org/downloads/macos/; the installer tells you if it is missing).
+
+1. Double-click `market-digest-setup.zip` in Finder to unzip it.
+2. Open **Terminal** (Cmd+Space, type Terminal, Return). Type `bash ` (with a space), drag **`install-mac.command`**
+   from the unzipped folder into the Terminal window, and press Return.
+3. Answer the questions. Cmd+V pastes; the key and password stay hidden as you paste them.
 4. Say **yes** to the test digest at the end. It opens in your browser.
 
 That's it. The digest arrives by email every day at the time you chose, and **Digest chat** is on your desktop.
@@ -33,14 +52,20 @@ That's it. The digest arrives by email every day at the time you chose, and **Di
 | Ask about the videos | Double-click **Digest chat** on the desktop. Keep its black window open while you use it. |
 | Get a digest right now | In PowerShell: `cd $env:USERPROFILE\market-digest` then `python digest.py --open` |
 | Check everything works | `python digest.py --check` (in the same folder) |
+| Feed the Econova hub | Each run also saves `video-digest_YYYY-MM-DD.json` in `json_dir` (set it to a Google Drive for desktop folder to share it). See [ARCHITECTURE.md](docs/ARCHITECTURE.md) §3. |
+| See prices for my stocks next to the analysts' calls | Set up the watchlist sheet: USER_GUIDE.md, section 5a. |
+| Add past days to the JSON folder | `python email_backfill.py digests\digest-*.html` (USER_GUIDE.md, 5a) |
+| See the dashboard | Open it in Claude (the link is in the Drive folder's START HERE doc). Every number has an (i) that explains it. |
+| Add Wall Street's view | Get a key at https://mcp.tipranks.com/ (Keys), add it as `tipranks_api_key`, then `python digest.py --tipranks-check` |
+| Update to the newest version | In the project folder: `git pull`, then `install.bat -Unattended` (keeps your settings) |
 | Change channels, email or time | Run `install.bat` again and answer `y` to "Enter them again?" |
 
 ## Documents
 
 - **[USER_GUIDE.md](USER_GUIDE.md)**: installation, settings, daily use, updating and removing it.
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: what to do when something goes wrong.
-- **ARCHITECTURE.md**: how it works inside, for developers. *(In the project's source folder, not in the setup zip.)*
-- **PRESENTATION.md**: a 6-slide overview of the project. *(In the project's source folder, not in the setup zip.)*
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: how it works inside, for developers. *(In `docs/`, not in the setup zip.)*
+- **[PRESENTATION.md](docs/PRESENTATION.md)**: a 6-slide overview of the project. *(In `docs/`, not in the setup zip.)*
 
 ## Good to know
 

@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0",
+  "digest_date": "2026-10-29",
+  "generated_at": "2026-10-29T07:30:00+00:00",
+  "channels": [
+    "TheStreet"
+  ],
+  "video_count": 2,
+  "summary": "SAMPLE: made-up analyst calls for wiring up the dashboard; prices are Google Finance's of 29 Oct 2026.",
+  "videos": [
+    {
+      "number": 1,
+      "channel": "TheStreet",
+      "published_date": "2026-10-29",
+      "duration": "23:24",
+      "title": "Video 1",
+      "url": "https://www.youtube.com/watch?v=vid00000001",
+      "speakers": [
+        {
+          "name": "Sam Stovall",
+          "role": "CFRA"
+        }
+      ],
+      "summary": "s",
+      "key_points": [],
+      "sectors": [],
+      "expectations": [],
+      "risks": [],
+      "sp500_targets": [
+        {
+          "value": 8050,
+          "horizon": "year-end"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "channel": "TheStreet",
+      "published_date": "2026-10-29",
+      "duration": "23:24",
+      "title": "Video 2",
+      "url": "https://www.youtube.com/watch?v=vid00000002",
+      "speakers": [],
+      "summary": "s",
+      "key_points": [],
+      "sectors": [],
+      "expectations": [],
+      "risks": [],
+      "sp500_targets": []
+    }
+  ],
+  "mentions": [
+    {
+      "ticker": "AAPL",
+      "name": "Apple",
+      "view": "bullish",
+      "reason": "because",
+      "video": 1,
+      "analyst": "Sam Stovall",
+      "timestamp": "0:53"
+    },
+    {
+      "ticker": "NVDA",
+      "name": "Nvidia",
+      "view": "bullish",
+      "reason": "because",
+      "video": 2,
+      "analyst": "James Demmert",
+      "timestamp": "2:00"
+    },
+    {
+      "ticker": "NVDA",
+      "name": "NVDA",
+      "view": "bearish",
+      "reason": "because",
+      "video": 2,
+      "analyst": null,
+      "timestamp": "5:00"
+    }
+  ],
+  "themes": [
+    {
+      "name": "AI infrastructure",
+      "summary": "Sample theme.",
+      "videos": [
+        1,
+        2
+      ]
+    }
+  ],
+  "debates": [
+    {
+      "topic": "Nvidia after the run-up",
+      "sides": [
+        {
+          "analysts": [
+            "James Demmert"
+          ],
+          "position": "Still a buy-the-dip name",
+          "videos": [
+            2
+          ]
+        },
+        {
+          "analysts": [
+            "Sample analyst"
+          ],
+          "position": "Too far, too fast",
+          "videos": [
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "levels": [
+    {
+      "metric": "10-year yield concern threshold",
+      "value": 5.45,
+      "unit": "%",
+      "display": "5.45%",
+      "note": "where stocks get seriously concerned",
+      "video": 1,
+      "timestamp": "19:44"
+    }
+  ],
+  "upcoming": [
+    {
+      "event": "Nvidia earnings",
+      "date": "2026-11-19",
+      "date_text": "November 19",
+      "videos": [
+        1
+      ]
+    }
+  ]
+}

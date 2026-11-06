@@ -42,7 +42,58 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 
 ---
 
+### Mac: "install-mac.command cannot be opened because it is from an unidentified developer"
+
+macOS shows this when the file is double-clicked. Start it from Terminal instead: type `bash ` (with a space),
+drag the file into the Terminal window, press Return. The same works if Finder says you do not have permission to
+open it (a zip made on Windows does not keep the "can be run" flag).
+
+### Mac: "Python cannot check web certificates" or `CERTIFICATE_VERIFY_FAILED`
+
+Python from python.org needs its certificates installed once. The installer tries this itself. If it still fails:
+open **Applications > Python 3.x**, double-click **Install Certificates.command**, then run the installer again.
+
+### Mac: the JSON file is not appearing in Google Drive
+
+Run `cd ~/market-digest && python3 digest.py --check` and look at the `JSON folder:` line. Google Drive for desktop
+must be running and signed in, and its folder is under `~/Library/CloudStorage/GoogleDrive-<your email>/My Drive`.
+If macOS asked whether Terminal may access Google Drive, it needs **Allow** (System Settings > Privacy & Security >
+Files and Folders). Not yet tested on a real Mac: whether the scheduled (launchd) run is allowed to write there
+without asking. Check `digest.log` after the first scheduled run.
+
 ## No digest email
+
+### TipRanks: "refused the API key", "skipped", or an empty Wall Street table
+- **"refused the API key (HTTP 401)"**: the key is mistyped or was revoked. A key is 40 characters and starts with
+  `tr_live_`; add it again with a right-click paste, or make a new one at https://mcp.tipranks.com/ (Keys).
+- **"TipRanks: skipped (...)"** in the log is normal: weekends, a look-up already made today, or the month's calls
+  nearly used (3 are always kept spare). The quota resets on the 1st (UTC). `--tipranks-check` shows TipRanks' count.
+- **Empty "Wall Street's view" on the dashboard**: no `tipranks_*.json` in the json folder yet. Check that
+  `tipranks_api_key` is set and that the log has a "Saved ...tipranks_" line after a weekday run.
+
+### The dashboard says "Live data isn't available in this view" or "Failed to load"
+- **"Live data isn't available in this view"**: the dashboard was opened from another Claude account. Claude runs
+  connectors only for the account that owns the dashboard, so open it from that account, or have the other person
+  Duplicate it into their own account and point it at Drive files they can read.
+- **"Failed to load"**: that account's Google Drive connector cannot read the json folder or one of the sheets
+  (Market Digest Watchlist, Market Digest Prices, Investment Tracker). Open the Sources panel to see which, and check
+  that the connector is signed in with the Google account that owns them.
+- A file or sheet moved to another folder keeps working: the dashboard finds them by their Drive ids. Renaming or
+  moving the json folder itself breaks the PC's daily writes, not the dashboard.
+
+### A backfilled day has `video_count: 0` though its email had videos (Verified, fixed 4 Nov 2026)
+- **Cause:** `email_backfill.py` was given only `market-digest\digests`, but that day's digests were made by runs
+  started in the project folder, so they were saved in its own `digests` folder. The backfill found only an empty
+  run's page and wrote an empty day (Oct 22 and Oct 26).
+- **Fix:** delete the empty file from the json folder, then run the backfill again with both folders' patterns.
+  Oct 22 and Oct 26 were rebuilt from their digest emails.
+
+### A failed run was not tried again on Windows (Verified, fixed 3 Nov 2026)
+- **Cause:** the log said "tries again in 30 minutes", but Task Scheduler's "restart on failure" ignores the
+  program's exit code, so nothing ran until the next day. On 31 Oct, Gmail refused the email (451) after that day's
+  JSON was saved; the queued videos then went into the 1 Nov file as well.
+- **Fix:** `run_digest.bat` now retries itself every 30 minutes, 3 times, and the JSON is saved only after the email
+  goes out. Run `install.bat -Unattended` once to get the new launcher (settings are kept).
 
 ### Nothing arrived, and `digest.log` says `getaddrinfo failed` (Verified)
 - **Cause:** the PC had just been switched on. Windows started the catch-up run before Wi-Fi was connected, so the
@@ -89,10 +140,12 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 - **Cause:** the video has no captions. Common for Shorts.
 - **Fix:** none needed. Such videos are listed once and not retried.
 
-### `FAILED to read the uploads feed`
-- **Cause:** YouTube's public feed was unreachable for a moment, or the channel id is wrong.
-- **Fix:** open the link printed under the error in a browser. If it shows a list of videos, try again later. If it
-  shows an error, check the channel link.
+### `FAILED to list its uploads` (was `FAILED to read the uploads feed`)
+- **Cause:** from 3 Nov 2026 YouTube's public uploads feed answered 404 (also in a browser). The digest now falls
+  back to yt-dlp, which reads the channel's Videos tab; the log says "listing the channel's videos with yt-dlp
+  instead". This error appears only when both fail.
+- **Fix:** open the link printed under the error in a browser. If it shows the videos, update yt-dlp
+  (`yt-dlp -U`) and try again. If it shows an error, check the channel link.
 
 ---
 

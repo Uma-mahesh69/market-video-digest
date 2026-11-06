@@ -34,14 +34,19 @@ a plain-language summary.
 
 | Component | File | What it does |
 |---|---|---|
-| **Digest pipeline** | `digest.py` | The daily job: find new videos, get captions, summarise with Gemini, render, email. Also `--check`. |
+| **Digest pipeline** | `digest.py` | The daily job: find new videos, get captions, summarise with Gemini, render, email. Also `--check` and `--rebuild`. |
 | **Chat server** | `chat.py` | A small web server on `127.0.0.1:8765` (this PC only). Builds context from saved notes and captions, calls Gemini, saves chats. |
 | **Chat page** | `chat.html` | The browser interface: chat list, scope selectors, answers with clickable citations. |
 | **Caption reader** | `ytmd` (external, MIT licence, v0.7.0) | Downloads captions through yt-dlp and stores them in a SQLite full-text index at `%USERPROFILE%\ytmd`. Provides `add`, `read`, `search`, `info`, `doctor`. |
 | **yt-dlp** | `bin\yt-dlp.exe` or already installed | Fetches caption files from YouTube for ytmd. |
-| **Installer** | `install.bat` + `install.ps1` | One-step Windows setup: Python, yt-dlp, settings, tests, scheduled task, desktop shortcut. |
+| **Installer** | `install.bat` + `install.ps1` (Windows), `install-mac.command` (Mac) | One-step setup: Python, yt-dlp, settings, tests, daily schedule (Task Scheduler on Windows, a launchd agent on a Mac), desktop shortcut. |
 | **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
-| **Launchers** | `run_digest.bat`, `run_chat.bat` | Written by the installer with the PC's own Python path, and `bin\` on PATH. |
+| **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. Both retry a failed run every 30 minutes, 3 times (Task Scheduler's own "restart on failure" ignores a program's exit code, so it cannot do this). |
+| **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
+| **Watchlist** | `market_data.py`, `market_schema.json`, `watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
+| **Backfill** | `email_backfill.py` | Turns digests already sent (saved HTML or the email) back into the day's JSON file, through the same export. |
+| **Dashboard page** | `docs/econova_dashboard/` | The Analyst Video Digest page that reads the daily files and the watchlist sheet live from Google Drive. |
+| **Tests** | `tests/test_digest_export.py`, `tests/test_digest_run.py` | `python -m unittest` in the project folder runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |
 
 ## 3. The daily run, step by step (`digest.py`, `main()`)
@@ -73,9 +78,55 @@ a plain-language summary.
    Video numbers are validated by code.
 6. **Render** (`render`): HTML built in code from the notes. The stock table is grouped by ticker in code, not
    written by the model. Unclear figures are marked "(check)". All text is HTML-escaped.
-7. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
-8. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
-   out. If sending fails, nothing is marked, and the run exits with code 1 so Windows retries in 30 minutes.
+7. **JSON copy** (`digest_export.py`): the same content saved as `video-digest_YYYY-MM-DD.json` in `json_dir`
+   (default `digest_json\`), for the Econova Dashboard Hub. The shape is fixed by `digest_schema.json` (schema 1.0):
+   videos, one `mentions` row per stock call, themes, debates with sides, levels and upcoming events, each with its
+   video number and timestamp. Stock names are merged into tickers with `tickers.json` (also trying the name without
+   "Inc.", "Corporation" and the like); a name with no entry gets `ticker: null` and a line in `digest.log`.
+   - **One file per day, covering the whole day.** A run only picks up videos not yet sent, so a second run on the
+     same day (a manual `--open` after the morning run) adds its videos to the day's file from the saved notes and
+     redoes the overview; it never replaces the morning's videos. The video ids in today's file are kept in
+     `digest_state.json` (`json_day`). A run with nothing new leaves the file as it is. A day with no videos at all
+     still gets a file with `video_count: 0`.
+   - **Written after the email goes out.** When sending fails, no file is written and the videos stay queued, so
+     they land in the file of the run that sends them (the retry, or the next day) and no video is counted on two days.
+   - **Checked before saving.** On any schema problem, or if the folder cannot be written, nothing is saved and the
+     reason is logged with the date. Earlier days' files are never touched. The schema accepts any 1.x file, because
+     1.x may add optional fields.
+   - **Tests and past days.** `--dry-run` and `--video` write to `digests\`, so a test cannot replace the real file.
+     `--rebuild YYYY-MM-DD` writes the file for an earlier day's digest (the videos recorded as sent that day),
+     summarising again any video whose notes were saved before the JSON fields existed. It refuses to overwrite an
+     existing file; with `--dry-run` it writes to `digests\`.
+   - Scoring (mood, consensus, upside) is done by the hub, not here.
+   - **Watchlist and prices** (`market_data.py`, when `watchlist_csv` is set). The watchlist is a Google Sheet whose
+     `GOOGLEFINANCE()` formulas give price, day and week change, 52-week range, P/E and market cap, plus two
+     benchmark rows: the S&P 500 (`INDEXSP:.INX`) and the 10-year yield (`INDEXCBOE:TNX`, quoted as the yield
+     times 10). The sheet is read as CSV from its "Publish to web" link (no API key, standard library only).
+     `market_brief` joins it with the day's stock calls and with the last 14 days of calls in `digest_cache`, and
+     applies fixed rules (no model call): experts vs price (the week's calls lean one way, the price moved 5% or
+     more the other way), sentiment shift (this week's bullish share a third or more away from last week's), split
+     today, a catalyst in "Coming up", S&P 500 target vs today's level, 10-year concern level vs today's yield, new
+     calls today, and the stocks with no new views. Up to 5 cards, in that order of priority, go into the email's
+     "Your watchlist" section and into `market-data_YYYY-MM-DD.json` (schema `market_schema.json`), saved next to
+     the digest file and covering the same videos. Prices stay out of `video-digest_*.json`, which holds only what
+     analysts said. A sheet that cannot be read gives a note in the email and no market file; the digest goes on.
+8. **Send** (`send`): Gmail over SMTP SSL (port 465) with an app password; HTML plus a plain-text version.
+9. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
+   out. If sending fails, nothing is marked, and the run exits with code 1 so the launcher tries again in 30 minutes.
+
+## 3a. Google Finance prices and TipRanks
+
+- **Watchlist sheet** (`market_data.py`): a published Google Sheet of `GOOGLEFINANCE()` formulas, read as CSV each
+  run, for the email's "Your watchlist" section and `market-data_YYYY-MM-DD.json`.
+- **Market Digest Prices sheet** (`price_sheet.py` makes its CSV): price, day change, 52-week high, P/E and 120 days
+  of closes for every ticker in `tickers.json`. Only the dashboard reads it (through the Google Drive connector), to
+  score each call from its video's day to the latest close against the S&P 500.
+- **TipRanks** (`tipranks.py`): a small MCP client over Streamable HTTP with the API key as a Bearer header. Before
+  each look-up it asks `get_my_usage` (free); then one `get_assets_data` call covers the watchlist and the day's most
+  called stocks, saved as `tipranks_YYYY-MM-DD.json`. Pace: each weekday with 40+ calls a month, weekly with fewer,
+  always 3 calls spare. A failure is logged and never stops the digest.
+- **Investment Tracker**: the reader's own Google Finance template, read by the dashboard as .xlsx (the tab with
+  Symbol and # Shares) to weight holdings. It stays out of shared folders: it holds share counts.
 
 ## 4. Talking to Gemini (`call_gemini`)
 
@@ -114,6 +165,10 @@ a plain-language summary.
 | `digest_state.json` | Channel ids, done/skipped videos, `last_sent` | No |
 | `digest_cache\<id>.json` | Gemini's notes per video | No |
 | `digests\*.html` | Every digest as a web page | No |
+| `digest_json\video-digest_YYYY-MM-DD.json` (or `json_dir`) | The day's digest as JSON for the Econova hub | No |
+| `digest_json\market-data_YYYY-MM-DD.json` (or `json_dir`) | Watchlist prices, analyst calls per stock and the insight cards | No |
+| `watchlist_template.csv` | The watchlist sheet's formulas, to import into Google Sheets | No |
+| `tickers.json` | Company name to ticker lookup. Add a line when the log reports an unmatched name | No |
 | `chats.json` | Saved chats | Private |
 | `digest.log` | Output of scheduled runs | No |
 | `%USERPROFILE%\ytmd\` | Transcripts and the search index (ytmd library) | No |
@@ -148,4 +203,7 @@ a plain-language summary.
 - Captions are automatic: names and numbers can be misheard.
 - Shorts usually have no captions and are skipped.
 - `generateContent` is Google's older ("legacy") API style; Google now recommends the Interactions API. It still works.
+- Watchlist prices come from `GOOGLEFINANCE()`: delayed up to 20 minutes, US-centred, and Google says not for trading.
+  It has no earnings dates, so the "catalyst" card relies on what the videos say. Whether a published sheet keeps
+  recalculating when nobody has it open has not been checked over several days.
 - The YouTube terms-of-service and copyright check required by the original task has not been done yet.

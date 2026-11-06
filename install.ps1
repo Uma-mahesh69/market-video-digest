@@ -7,7 +7,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $src = $PSScriptRoot
-$files = "digest.py", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
+$files = "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "tipranks.py", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "STOPPED: $text" -ForegroundColor Red; exit 1 }
@@ -79,7 +79,24 @@ if (Get-Command yt-dlp -ErrorAction SilentlyContinue) {
 $env:PATH = (Join-Path $InstallDir "bin") + ";" + $env:PATH
 
 # The launchers use this computer's own Python, and the yt-dlp in bin\.
-$runDigest = "@echo off`r`nrem Runs the daily digest and keeps a log next to this file.`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" digest.py >> digest.log 2>&1`r`n"
+# Task Scheduler's "restart on failure" ignores a program's exit code, so the launcher retries a failed run itself,
+# as run_digest.sh does on a Mac.
+$runDigest = @(
+    "@echo off",
+    "rem Runs the daily digest and keeps a log next to this file. Started every day by Task Scheduler.",
+    "rem A failed run (no internet yet, YouTube or email down) is tried again every 30 minutes, 3 times.",
+    "cd /d `"%~dp0`"",
+    "set `"PATH=%~dp0bin;%PATH%`"",
+    "set attempt=1",
+    ":run",
+    "`"$py`" digest.py >> digest.log 2>&1 && exit /b 0",
+    "if %attempt% geq 4 exit /b 1",
+    "set /a attempt+=1",
+    "echo %time:~0,8% The run failed; trying again in 30 minutes.>> digest.log",
+    "`"$py`" -c `"import time; time.sleep(1800)`"",
+    "goto run",
+    ""
+) -join "`r`n"
 $runChat = "@echo off`r`nrem Starts the chat page. Keep this window open while you use it.`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" chat.py`r`npause`r`n"
 [IO.File]::WriteAllText((Join-Path $InstallDir "run_digest.bat"), $runDigest)
 [IO.File]::WriteAllText((Join-Path $InstallDir "run_chat.bat"), $runChat)
@@ -107,6 +124,13 @@ try {
             Write-Host "Gmail needs an app password: Google Account > Security > 2-Step Verification > App passwords."
             $pass = (AskSecret "Gmail app password (16 letters)" 16) -replace "\s", ""
         }
+        Write-Host "Each digest is also saved as a JSON file for the Econova hub. To share it, give a Google Drive for desktop folder,"
+        Write-Host "for example G:\My Drive\Econova\Video Digests\json"
+        $jsonDir = Ask "Folder for the daily JSON file (blank = digest_json in the program folder)" ""
+        Write-Host "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
+        $watchlist = Ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" ""
+        Write-Host "Optional: a TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus, price targets and earnings dates."
+        $tipranks = AskSecret "TipRanks API key (press Enter to skip)" 0
         $settings = [ordered]@{
             channels = @($channels -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
             gemini_api_key = $key
@@ -118,6 +142,9 @@ try {
             smtp_password = $pass
             smtp_host = "smtp.gmail.com"
             smtp_port = 465
+            json_dir = $jsonDir
+            watchlist_csv = $watchlist
+            tipranks_api_key = $tipranks
         }
         [IO.File]::WriteAllText($config, ($settings | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
         Write-Host "Saved."
@@ -134,8 +161,8 @@ try {
     $action = New-ScheduledTaskAction -Execute (Join-Path $InstallDir "run_digest.bat") -WorkingDirectory $InstallDir
     $trigger = New-ScheduledTaskTrigger -Daily -At $time
     # StartWhenAvailable: if the computer was off at that time, run as soon as it is back on.
-    # Restart: a failed run (no internet yet, email down) is tried again every 30 minutes, 3 times.
-    $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 30)
+    # Retries happen inside run_digest.bat (up to 3 waits of 30 minutes), so the time limit leaves room for them.
+    $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 3)
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $taskSettings -Description "Emails the market video digest. Installed by install.bat." -Force | Out-Null
     Write-Host "Scheduled '$TaskName' every day at $time (while you are logged in; a missed time runs when the computer is next on)."
 
