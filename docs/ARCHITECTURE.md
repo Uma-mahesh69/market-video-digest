@@ -114,6 +114,20 @@ a plain-language summary.
 9. **Remember** (`digest_state.json`): videos are marked done, and `last_sent` updated, **only after** the email goes
    out. If sending fails, nothing is marked, and the run exits with code 1 so the launcher tries again in 30 minutes.
 
+## 3a. Google Finance prices and TipRanks
+
+- **Watchlist sheet** (`market_data.py`): a published Google Sheet of `GOOGLEFINANCE()` formulas, read as CSV each
+  run, for the email's "Your watchlist" section and `market-data_YYYY-MM-DD.json`.
+- **Market Digest Prices sheet** (`price_sheet.py` makes its CSV): price, day change, 52-week high, P/E and 120 days
+  of closes for every ticker in `tickers.json`. Only the dashboard reads it (through the Google Drive connector), to
+  score each call from its video's day to the latest close against the S&P 500.
+- **TipRanks** (`tipranks.py`): a small MCP client over Streamable HTTP with the API key as a Bearer header. Before
+  each look-up it asks `get_my_usage` (free); then one `get_assets_data` call covers the watchlist and the day's most
+  called stocks, saved as `tipranks_YYYY-MM-DD.json`. Pace: each weekday with 40+ calls a month, weekly with fewer,
+  always 3 calls spare. A failure is logged and never stops the digest.
+- **Investment Tracker**: the reader's own Google Finance template, read by the dashboard as .xlsx (the tab with
+  Symbol and # Shares) to weight holdings. It stays out of shared folders: it holds share counts.
+
 ## 4. Talking to Gemini (`call_gemini`)
 
 - REST `generateContent` at `generativelanguage.googleapis.com/v1beta`, key in the `x-goog-api-key` header,

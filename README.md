@@ -13,6 +13,14 @@ Every morning it:
 
 It runs on your own Windows PC or Mac, uses only free services, and keeps your keys and data on your computer.
 
+Optional extras, each set up once (USER_GUIDE.md, section 5a):
+
+- **Prices**: a Google Sheet of Google Finance prices puts your watchlist's moves next to the analysts' calls.
+- **The Econova dashboard**: each run saves the day's notes as JSON in a Google Drive folder; a Claude dashboard reads
+  them with live prices, scores whether past calls beat the S&P 500, and shows your own holdings.
+- **Wall Street's view**: with a TipRanks API key, one look-up a weekday adds the professional consensus, price
+  targets and earnings dates, inside TipRanks' free 50 calls a month.
+
 ## Quick start (Windows)
 
 You need: a **Gemini API key** (free, from https://aistudio.google.com/apikey) and, to receive emails, a **Gmail
@@ -34,8 +42,6 @@ You need the same Gemini key and Gmail app password, and **Python 3.9 or newer**
 3. Answer the questions. Cmd+V pastes; the key and password stay hidden as you paste them.
 4. Say **yes** to the test digest at the end. It opens in your browser.
 
-The digest then runs every day at the time you chose, from `~/market-digest`, and **Digest chat** is on your desktop.
-
 That's it. The digest arrives by email every day at the time you chose, and **Digest chat** is on your desktop.
 
 ## Everyday use
@@ -49,6 +55,9 @@ That's it. The digest arrives by email every day at the time you chose, and **Di
 | Feed the Econova hub | Each run also saves `video-digest_YYYY-MM-DD.json` in `json_dir` (set it to a Google Drive for desktop folder to share it). See [ARCHITECTURE.md](docs/ARCHITECTURE.md) §3. |
 | See prices for my stocks next to the analysts' calls | Set up the watchlist sheet: USER_GUIDE.md, section 5a. |
 | Add past days to the JSON folder | `python email_backfill.py digests\digest-*.html` (USER_GUIDE.md, 5a) |
+| See the dashboard | Open it in Claude (the link is in the Drive folder's START HERE doc). Every number has an (i) that explains it. |
+| Add Wall Street's view | Get a key at https://mcp.tipranks.com/ (Keys), add it as `tipranks_api_key`, then `python digest.py --tipranks-check` |
+| Update to the newest version | In the project folder: `git pull`, then `install.bat -Unattended` (keeps your settings) |
 | Change channels, email or time | Run `install.bat` again and answer `y` to "Enter them again?" |
 
 ## Documents

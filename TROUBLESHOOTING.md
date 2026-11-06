@@ -63,6 +63,24 @@ without asking. Check `digest.log` after the first scheduled run.
 
 ## No digest email
 
+### TipRanks: "refused the API key", "skipped", or an empty Wall Street table
+- **"refused the API key (HTTP 401)"**: the key is mistyped or was revoked. A key is 40 characters and starts with
+  `tr_live_`; add it again with a right-click paste, or make a new one at https://mcp.tipranks.com/ (Keys).
+- **"TipRanks: skipped (...)"** in the log is normal: weekends, a look-up already made today, or the month's calls
+  nearly used (3 are always kept spare). The quota resets on the 1st (UTC). `--tipranks-check` shows TipRanks' count.
+- **Empty "Wall Street's view" on the dashboard**: no `tipranks_*.json` in the json folder yet. Check that
+  `tipranks_api_key` is set and that the log has a "Saved ...tipranks_" line after a weekday run.
+
+### The dashboard says "Live data isn't available in this view" or "Failed to load"
+- **"Live data isn't available in this view"**: the dashboard was opened from another Claude account. Claude runs
+  connectors only for the account that owns the dashboard, so open it from that account, or have the other person
+  Duplicate it into their own account and point it at Drive files they can read.
+- **"Failed to load"**: that account's Google Drive connector cannot read the json folder or one of the sheets
+  (Market Digest Watchlist, Market Digest Prices, Investment Tracker). Open the Sources panel to see which, and check
+  that the connector is signed in with the Google account that owns them.
+- A file or sheet moved to another folder keeps working: the dashboard finds them by their Drive ids. Renaming or
+  moving the json folder itself breaks the PC's daily writes, not the dashboard.
+
 ### A backfilled day has `video_count: 0` though its email had videos (Verified, fixed 4 Nov 2026)
 - **Cause:** `email_backfill.py` was given only `market-digest\digests`, but that day's digests were made by runs
   started in the project folder, so they were saved in its own `digests` folder. The backfill found only an empty
