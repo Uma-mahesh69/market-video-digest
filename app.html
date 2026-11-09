@@ -169,6 +169,23 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
   </div>
 
   <div class="card">
+    <h2>Analysts to follow <span class="tag opt">Optional</span></h2>
+    <p class="what">Only videos with these people go into the digest. Leave the list empty to include every video from your channels.
+      A video counts when the analyst <b>speaks</b> in it (or is named in its title), not when someone only quotes them.
+      Videos without any of them are left out before Gemini reads them, so they cost nothing.</p>
+    <div id="analysts"></div>
+    <p class="err" id="e-analysts"></p>
+    <div class="tests"><button type="button" id="addAnalyst">+ Add an analyst</button></div>
+    <p class="help">Write the full name, like <i>Dan Ives</i>. If captions spell it differently, add the other spelling after a slash: <i>Tom Lee / Thomas Lee</i>.</p>
+    <div id="suggestBox" hidden>
+      <p class="help" style="margin-top:12px"><b>Seen in your saved videos</b> (click to add; the number is how many videos):</p>
+      <div class="chips" id="suggest"></div>
+    </div>
+    <label class="switch" style="margin-top:14px"><input type="checkbox" id="markets_only"> Leave out videos that are not about markets or stocks</label>
+    <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
+  </div>
+
+  <div class="card">
     <h2>Email <span class="tag opt">Optional</span></h2>
     <p class="what">Where the digest is sent each day. Leave the first box empty to skip email; digests are still saved and shown on the home page.</p>
     <label class="f" for="email_to">Send the digest to</label>
@@ -331,6 +348,8 @@ async function loadHome() {
   const facts = [
     ['Email', st.email_to.length ? st.email_to.join(', ') : 'Off (digests are saved on this computer)'],
     ['Data files', (st.json_shared ? st.json_dir : 'The program folder (not shared)') + (st.latest_json ? ` · newest: ${st.latest_json}` : '')],
+    ['Videos included', (st.analysts.length ? `Only with ${st.analysts.map(a => a.split('/')[0].trim()).join(', ')}` : 'Every video from your channels')
+      + (st.markets_only ? '; markets and stocks only' : '')],
     ['Watchlist', st.watchlist ? 'On' : 'Off'],
     ['TipRanks', st.tipranks.on ? `On · ${st.tipranks.calls} look-ups used this month` : 'Off'],
     ['Chat', 'Ask about the videos on the Chat page'],
@@ -380,6 +399,28 @@ function chanRow(value) {
   inp.oninput = () => { res.textContent = ''; res.className = 'result'; changed(); };
   row.append(inp, rm); div.append(row, res); return div;
 }
+function analystRow(value) {
+  const div = document.createElement('div'), row = document.createElement('div'), inp = document.createElement('input'), rm = document.createElement('button');
+  div.className = 'chan'; row.className = 'row'; inp.type = 'text'; inp.value = value || ''; inp.placeholder = 'Full name, like Dan Ives'; inp.spellcheck = false;
+  inp.setAttribute('aria-label', 'Analyst to follow'); rm.type = 'button'; rm.textContent = 'Remove';
+  rm.onclick = () => { div.remove(); changed(); renderSuggestions(); };
+  inp.oninput = () => { changed(); };
+  row.append(inp, rm); div.append(row); return div;
+}
+function analystValues() { return [...$('analysts').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean); }
+function renderSuggestions() {
+  const have = new Set(analystValues().flatMap(a => a.split('/').map(x => x.trim().toLowerCase())));
+  const box = $('suggest'); box.textContent = '';
+  const list = (S.analyst_suggestions || []).filter(r => !have.has(r.name.toLowerCase()));
+  $('suggestBox').hidden = !list.length;
+  for (const r of list) {
+    const b = document.createElement('button'); b.type = 'button';
+    b.textContent = `+ ${r.name}${r.role ? ' (' + r.role.slice(0, 40) + ')' : ''} · ${r.videos}`;
+    b.onclick = () => { const empty = [...$('analysts').querySelectorAll('input')].find(i => !i.value.trim());
+      if (empty) empty.value = r.name; else $('analysts').append(analystRow(r.name)); changed(); renderSuggestions(); };
+    box.append(b);
+  }
+}
 function fillSettings(s) {
   S = s; cleared = {};
   $('gemini_api_key').value = ''; $('smtp_password').value = ''; $('tipranks_api_key').value = '';
@@ -398,6 +439,10 @@ function fillSettings(s) {
   }
   $('chans').textContent = '';
   for (const c of (s.channels.length ? s.channels : [''])) $('chans').append(chanRow(c));
+  $('analysts').textContent = '';
+  for (const a of s.analysts) $('analysts').append(analystRow(a));
+  $('markets_only').checked = s.markets_only;
+  renderSuggestions();
   $('email_to').value = s.email_to.join(', ');
   $('smtp_user').value = s.smtp_user || '';
   $('json_dir').value = s.json_dir || '';
@@ -419,6 +464,7 @@ function smtpVisibility() {
 function collect() {
   const f = {
     channels: [...$('chans').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
+    analysts: analystValues(), markets_only: $('markets_only').checked,
     email_to: $('email_to').value, smtp_user: $('smtp_user').value.trim(),
     json_dir: $('json_dir').value, watchlist_csv: $('watchlist_csv').value,
     daily_time: $('daily_time').value, schedule_on: $('schedule_on').checked,
@@ -448,6 +494,7 @@ document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () =
 document.querySelectorAll('.show').forEach(b => b.onclick = () => {
   const i = $(b.dataset.for); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Show' : 'Hide';
 });
+$('addAnalyst').onclick = () => { const r = analystRow(''); $('analysts').append(r); r.querySelector('input').focus(); changed(); };
 $('addChan').onclick = () => { const r = chanRow(''); $('chans').append(r); r.querySelector('input').focus(); changed(); };
 $('form').addEventListener('input', e => { if (e.target.id === 'email_to') smtpVisibility(); changed(); });
 $('form').addEventListener('change', changed);
@@ -470,7 +517,7 @@ $('save').onclick = async () => {
       let first = null;
       for (const [k, msg] of Object.entries(e.fields)) {
         const el = $('e-' + k); if (el) el.textContent = msg;
-        const inp = k === 'channels' ? $('chans').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
+        const inp = k === 'channels' ? $('chans').querySelector('input') : k === 'analysts' ? $('analysts').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
       }
       if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus({ preventScroll: true }); }
     }

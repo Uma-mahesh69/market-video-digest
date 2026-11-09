@@ -71,6 +71,11 @@ plain words (for example "The key works" or "Gmail did not accept this address a
 - **Gemini key** (needed): paste it with Ctrl+V (Cmd+V on a Mac). **Show** reveals what you pasted.
 - **YouTube channels** (needed): one per box; **+ Add a channel** for more. A link like
   `https://www.youtube.com/@TheStreet` or a handle like `@TheStreet`. **Test the channels** shows each channel's newest video.
+- **Analysts to follow** (optional): only videos where one of these people speaks go into the digest. Videos
+  without any of them are left out by a free check of the captions, before Gemini reads them, so adding more
+  channels costs no extra Gemini quota. The page suggests names already seen in your saved videos. Leave the
+  list empty to include every video. **Leave out videos that are not about markets or stocks** (on by default)
+  drops the rest, for example a politics interview with no stocks or market levels in it.
 - **Email** (optional): who receives the digest, the Gmail address that sends it, and its app password.
   **Send a test email** proves it arrives. Leave the first box empty to skip email.
 - **Daily time**: when the digest is made.
@@ -107,6 +112,8 @@ send it to anyone.** You can also edit it in a text editor; these are the settin
 | `models` | Gemini models to try, in order. If one is busy or out of free quota, the next is used. | 3.7 Flash, 3.6 Flash, 3 Flash, 3.5 Flash Lite, 3.1 Flash Lite |
 | `lookback_hours` | How far back the very first run looks, or a run with `--hours`. Later runs cover everything since the last digest (up to 7 days). | 26 |
 | `max_videos` | The most videos in one digest (newest first). | 20 |
+| `analysts` | Only videos with these people (full names; other spellings after a slash: `"Tom Lee / Thomas Lee"`). Empty = every video. Left-out videos are listed at the bottom of the email in small print. | empty |
+| `markets_only` | Leave out videos with no stocks, market levels, sectors or predictions in them. | true |
 | `email_to` | Who receives the digest. | |
 | `smtp_user`, `smtp_password` | The Gmail account that sends it, and its app password. | |
 | `smtp_host`, `smtp_port` | The mail server. Leave as is for Gmail. | smtp.gmail.com, 465 |

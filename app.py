@@ -42,7 +42,7 @@ LABEL = "com.nugenix.market-digest"   # the launchd job on a Mac
 TASK = "Market video digest"          # the Task Scheduler task on Windows
 SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key")
 DEFAULTS = {"channels": ["https://www.youtube.com/@TheStreet"], "email_to": [], "smtp_user": "", "json_dir": "", "watchlist_csv": "",
-            "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20}
+            "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20, "analysts": [], "markets_only": True}
 TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 EMAIL = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 CHANNEL = re.compile(r"^(https?://)?(www\.|m\.)?youtube\.com/(@[\w.\-]+|channel/UC[\w-]{22}|c/[\w.\-]+|user/[\w.\-]+)/?(videos|featured|streams)?/?$|^@[\w.\-]+$", re.I)
@@ -141,6 +141,13 @@ def merged(form, saved):
     if "json_dir" in form:
         folder = str(form["json_dir"] or "").strip().strip("'\"").replace("\\ ", " ")
         cfg["json_dir"] = os.path.expanduser(folder) if folder else ""
+    if "analysts" in form:
+        items = form["analysts"] if isinstance(form["analysts"], list) else str(form["analysts"]).splitlines()
+        cfg["analysts"] = list(dict.fromkeys(re.sub(r"\s+", " ", str(a)).strip() for a in items if str(a).strip()))
+    if [a for a in cfg.get("analysts") or [] if len(a.split("/")[0].strip()) < 3 or len(a) > 120]:
+        errors["analysts"] = "Write each analyst's full name, like Dan Ives (other spellings after a slash: Tom Lee / Thomas Lee)."
+    if "markets_only" in form:
+        cfg["markets_only"] = bool(form["markets_only"])
     if "watchlist_csv" in form:
         cfg["watchlist_csv"] = str(form["watchlist_csv"] or "").strip()
     if cfg.get("watchlist_csv") and not re.match(r"^https?://", cfg["watchlist_csv"]):
@@ -462,6 +469,27 @@ def drive_folders():
     return out
 
 
+def analyst_suggestions(limit=24):
+    """Speakers in the saved videos, most frequent first, as suggestions for "Analysts to follow"."""
+    seen = {}
+    for f in dg.CACHE_DIR.glob("*.json") if dg.CACHE_DIR.exists() else []:
+        try:
+            notes = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        names = {}
+        for s in dg.note_speakers(notes):
+            names.setdefault(s["name"].strip(), s.get("role") or "")
+        for name, role in names.items():
+            if len(name.split()) < 2:   # "Sam" or "Host" is not enough to follow someone by
+                continue
+            key = name.lower()
+            row = seen.setdefault(key, {"name": name, "role": role, "videos": 0})
+            row["videos"] += 1
+            row["role"] = row["role"] or role
+    return sorted(seen.values(), key=lambda r: (-r["videos"], r["name"]))[:limit]
+
+
 def pick_folder():
     """Open the system's own folder chooser. Returns the chosen path, or "" when cancelled."""
     if sys.platform == "darwin":
@@ -556,6 +584,7 @@ def status():
         "digests": [{"name": p.name, "when": made_at(p), "test": p.name in tests} for p in digests],
         "email_to": [to] if isinstance(to, str) else to,
         "channels": len(cfg.get("channels") or []),
+        "analysts": cfg.get("analysts") or [], "markets_only": cfg.get("markets_only", True),
         "json_dir": str(json_folder(cfg)), "latest_json": latest_json, "json_shared": bool(cfg.get("json_dir")),
         "watchlist": bool(cfg.get("watchlist_csv")),
         "tipranks": {"on": bool(real(cfg.get("tipranks_api_key"))), "calls": tipranks_usage()},
@@ -633,6 +662,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.page("chat.html")
         if u.path == "/api/settings":
             return self.send(200, {**public(read_config()), "setup": self.setup_mode, "drive_folders": drive_folders(),
+                                   "analyst_suggestions": analyst_suggestions(),
                                    "platform": platform(), "program_folder": str(dg.HERE)})
         if u.path == "/api/status":
             return self.send(200, {**status(), "setup": self.setup_mode})

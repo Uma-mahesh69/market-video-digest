@@ -52,6 +52,23 @@ class Settings(unittest.TestCase):
         self.assertEqual(cfg["smtp_user"], "anil@example.com")
         self.assertEqual(cfg["email_to"], ["anil@example.com", "b@example.com"])
 
+    def test_analysts_to_follow(self):
+        cfg, errors = app.merged({**GOOD, "analysts": [" Dan  Ives ", "Tom Lee / Thomas Lee", "", "Dan Ives"], "markets_only": False}, {})
+        self.assertEqual(errors, {})
+        self.assertEqual(cfg["analysts"], ["Dan Ives", "Tom Lee / Thomas Lee"])
+        self.assertFalse(cfg["markets_only"])
+        self.assertIn("analysts", app.merged({**GOOD, "analysts": ["Al"]}, {})[1])
+
+    def test_analyst_suggestions_come_from_saved_videos(self):
+        saved = digest.CACHE_DIR
+        digest.CACHE_DIR = Path(tempfile.mkdtemp())
+        try:
+            for n, speakers in enumerate([[{"name": "Dan Ives", "role": "Wedbush"}, {"name": "Host"}], [{"name": "Dan Ives", "role": ""}], [{"name": "Tom Lee", "role": "Fundstrat"}]]):
+                (digest.CACHE_DIR / f"v{n}.json").write_text(json.dumps({"speakers": speakers}))
+            self.assertEqual(app.analyst_suggestions(), [{"name": "Dan Ives", "role": "Wedbush", "videos": 2}, {"name": "Tom Lee", "role": "Fundstrat", "videos": 1}])
+        finally:
+            digest.CACHE_DIR = saved
+
     def test_the_page_never_sees_a_secret(self):
         cfg = {"gemini_api_key": KEY, "smtp_password": "abcdefghijklmnop", "tipranks_api_key": "tr_live_" + "z" * 32}
         page = json.dumps(app.public(cfg))

@@ -14,7 +14,10 @@ Every morning it:
 
 It runs on your own Windows PC or Mac, uses only free services, and keeps your keys and data on your computer.
 
-Optional extras, each set up once (USER_GUIDE.md, section 5a):
+Optional extras, each set up once (USER_GUIDE.md, sections 3 and 5a):
+
+- **Only the analysts you follow**: list the people whose views matter (Dan Ives, Tom Lee, ...) and only videos where
+  they speak go into the digest. Other uploads are left out before Gemini reads them, so more channels cost nothing.
 
 - **Prices**: a Google Sheet of Google Finance prices puts your watchlist's moves next to the analysts' calls.
 - **The Econova dashboard**: each run saves the day's notes as JSON in a Google Drive folder; a Claude dashboard reads

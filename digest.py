@@ -57,6 +57,58 @@ class Skip(Exception):
     """A video that can never be processed (for example, no captions). It is not retried."""
 
 
+class Filtered(Skip):
+    """A video left out on purpose by the settings: none of the analysts you follow is in it, or it is not about
+    markets. Not retried, and listed apart from videos that failed."""
+
+
+# ---------------------------------------------------------------- the analysts you follow
+
+MARKET_LISTS = ("stocks", "market_levels", "sectors_and_themes", "predictions", "sp500_targets")
+
+
+def analyst_patterns(cfg):
+    """[(name, [regex, ...])] from the "analysts" setting. Each entry is a name, with other spellings after a slash:
+    "Tom Lee / Thomas Lee". Whole names only, any case, any spacing; captions are lower case and break lines anywhere."""
+    out = []
+    for entry in cfg.get("analysts") or []:
+        names = [n.strip() for n in re.split(r"[/|]", str(entry)) if len(n.strip()) > 2]
+        if names:
+            out.append((names[0], [re.compile(r"(?<!\w)" + r"[\s.\-]*".join(map(re.escape, re.split(r"[\s.]+", n.strip(" ."))))
+                                              + r"(?!\w)", re.I) for n in names]))
+    return out
+
+
+def names_in(patterns, text):
+    """The followed analysts named in a text (a title, captions, or the notes' speakers)."""
+    plain = re.sub(r"\[\d{1,2}(?::\d{2}){1,2}\]", " ", text or "")
+    return [name for name, pats in patterns if any(p.search(plain) for p in pats)]
+
+
+def left_out(cfg, patterns, video, notes):
+    """Why a summarised video is left out by the settings, or None to keep it."""
+    if patterns:
+        speakers = [s["name"] for s in note_speakers(notes)] + [str(s.get("analyst") or "") for s in notes.get("stocks") or []]
+        speaking = names_in(patterns, "\n".join(speakers)) or names_in(patterns, video.get("title", ""))
+        if not speaking:
+            return f"{', '.join(video.get('named') or ['an analyst you follow'])} only mentioned, not speaking"
+        video["analysts"] = speaking
+    if cfg.get("markets_only", True) and not any(notes.get(k) for k in MARKET_LISTS):
+        return "not about markets or stocks"
+    return None
+
+
+def mark_left_out(vid, why):
+    """Note in the saved notes that the video was left out, so the chat does not offer it."""
+    path = CACHE_DIR / f"{vid}.json"
+    try:
+        notes = json.loads(path.read_text(encoding="utf-8"))
+        notes["_left_out"] = why
+        path.write_text(json.dumps(notes, indent=1, ensure_ascii=False), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+
+
 # ---------------------------------------------------------------- settings and memory
 
 def load_config():
@@ -538,7 +590,7 @@ def watchlist_html(market):
     return "".join(out)
 
 
-def render(day, done, skipped, overview, unchecked=(), market=None):
+def render(day, done, skipped, overview, unchecked=(), market=None, filtered=()):
     vref = lambda nums: " ".join(f'<a href="#v{n}" style="color:{C["blue"]}">#{n}</a>' for n in nums)
     parts = [f'<p style="margin:0;color:{C["muted"]};font-size:13px">{day:%A, %d %B %Y}. '
              f'{len(done)} new video{"s" if len(done) != 1 else ""} from {len({d["video"]["channel"] for d in done})} channel(s).</p>',
@@ -618,6 +670,9 @@ def render(day, done, skipped, overview, unchecked=(), market=None):
         parts.append(section("Video by video", "".join(cards)))
     if skipped:
         parts.append(section("Not included", bullets([f'<a href="{v["url"]}" style="color:{C["blue"]}">{e(v["title"])}</a> ({e(v["channel"])}): {e(why)}' for v, why in skipped])))
+    if filtered:
+        parts.append(f'<p style="margin:20px 0 0;font-size:12px;color:{C["muted"]};line-height:1.5"><b>Left out by your settings ({len(filtered)}):</b> '
+                     + "; ".join(f'<a href="{v["url"]}" style="color:{C["muted"]}">{e(v["title"][:80])}</a> ({e(why)})' for v, why in filtered) + '.</p>')
     parts.append(f'<p style="margin:28px 0 0;font-size:12px;color:{C["muted"]};line-height:1.5">Written automatically by Gemini from the videos\' captions. '
                  'Captions can mishear names and figures, so open the linked moment before relying on a number. '
                  'This reports what each channel said. It is not investment advice.</p>')
@@ -830,6 +885,7 @@ def main():
 
     # 1. What is new
     unchecked = []   # channels whose uploads could not be read this time
+    followed = [] if args.video else analyst_patterns(cfg)   # a single video you asked for is never left out
     if args.check:
         sys.exit(0 if check(cfg, state) else 1)
     if args.rebuild:
@@ -864,16 +920,20 @@ def main():
             log(f"{ch}: {len(ups)} in its feed, {len(fresh)} new since {since.astimezone():%d %b %H:%M}")
             new += fresh
         new.sort(key=lambda u: u["published"], reverse=True)
-        if len(new) > cfg["max_videos"]:
-            log(f"{len(new)} new videos; keeping the newest {cfg['max_videos']} (max_videos in the config).")
-            new = new[:cfg["max_videos"]]
+        # With analysts to follow, most uploads are left out by a free check of the captions, so more are read;
+        # max_videos then limits the ones that reach Gemini.
+        limit = cfg["max_videos"] * (5 if followed else 1)
+        if len(new) > limit:
+            log(f"{len(new)} new videos; keeping the newest {limit} (max_videos in the config).")
+            new = new[:limit]
     if not args.dry_run:
         save_state(state)   # keeps the channel ids it just looked up
 
     # 2 and 3. Read and summarise each one, several at a time
     ytmd_lock = threading.Lock()   # ytmd writes one database file, so captions are fetched one at a time
 
-    def process(v):
+    def read(v):
+        """The captions, or why the video cannot or should not be summarised. Free: no Gemini call."""
         try:
             with ytmd_lock:
                 log(f"Reading: {v['title'] or v['url']}")
@@ -881,17 +941,45 @@ def main():
                 if not v["title"] or not v["channel"]:   # a single --video run: take the details ytmd saved
                     info = ytmd("info", v["id"])
                     v["title"], v["channel"] = v["title"] or info.get("title", v["url"]), v["channel"] or info.get("channel", "")
+            if followed:
+                v["named"] = names_in(followed, v["title"] + "\n" + text)
+                if not v["named"]:
+                    raise Filtered("none of the analysts you follow is in it")
+            return text
+        except Exception as err:
+            return err
+
+    def summarise(item):
+        v, text = item
+        try:
             notes = extract(cfg, v, text)
+            why = None if args.video else left_out(cfg, followed, v, notes)
+            if why:
+                mark_left_out(v["id"], why)
+                raise Filtered(why)
             log(f"Summarised: {v['title'][:70]}")
             return notes
         except Exception as err:
             return err
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        results = list(pool.map(process, new))
-    done, skipped, sent_ok = [], [], {}
+        texts = list(pool.map(read, new))
+        ready = [(v, t) for v, t in zip(new, texts) if not isinstance(t, Exception)]
+        if len(ready) > cfg["max_videos"]:
+            log(f"{len(ready)} videos with your analysts; summarising the newest {cfg['max_videos']} (max_videos in the config).")
+            ready = ready[:cfg["max_videos"]]
+        summarised = dict(zip((v["id"] for v, _ in ready), pool.map(summarise, ready)))
+    results = [t if isinstance(t, Exception) else summarised.get(v["id"]) for v, t in zip(new, texts)]
+    done, skipped, filtered, sent_ok = [], [], [], {}
     for v, result in zip(new, results):
-        if isinstance(result, Skip):
+        if result is None:   # over max_videos
+            continue
+        if isinstance(result, Filtered):
+            filtered.append((v, str(result)))
+            log(f"Left out: {v['title'][:70]} ({result})")
+            if not args.dry_run:
+                state["done"][v["id"]] = "left out: " + str(result)
+        elif isinstance(result, Skip):
             skipped.append((v, str(result)))
             if not args.dry_run:
                 state["done"][v["id"]] = "skipped: " + str(result)
@@ -907,7 +995,7 @@ def main():
     overview = make_overview(cfg, done)
     today = datetime.now()
     prices, market = watchlist(cfg, today, done)
-    page = render(today, done, skipped, overview, unchecked, market)
+    page = render(today, done, skipped, overview, unchecked, market, filtered)
     OUT_DIR.mkdir(exist_ok=True)
     out = OUT_DIR / f"digest-{today:%Y-%m-%d-%H%M}.html"
     local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}" '
@@ -936,7 +1024,8 @@ def main():
                     state["last_sent"] = datetime.now(timezone.utc).isoformat()
                 save_state(state)
         else:
-            log("Nothing new today, so no email was sent.")
+            log(f"Nothing new today ({len(filtered)} left out by your settings), so no email was sent." if filtered else
+                "Nothing new today, so no email was sent.")
     # The JSON copy for the Econova hub, written once the digest is out: videos a failed email leaves queued go into
     # the file of the run that sends them, so no video is counted on two days. A test run (--dry-run or --video) goes
     # to the digests folder, so it can never replace the real day's file. With no videos and a channel that could not
@@ -975,11 +1064,13 @@ def main():
         message = (f"{len(done)} new video{'s' if len(done) != 1 else ''}" if done else "No new videos") + (
             ", emailed" if emailed else ", not emailed (a test)" if args.dry_run else
             ", saved on this computer (email is not set up)" if done or skipped or unchecked else ", so no email was needed") + "."
+        if filtered:
+            message += f" {len(filtered)} left out by your settings (analysts to follow, markets only)."
         if unchecked:
             message += f" {len(unchecked)} channel{'s' if len(unchecked) != 1 else ''} could not be checked."
         if failed:
             message += f" {len(failed)} video{'s' if len(failed) != 1 else ''} failed and will be tried again."
-    record_run(ok, message, test=test_run, videos=len(done), skipped=len(skipped), digest_file=out.name,
+    record_run(ok, message, test=test_run, videos=len(done), skipped=len(skipped), left_out=len(filtered), digest_file=out.name,
                emailed_to=(cfg.get("email_to") if emailed else []), unchecked=[ch for ch, _ in unchecked])
     if args.open:
         if hasattr(os, "startfile"):   # Windows

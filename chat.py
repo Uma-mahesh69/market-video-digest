@@ -63,6 +63,8 @@ def library():
             notes = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
+        if notes.get("_left_out"):   # left out of the digest by the settings (analysts to follow, markets only)
+            continue
         out.append((video_meta(f.stem, notes), notes))
     far = datetime(1970, 1, 1, tzinfo=timezone.utc)
     return sorted(out, key=lambda vn: vn[0]["date"] or far, reverse=True)
