@@ -31,10 +31,24 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
   install.bat again.
 
 ### The Gemini key was saved wrongly: later `Gemini error 400: Bad Request` (Verified)
-- **Cause:** the key prompt hides what you type. In that prompt, **Ctrl+V does not paste**; it saves an invisible
-  control character instead of the key. On our test PC the saved "key" was 1 character long.
-- **Fix:** run install.bat again, answer `y` to "Enter them again?", and **paste with a right-click**. The installer
-  now rejects a Ctrl+V paste or a too-short key and asks again.
+- **Cause:** older versions asked for the key in a hidden terminal prompt, where **Ctrl+V does not paste**; it saved an
+  invisible control character instead of the key. On our test PC the saved "key" was 1 character long.
+- **Fix:** open **Market Digest > Settings**, paste the key into the Gemini box (Ctrl+V works there; **Show** reveals
+  it), click **Test the key**, then **Save**. The settings page replaced the terminal questions.
+
+### The settings page did not open during installation
+- **Cause:** the browser did not start by itself.
+- **Fix:** copy the address the installer window shows (`http://127.0.0.1:8765/settings?setup=1`, or another port)
+  into your browser. The installer waits until you click **Finish** on the page; if you closed the page, press
+  Ctrl+C in the installer window and run it again.
+
+### "Market Digest stopped responding" or the page does not load
+- **Cause:** the small Market Digest window was closed, which stops the page.
+- **Fix:** double-click **Market Digest** on the desktop again. Keep its window open (you can minimise it).
+
+### The home page says "this computer has no schedule for it"
+- **Cause:** the daily task (Windows) or launchd job (Mac) was removed, or the program folder moved.
+- **Fix:** open **Settings** and click **Save**. Saving sets the schedule again.
 
 ### The zip could not be sent by email
 - **Cause:** Gmail blocks attachments that contain `.bat` files, even inside a zip.
@@ -42,11 +56,12 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 
 ---
 
-### Mac: "install-mac.command cannot be opened because it is from an unidentified developer"
+### Mac: "install-mac.command cannot be opened" (unidentified developer, or Apple cannot check it)
 
-macOS shows this when the file is double-clicked. Start it from Terminal instead: type `bash ` (with a space),
-drag the file into the Terminal window, press Return. The same works if Finder says you do not have permission to
-open it (a zip made on Windows does not keep the "can be run" flag).
+macOS shows this for files downloaded from the internet. **Right-click** the file, choose **Open**, then **Open**
+again; macOS remembers this. If Finder says you do not have permission to open it (a zip made on Windows does not
+keep the "can be run" flag), start it from Terminal instead: type `bash ` (with a space), drag the file into the
+Terminal window, press Return. A folder made with `git clone` does not have either problem.
 
 ### Mac: "Python cannot check web certificates" or `CERTIFICATE_VERIFY_FAILED`
 
@@ -110,13 +125,13 @@ without asking. Check `digest.log` after the first scheduled run.
 ### No line for today in `digest.log` at all
 - **Cause:** the PC was not on at any point after the scheduled time, or the task is missing.
 - **Fix:** check the task exists in Task Scheduler > Task Scheduler Library > **Market video digest**. If it is
-  missing, run install.bat again. The next run covers everything since the last digest (up to 7 days), so days the
+  missing, open Market Digest > Settings and click Save. The next run covers everything since the last digest (up to 7 days), so days the
   PC was off are not lost.
 
 ### `Email: FAILED to log in`
 - **Cause:** the normal Gmail password was used, or the app password was mistyped or revoked.
-- **Fix:** create a new app password (Google Account > Security > 2-Step Verification > App passwords) and run
-  install.bat again to enter it.
+- **Fix:** create a new app password at https://myaccount.google.com/apppasswords, paste it in Market Digest >
+  Settings > Email, click **Send a test email**, then **Save**.
 
 ### The email was sent (`Emailed to ...` in the log) but you can't find it
 - **Cause:** when you send to your own Gmail address, Gmail may not put it in the Inbox.
@@ -185,17 +200,15 @@ without asking. Check `digest.log` after the first scheduled run.
 - **Fix:** the chat still answers from your videos and says so. To get web results, turn on billing for the Gemini
   project.
 
-### "The chat page is already running" / changes don't seem to take effect (Verified)
-- **Cause:** an older chat window is still open and holding the page (port 8765), still running the old code.
-- **Fix:** close every black chat window (or press Ctrl+C in it), then double-click **Digest chat** again.
-
-### "The chat page stopped responding. Is the black chat window still open?"
-- **Cause:** the black window was closed.
-- **Fix:** double-click **Digest chat** again.
+### "Market Digest is already running" / changes don't seem to take effect (Verified)
+- **Cause:** an older Market Digest (or Digest chat) window is still open and holding the page (port 8765), still
+  running the old code. After an update, the Settings tab may be missing for the same reason.
+- **Fix:** close every Market Digest or Digest chat window (or press Ctrl+C in it), then double-click
+  **Market Digest** again.
 
 ### The video list in the chat is empty, or a new video is missing
 - **Cause:** the chat only knows videos the digest has already summarised.
-- **Fix:** run a digest first (`python digest.py --open`), then refresh the chat page.
+- **Fix:** make a digest first (Market Digest > **Make today's digest now**), then refresh the chat page.
 
 ### A citation shows as plain text like `[V1 3:33, 10:13]` (Verified, fixed)
 - **Cause:** older versions only linked citations where every time had its own `V1`.

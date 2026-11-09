@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Digest chat</title>
+<title>Chat · Market Digest</title>
 <style>
 :root{--paper:#F4F6F9;--surface:#FFFFFF;--ink:#16202E;--muted:#5C6878;--line:#DCE2EA;--blue:#2447C5;--blue-soft:#E8EDFB;--red:#B42318;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Charter,"Iowan Old Style","Palatino Linotype",Georgia,serif}
@@ -17,6 +17,8 @@ a{color:var(--blue)}
 
 aside{display:flex;flex-direction:column;gap:6px;padding:16px 10px;border-right:1px solid var(--line);overflow:auto;min-height:0}
 aside h1{font:600 18px/1.2 var(--serif);margin:2px 8px 12px}
+aside .home{margin:0 8px 6px;font-size:13px;text-decoration:none}
+aside .home:hover{text-decoration:underline}
 #newChat{margin:0 4px 10px;background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
 aside .label{font-size:12px;font-weight:600;color:var(--muted);margin:8px 8px 2px}
 .chatLink{display:block;width:100%;text-align:left;border:0;padding:7px 8px;line-height:1.35}
@@ -30,6 +32,7 @@ main{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;height
 .top label{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted)}
 .top select{max-width:340px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
 .top .sp{flex:1}
+.homeTop{display:none;font-size:14px}
 #thread{overflow:auto;padding:24px}
 .col{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
 .q{align-self:flex-end;max-width:80%;background:var(--blue-soft);border-radius:10px;padding:10px 14px}
@@ -54,10 +57,11 @@ a.cite:hover{text-decoration:underline}
 #ask{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600;padding:11px 18px}
 #err{max-width:820px;margin:6px auto 0;color:var(--red);font-size:14px;min-height:1em}
 .hint{max-width:820px;margin:4px auto 0;color:var(--muted);font-size:12px}
-@media (max-width:760px){body{grid-template-columns:1fr;overflow:auto}aside{display:none}main{height:100vh}}
+@media (max-width:760px){body{grid-template-columns:1fr;overflow:auto}aside{display:none}main{height:100vh}.homeTop{display:inline}}
 </style></head>
 <body>
 <aside>
+  <a class="home" href="/">&larr; Market Digest home</a>
   <h1>Digest chat</h1>
   <button id="newChat">New chat</button>
   <p class="label">Earlier chats</p>
@@ -65,6 +69,7 @@ a.cite:hover{text-decoration:underline}
 </aside>
 <main>
   <div class="top">
+    <a class="homeTop" href="/">&larr; Home</a>
     <label>Videos <select id="days" aria-label="Which videos to use">
       <option value="3">Last 3 days</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="0">All saved videos</option>
     </select></label>
@@ -171,7 +176,7 @@ function renderThread(pendingQuestion) {
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
-  const data = await r.json().catch(() => ({ error: 'The chat page stopped responding. Is the black chat window still open?' }));
+  const data = await r.json().catch(() => ({ error: 'Market Digest stopped responding. Start it again with Market Digest on the desktop.' }));
   if (!r.ok) throw new Error(data.error || 'Something went wrong.');
   return data;
 }

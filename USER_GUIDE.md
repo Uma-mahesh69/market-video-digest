@@ -9,7 +9,7 @@ shown in grey boxes. Copy them exactly.
 3. Installing
 4. Your settings
 5. Everyday use: the email
-6. Everyday use: the chat page
+6. Everyday use: Market Digest (status, settings and chat)
 7. Useful commands
 8. Changing, updating and removing it
 9. If something goes wrong
@@ -27,88 +27,78 @@ shown in grey boxes. Copy them exactly.
   - **Video by video**: a summary, key points, sectors, predictions and risks for each video.
   - **Not included**: videos that could not be read (usually Shorts with no captions).
   - Every point has a time like **[12:34]** that opens the video at that moment.
-- **A chat page** on your PC for questions such as "Which stocks came up most this week?" or "What did they say
-  about Treasury yields?". Answers cite the video and moment, like **TheStreet 12:34**.
+- **Market Digest** on your desktop: a page in your browser that shows whether today's digest ran, lets you change
+  any setting with a Test button beside it, and has a **chat** for questions such as "Which stocks came up most this
+  week?". Answers cite the video and moment, like **TheStreet 12:34**.
 
 ## 2. Before you install
 
-You need three things.
-
 | What | Where to get it | Notes |
 |---|---|---|
-| A Windows 10 or 11 PC | | It must be on (or turned on later that day) for the digest to run. |
+| A Windows 10/11 PC or a Mac | | It must be on (or turned on later that day) for the digest to run. |
 | A **Gemini API key** | https://aistudio.google.com/apikey, sign in with Google, click **Create API key** | Free. Starts with `AIza`. Keep it private. |
-| A **Gmail app password** (only if you want emails) | Google Account > **Security** > **2-Step Verification** > **App passwords** | 16 letters. Your normal Gmail password will **not** work. 2-Step Verification must be on. |
+| A **Gmail app password** (only if you want emails) | https://myaccount.google.com/apppasswords | 16 letters. Your normal Gmail password will **not** work. 2-Step Verification must be on. |
 
-The installer gets Python and the caption reader (yt-dlp) for you if they are missing.
+You can get these during setup too: the settings page links to each one. The installer gets Python and the caption
+reader (yt-dlp) for you on Windows; on a Mac it tells you if Python is missing.
 
 ## 3. Installing
 
-1. Save `market-digest-setup.zip` somewhere, for example your Downloads folder.
-2. Right-click it and choose **Extract All**, then **Extract**.
-3. In the extracted folder, double-click **`install.bat`**.
-   - If you see **"Windows protected your PC"**, click **More info**, then **Run anyway**. Windows shows this for
-     any script downloaded from the internet.
-4. A blue window walks you through these steps:
+**Get the files** in one of two ways:
+- the setup zip: right-click `market-digest-setup.zip` > **Extract All** (Windows), or double-click it (Mac); or
+- GitHub: open https://github.com/Uma-mahesh69/market-video-digest, click **Code > Download ZIP** and unzip it, or
+  `git clone` it.
 
-| Step | What happens | What you do |
-|---|---|---|
-| 1. Python | Finds Python, or installs Python 3.13 for you. | Wait. This can take a few minutes the first time. |
-| 2. Program files | Copies the program to `C:\Users\<you>\market-digest`. | Nothing. |
-| 3. yt-dlp | Downloads the official caption reader if it is missing. | Nothing. |
-| 4. Settings | Asks your questions (see below). | Answer them. |
-| 5. Testing | Tests your channels, your Gemini key and your Gmail login. | Read the results. Everything should say it works. |
-| 6. Daily schedule | Creates the Windows task "Market video digest". | Nothing. |
-| 7. Shortcut | Adds **Digest chat** to your desktop. | Nothing. |
-| Test digest | Offers to make a digest of the last 3 days. | Type `y`. It opens in your browser and is not emailed. |
+**Start the installer** by double-clicking it in the unzipped folder:
+- **Windows:** `install.bat`. If you see **"Windows protected your PC"**, click **More info**, then **Run anyway**.
+- **Mac:** `install-mac.command`. If macOS says it cannot check the file, **right-click** it, choose **Open**, then
+  **Open** again. (This happens once, for files downloaded from the internet.)
 
-**The questions in step 4:**
+A window shows the steps. You only act at step 4:
 
-- **Gemini API key**: paste it with a **right-click**. You will not see it as you paste; that is normal.
-  Ctrl+V does not work in this prompt. If you press it anyway, the installer notices and asks again.
-- **YouTube channels**: paste channel links separated by commas, for example
-  `https://www.youtube.com/@TheStreet, https://www.youtube.com/@CNBCtelevision`. `@handles`, `/channel/UC...`
-  links and `music.youtube.com` links all work. Press Enter to keep the suggested TheStreet.
-- **Email address that should receive the digest**: one address, or several separated by commas. Leave empty if
-  you only want the digest saved as a file.
-- **Gmail address that sends it**: the Gmail account that owns the app password. It can be the same as the
-  receiving address.
-- **Gmail app password**: paste with a right-click.
-- **Time**: when to make the digest each day, in 24-hour form, for example `07:30`.
+| Step | What happens |
+|---|---|
+| 1. Python | Finds Python (on Windows it installs Python 3.13 if needed; this can take a few minutes). |
+| 2. Program files | Copies the program to `C:\Users\<you>\market-digest` (Windows) or `~/market-digest` (Mac). |
+| 3. yt-dlp | Downloads the official caption reader if it is missing. |
+| 4. Settings | **The settings page opens in your browser.** Fill it in, test, click **Save**, then **Finish**. |
+| 5. Daily schedule | Sets the daily run at the time you chose. |
+| 6. Desktop | Adds **Market Digest** to the desktop. |
 
-If step 5 says **FAILED**, the installer stops before scheduling anything. Read the message, then run
-`install.bat` again and re-enter the setting that failed. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) explains each
-message.
+**The settings page** has one box per setting, each with a short explanation and a **Test** button that answers in
+plain words (for example "The key works" or "Gmail did not accept this address and app password"):
 
-### Installing on a Mac
+- **Gemini key** (needed): paste it with Ctrl+V (Cmd+V on a Mac). **Show** reveals what you pasted.
+- **YouTube channels** (needed): one per box; **+ Add a channel** for more. A link like
+  `https://www.youtube.com/@TheStreet` or a handle like `@TheStreet`. **Test the channels** shows each channel's newest video.
+- **Email** (optional): who receives the digest, the Gmail address that sends it, and its app password.
+  **Send a test email** proves it arrives. Leave the first box empty to skip email.
+- **Daily time**: when the digest is made.
+- **Shared folder**, **Watchlist** and **TipRanks**: optional extras, explained in section 5a. **Choose…** opens your
+  computer's own folder window; if Google Drive for desktop is installed, a button offers its folder.
 
-The Mac installer does the same steps as the Windows one, in Terminal.
-
-1. Install **Python 3.9 or newer** if you don't have it: https://www.python.org/downloads/macos/ (the "macOS 64-bit
-   universal" installer). The installer checks this and opens that page if Python is missing.
-2. Double-click `market-digest-setup.zip` in Finder to unzip it.
-3. Open **Terminal** (press Cmd+Space, type `Terminal`, press Return).
-4. Type `bash ` (with a space after it), then drag **`install-mac.command`** from the unzipped folder into the
-   Terminal window, and press Return. Starting it this way avoids macOS's "unidentified developer" warning.
-5. Answer the same questions as on Windows. **Cmd+V** pastes; the key and password stay hidden. For the JSON folder
-   you can drag a folder from Finder into the window; the installer shows where your Google Drive is.
+After **Save**, click **Make a test digest**: a digest of the last 3 days opens in your browser (not emailed). Then
+click **Finish**. The installer window says **Done**; you can close it.
 
 What is different on a Mac:
 
-- The program goes to `~/market-digest` (your home folder, `market-digest`).
 - The daily run is a **launchd** job (`~/Library/LaunchAgents/com.nugenix.market-digest.plist`) instead of a Task
   Scheduler task. It runs while you are logged in. If the Mac is asleep at that time, it runs when it wakes; if
-  it is shut down, the next run covers everything since the last digest. A failed run is retried every 30 minutes,
-  3 times, like on Windows.
-- **Digest chat** on the desktop is `Digest chat.command`. Double-click it; a Terminal window opens and must stay
-  open while you use the chat.
+  it is shut down, the next run covers everything since the last digest.
+- **Market Digest** on the desktop opens a Terminal window, which must stay open while you use the page.
 - If macOS asks whether Terminal may access your Desktop or Google Drive, click **Allow**.
+
+On both, a failed run is retried every 30 minutes, 3 times. If all fail, a desktop notice says so, and the
+Market Digest home page shows why.
 
 ## 4. Your settings
 
-The installer saves your answers in `C:\Users\<you>\market-digest\digest_config.json`. **This file contains your
-key and password. Never send it to anyone.** The easiest way to change settings is to run `install.bat` again.
-If you prefer to edit the file in Notepad, these are the settings:
+To change anything later, double-click **Market Digest** on the desktop and click **Settings**. Saved keys and
+passwords are never shown again: the page only says they are saved (with a key's last 4 characters). Leave a box
+empty to keep what is saved; paste a new one to replace it.
+
+The settings live in `digest_config.json` in the program folder. **This file contains your key and password. Never
+send it to anyone.** You can also edit it in a text editor; these are the settings:
 
 | Setting | Meaning | Default |
 |---|---|---|
@@ -120,10 +110,13 @@ If you prefer to edit the file in Notepad, these are the settings:
 | `email_to` | Who receives the digest. | |
 | `smtp_user`, `smtp_password` | The Gmail account that sends it, and its app password. | |
 | `smtp_host`, `smtp_port` | The mail server. Leave as is for Gmail. | smtp.gmail.com, 465 |
+| `daily_time`, `schedule_on` | When the daily run happens, and whether it is on. Change these on the settings page, which also updates the system's schedule. | 07:30, on |
 | `watchlist_csv` | The CSV link of your watchlist Google Sheet (see section 5a), or the path of a CSV file. Empty = no watchlist. | |
 | `json_dir` | Folder for the daily JSON file (`video-digest_YYYY-MM-DD.json`) that feeds the Econova hub. Use a Google Drive for desktop folder to share it. | `digest_json` in the program folder |
+| `tipranks_api_key` | Your TipRanks API key (section 5a). Empty = no TipRanks. | |
 
-After editing, run `python digest.py --check` (see section 7) to test your changes.
+After editing the file by hand, open Market Digest > Settings and use the **Test** buttons (or run
+`python digest.py --check`, section 7).
 
 ## 5. Everyday use: the email
 
@@ -167,7 +160,7 @@ the prices. To set it up once:
 3. **File > Settings > Calculation > Recalculation: On change and every minute**, so the prices stay fresh.
 4. **File > Share > Publish to web**: choose the sheet, **Comma-separated values (.csv)**, tick **Automatically
    republish when changes are made**, click **Publish**, and copy the link.
-5. Run the installer again (answer `y` to "Enter them again?") and paste the link at the watchlist question, or put
+5. Open Market Digest > **Settings**, paste the link under **Watchlist**, click **Test the sheet**, then **Save**. Or put
    it in `digest_config.json` as `watchlist_csv`. Then run `python digest.py --check`: it should say
    `Watchlist sheet: 10 stocks, 10 with prices`.
 
@@ -187,7 +180,7 @@ The dashboard reads the two daily files from the Google Drive folder **Econova /
 
 1. Install **Google Drive for desktop** (https://www.google.com/drive/download/) and sign in. Your Drive then shows up
    as a drive letter on Windows (often `G:\My Drive`) or under `~/Library/CloudStorage/GoogleDrive-<you>/My Drive` on a Mac.
-2. Run the installer again and give that folder as the JSON folder, for example
+2. Open Market Digest > **Settings** and choose that folder under **Shared folder** (or type it), for example
    `G:\My Drive\Econova\Video Digests\json`. `python digest.py --check` should say the JSON folder can be written.
 3. To add days from before the JSON export existed, from their saved digests:
    `python email_backfill.py digests\digest-2026-10-*.html --out "G:\My Drive\Econova\Video Digests\json"`.
@@ -241,27 +234,39 @@ logged; the digest itself is never held up.
 
 1. Signed in at https://mcp.tipranks.com/, open **Keys** and create a key. It starts with `tr_live_` and is shown only
    once, so copy it straight into step 2. (The claude.ai connector is separate: it is for asking Claude about stocks.)
-2. Run the installer again and paste the key at the TipRanks question, or put it in `digest_config.json` as
-   `tipranks_api_key`. `tipranks_every_days` sets the pace by hand.
-3. Run `python digest.py --tipranks-check`. It connects, shows what TipRanks sends for AAPL, and uses 1 call.
+2. Open Market Digest > **Settings**, paste the key under **TipRanks**, click **Check the key (free)**, then **Save**.
+   (Or put it in `digest_config.json` as `tipranks_api_key`. `tipranks_every_days` sets the pace by hand.)
+3. **Test with TipRanks** connects, reads Apple's analyst data and uses 1 call. (The same as
+   `python digest.py --tipranks-check`.)
 
-## 6. Everyday use: the chat page
+## 6. Everyday use: Market Digest (status, settings and chat)
 
-1. Double-click **Digest chat** on the desktop. A black window opens, then the chat page opens in your browser at
-   `http://127.0.0.1:8765`.
-2. **Keep the black window open** while you chat. Closing it stops the chat page.
-3. At the top, choose which videos to ask about:
-   - **Last 3 / 7 / 30 days**, or **All saved videos**, or
-   - **one video** from the second list. The chat then reads that video's full transcript.
-4. **Also search the web**: needs a Gemini key with billing turned on. On a free key, leave it ticked or not;
-   either way the answer says web search was not available and uses only your videos.
-5. Type your question and press **Enter** (Shift+Enter for a new line). Answers take 10 to 40 seconds.
+Double-click **Market Digest** on the desktop. A small window opens (keep it open while you use the page), then the
+page opens in your browser at `http://127.0.0.1:8765`. Only this computer can open it. It has three parts:
+
+**Home** answers "did it work?":
+- **Every day at 07:30. Next: tomorrow at 07:30.** A green dot means the daily run is set; amber means it is turned
+  off; red means the settings say on but the computer has no schedule (click **Save** in Settings to set it again).
+- **Last digest today at 07:31: 5 new videos, emailed.** Red if the last run failed, with the reason in plain words
+  and what to check.
+- **Make today's digest now** does what the daily run does, including the email. **Preview the last 3 days** makes
+  a test digest that is only shown, not emailed. Progress appears below the buttons.
+- **Recent digests** opens any of the last 8 digests. **Where things go** lists who gets the email, where the data
+  files are saved, and how many TipRanks look-ups this month used. **Show the log** shows what each run did.
+
+**Settings** is the page from installation (section 3), with your saved settings filled in.
+
+**Chat** answers questions about your videos:
+1. At the top, choose which videos to ask about: **Last 3 / 7 / 30 days**, **All saved videos**, or **one video**
+   from the second list (the chat then reads that video's full transcript).
+2. **Also search the web**: needs a Gemini key with billing turned on. On a free key, the answer says web search was
+   not available and uses only your videos.
+3. Type your question and press **Enter** (Shift+Enter for a new line). Answers take 10 to 40 seconds.
 
 Each answer has two parts: **From your channels**, with citations like **TheStreet 12:34** that open the video at
 that moment, and **From the web**. Past chats are listed on the left. Click one to continue it. **Delete chat** asks
-you to click twice so nothing is deleted by accident.
-
-The chat page only works on the PC where it is installed. Other computers and phones cannot open it.
+you to click twice so nothing is deleted by accident. The **"Ask a question about this video"** link in a saved digest
+opens the chat on that video (start Market Digest first).
 
 Good questions to start with:
 - *What did my channels say about the market this week?*
@@ -271,6 +276,7 @@ Good questions to start with:
 
 ## 7. Useful commands
 
+Everything below can also be done on the Market Digest page; these are for when you prefer typing.
 Open **PowerShell** (Start menu > type PowerShell > Enter), then go to the program folder:
 
 ```
@@ -284,6 +290,7 @@ cd $env:USERPROFILE\market-digest
 | `python digest.py --hours 48 --open` | The same, covering the last 48 hours. |
 | `python digest.py --hours 72 --dry-run --open` | A test digest of the last 3 days: **not emailed**, and videos are not marked as done. |
 | `python digest.py --video https://www.youtube.com/watch?v=... --dry-run --open` | A digest of one video. |
+| `python app.py` | Opens Market Digest (the same as the desktop shortcut). |
 | `python digest.py --rebuild 2026-10-22 --dry-run` | The Econova JSON file for an earlier day's digest, written to `digests\` to look at. Without `--dry-run` it goes to the JSON folder, unless that day already has a file. |
 
 To run the scheduled task exactly as Windows would: open **Task Scheduler**, click **Task Scheduler Library**,
@@ -295,32 +302,33 @@ for example `python3 digest.py --check`. To start the scheduled run now:
 
 ## 8. Changing, updating and removing it
 
-- **Change channels, email, key or time:** run `install.bat` again and answer `y` to "Settings already exist.
-  Enter them again?". Answer `n` to keep the settings and only change the time.
-- **Update to a new version:** unzip the new `market-digest-setup.zip` and run its `install.bat`. Your settings,
-  saved digests and chats are kept. Close any open **Digest chat** window first, then open it again afterwards so
-  it uses the new version.
-- **Remove it completely:**
+- **Change channels, email, keys or time:** Market Digest > **Settings**, then **Save**. Saving also updates the
+  daily schedule. To pause the digest, untick **Make the digest every day** and save.
+- **Update to a new version:** get the new files (a new zip, or `git pull` in the cloned folder) and double-click the
+  installer again. The settings page opens with your settings filled in: click **Finish**. Your settings, saved
+  digests and chats are kept. Close any open Market Digest window first. (`install.bat -Unattended` updates without
+  opening the page, keeping the settings and the time.)
+- **Remove it from Windows:**
   1. In Command Prompt: `schtasks /delete /tn "Market video digest" /f`
   2. Delete the folder `C:\Users\<you>\market-digest`.
-  3. Delete the **Digest chat** shortcut from the desktop.
+  3. Delete the **Market Digest** shortcut from the desktop.
   4. Optional: delete `C:\Users\<you>\ytmd` (the saved transcripts).
 - **Remove it from a Mac:** in Terminal run
   `launchctl bootout gui/$(id -u)/com.nugenix.market-digest; rm ~/Library/LaunchAgents/com.nugenix.market-digest.plist`,
-  then delete the folders `~/market-digest` and (optional) `~/ytmd`, and `Digest chat.command` from the desktop.
-- **Update on a Mac:** unzip the new version and run its `install-mac.command` the same way as the first time.
+  then delete the folders `~/market-digest` and (optional) `~/ytmd`, and `Market Digest.command` from the desktop.
 
 ## 9. If something goes wrong
 
-Run `python digest.py --check` first. It names the part that failed. Then see
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md), which lists each problem we have actually seen, its cause and the fix.
+Open **Market Digest**. The home page says whether the last run worked and, if not, why. In **Settings**, click each
+**Test** button: the one that fails names the problem. Then see [TROUBLESHOOTING.md](TROUBLESHOOTING.md), which lists
+each problem we have actually seen, its cause and the fix.
 
-The five most common:
+The most common:
 
 | You see | Fix |
 |---|---|
-| `Gemini key: FAILED: Gemini error 400` | The key was pasted wrongly (often Ctrl+V). Run `install.bat` again and paste with a right-click. |
-| `Email: FAILED to log in` | Use a Gmail **app password**, not your normal password. |
-| No email today | Check `digest.log`. `Nothing new today` means there were no new videos. |
-| "The chat page is already running" | An old chat window is still open. Use it, or close it and open Digest chat again. |
+| "Google says this key is not valid" | Copy the key again from Google AI Studio and paste the whole key. |
+| "Gmail did not accept this address and app password" | Use a Gmail **app password** (16 letters), not your normal password. |
+| No email today | The home page says why. "No new videos" means the channels posted nothing new. |
+| "Market Digest stopped responding" | Its window was closed. Double-click **Market Digest** again. |
 | The chat says web search was not available | Normal on a free Gemini key. Web search needs billing. |

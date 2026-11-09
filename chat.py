@@ -1,7 +1,7 @@
 """Ask questions about the videos in your digest, plus what the web says now.
 
-Start it with Digest chat on the desktop (run_chat.bat on Windows, run_chat.command on a Mac), or: python chat.py. It opens http://127.0.0.1:8765 in your browser.
-It only listens on this computer. It uses the same digest_config.json, Gemini key and saved videos as digest.py.
+The chat is a page of the Market Digest app: start Market Digest on the desktop (or python app.py) and click Chat.
+This file holds the chat's logic; app.py serves it. It uses the same digest_config.json, Gemini key and saved videos as digest.py.
 Standard library only.
 """
 import json
@@ -9,14 +9,10 @@ import re
 import sys
 import threading
 import uuid
-import webbrowser
 from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
 
 import digest as dg
 
-PORT = 8765
 CHATS = dg.HERE / "chats.json"
 LOCK = threading.Lock()
 MAX_VIDEOS = 25            # newest videos in scope that Gemini sees notes for
@@ -239,90 +235,12 @@ def answer(cfg, req):
     return chat
 
 
-# ---------------------------------------------------------------- the web server (this computer only)
-
-class Handler(BaseHTTPRequestHandler):
-    cfg = None
-
-    def log_message(self, *a):
-        pass
-
-    def allowed(self):
-        # Only pages opened from this computer's own address may use it.
-        return self.headers.get("Host", "") in (f"127.0.0.1:{PORT}", f"localhost:{PORT}")
-
-    def send(self, code, body, ctype="application/json"):
-        data = body if isinstance(body, bytes) else (json.dumps(body, ensure_ascii=False) if ctype == "application/json" else body).encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", ctype + "; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(data)
-
-    def do_GET(self):
-        if not self.allowed():
-            return self.send(403, {"error": "forbidden"})
-        u = urlparse(self.path)
-        if u.path == "/":
-            return self.send(200, (dg.HERE / "chat.html").read_text(encoding="utf-8"), "text/html")
-        if u.path == "/api/state":
-            vids = [{"id": v["id"], "title": v.get("title"), "channel": v.get("channel"), "date": v["date"].strftime("%d %b") if v["date"] else ""} for v, _ in library()]
-            with LOCK:
-                chats = [{"id": c["id"], "title": c["title"], "updated": c.get("updated", c["created"])} for c in load_chats()]
-            return self.send(200, {"videos": vids, "chats": chats})
-        if u.path == "/api/chat":
-            cid = parse_qs(u.query).get("id", [""])[0]
-            with LOCK:
-                chat = next((c for c in load_chats() if c["id"] == cid), None)
-            return self.send(200, chat) if chat else self.send(404, {"error": "That chat no longer exists."})
-        self.send(404, {"error": "not found"})
-
-    def do_POST(self):
-        if not self.allowed() or self.headers.get("Content-Type", "").split(";")[0] != "application/json":
-            return self.send(403, {"error": "forbidden"})
-        try:
-            req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-        except json.JSONDecodeError:
-            return self.send(400, {"error": "bad request"})
-        try:
-            if self.path == "/api/ask":
-                return self.send(200, answer(self.cfg, req))
-            if self.path == "/api/delete":
-                with LOCK:
-                    save_chats([c for c in load_chats() if c["id"] != req.get("id")])
-                return self.send(200, {"ok": True})
-            if self.path == "/api/rename":
-                with LOCK:
-                    chats = load_chats()
-                    for c in chats:
-                        if c["id"] == req.get("id") and (req.get("title") or "").strip():
-                            c["title"] = req["title"].strip()[:80]
-                    save_chats(chats)
-                return self.send(200, {"ok": True})
-        except ValueError as err:
-            return self.send(400, {"error": str(err)})
-        except Exception as err:
-            return self.send(502, {"error": str(err)})
-        self.send(404, {"error": "not found"})
-
+# ---------------------------------------------------------------- start
 
 def main():
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    Handler.cfg = dg.load_config()
-    if not dg.YTMD.exists():
-        sys.exit(f"Put chat.py in the same folder as the ytmd script (looked for {dg.YTMD}).")
-    try:
-        server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    except OSError:
-        print(f"The chat page is already running. Opening http://127.0.0.1:{PORT}")
-        webbrowser.open(f"http://127.0.0.1:{PORT}")
-        return
-    print(f"Chat page: http://127.0.0.1:{PORT}  (only this computer can open it). Close this window to stop it.")
-    if "--no-browser" not in sys.argv:
-        webbrowser.open(f"http://127.0.0.1:{PORT}")
-    server.serve_forever()
+    """The chat is now a page of the Market Digest app (app.py); this keeps old Digest chat shortcuts working."""
+    import app
+    app.main(["--page", "/chat"] + (["--no-browser"] if "--no-browser" in sys.argv else []))
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ STATE = HERE / "digest_state.json"
 OUT_DIR = HERE / "digests"
 CACHE_DIR = HERE / "digest_cache"
 JSON_DIR = HERE / "digest_json"   # where the daily JSON files go unless json_dir is set in the config
+LAST_RUN = HERE / "last_run.json"  # how the latest run went, for the Market Digest app's home page
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 MAX_TRANSCRIPT_CHARS = 150_000
@@ -88,6 +89,17 @@ def save_state(state):
 
 def log(msg):
     print(datetime.now().strftime("%H:%M:%S"), msg, flush=True)
+
+
+def record_run(ok, message, **info):
+    """Save how this run went to last_run.json, which the Market Digest app shows. Never raises."""
+    try:
+        doc = {"finished_at": datetime.now().isoformat(timespec="seconds"), "ok": ok, "message": message, **info}
+        tmp = LAST_RUN.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(LAST_RUN)
+    except Exception:
+        pass
 
 
 def wait_for_internet(minutes=15):
@@ -807,8 +819,13 @@ def main():
     if not YTMD.exists():
         sys.exit(f"Put digest.py in the same folder as the ytmd script (looked for {YTMD}).")
 
+    test_run = bool(args.dry_run or args.video)
+    if not (args.check or args.rebuild or args.tipranks_check):
+        log(f"--- {datetime.now():%A %d %B %Y}: {'test digest (not emailed)' if test_run else 'daily digest'}")
     if not wait_for_internet():
         log("No internet for 15 minutes; stopping. The daily schedule tries again in 30 minutes.")
+        if not (args.check or args.rebuild or args.tipranks_check):
+            record_run(False, "There was no internet connection for 15 minutes.", test=test_run)
         sys.exit(1)
 
     # 1. What is new
@@ -894,11 +911,11 @@ def main():
     OUT_DIR.mkdir(exist_ok=True)
     out = OUT_DIR / f"digest-{today:%Y-%m-%d-%H%M}.html"
     local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}" '
-                   f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat page; start it with Digest chat on the desktop)</p>', page)
+                   f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat; start Market Digest on the desktop first)</p>', page)
     out.write_text(local, encoding="utf-8")
     log(f"Saved {out}")
     subject = f"Market video digest, {today:%d %b %Y}: {len(done)} new video{'s' if len(done) != 1 else ''}"
-    emailed = False
+    emailed, email_error = False, ""
     if not args.dry_run:
         if not done and not skipped and unchecked:
             log("Could not check any channel. Leaving videos queued; the daily schedule tries again in 30 minutes.")
@@ -908,6 +925,8 @@ def main():
                 emailed = send(cfg, subject, page, plain_text(done, skipped, overview, market))
             except Exception as err:
                 emailed = None
+                email_error = ("Gmail did not accept the sending address and app password" if isinstance(err, smtplib.SMTPAuthenticationError)
+                               else str(err))
                 log(f"Email failed: {err}. The digest is saved above; these videos stay queued and the daily schedule tries again in 30 minutes.")
             if emailed:
                 log("Emailed to " + ", ".join(cfg["email_to"] if isinstance(cfg["email_to"], list) else [cfg["email_to"]]))
@@ -945,6 +964,23 @@ def main():
                 save_state(state)
         except Exception as err:   # a JSON problem must not turn a sent digest into a failed run
             log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
+    failed = [why for v, why in skipped if why.startswith("failed this time")]
+    if emailed is None:
+        ok, message = False, (f"The email could not be sent: {email_error}" if email_error else
+                              "No channel could be checked: " + "; ".join(f"{ch}: {why[:150]}" for ch, why in unchecked))
+    elif new and not done and failed:
+        ok, message = False, f"No video could be summarised. The first problem: {failed[0][len('failed this time, will retry: '):][:300]}"
+    else:
+        ok = True
+        message = (f"{len(done)} new video{'s' if len(done) != 1 else ''}" if done else "No new videos") + (
+            ", emailed" if emailed else ", not emailed (a test)" if args.dry_run else
+            ", saved on this computer (email is not set up)" if done or skipped or unchecked else ", so no email was needed") + "."
+        if unchecked:
+            message += f" {len(unchecked)} channel{'s' if len(unchecked) != 1 else ''} could not be checked."
+        if failed:
+            message += f" {len(failed)} video{'s' if len(failed) != 1 else ''} failed and will be tried again."
+    record_run(ok, message, test=test_run, videos=len(done), skipped=len(skipped), digest_file=out.name,
+               emailed_to=(cfg.get("email_to") if emailed else []), unchecked=[ch for ch, _ in unchecked])
     if args.open:
         if hasattr(os, "startfile"):   # Windows
             os.startfile(out)
@@ -955,4 +991,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except Exception as err:   # an unexpected crash still shows on the app's home page
+        if not any(a in sys.argv for a in ("--check", "--rebuild", "--tipranks-check")):
+            record_run(False, f"The run stopped with an error: {err.__class__.__name__}: {err}", test="--dry-run" in sys.argv)
+        raise

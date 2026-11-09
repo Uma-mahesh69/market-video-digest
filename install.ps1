@@ -1,32 +1,16 @@
 # Sets up the market video digest on this Windows computer. Started by install.bat.
+# It installs what is needed, then opens the settings page in your browser, where you paste your keys.
 # Safe to run again: it updates the program files and keeps the settings, saved videos and chats.
 param(
     [string]$InstallDir = (Join-Path $env:USERPROFILE "market-digest"),
-    [string]$TaskName = "Market video digest",
-    [switch]$Unattended   # keep the existing settings, ask nothing, no desktop shortcut or test digest
+    [switch]$Unattended   # an update: keep the settings and the daily time, open no page
 )
 $ErrorActionPreference = "Stop"
 $src = $PSScriptRoot
-$files = "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "tipranks.py", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
+$files = "app.py", "app.html", "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "tipranks.py", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "STOPPED: $text" -ForegroundColor Red; exit 1 }
-function Ask($question, $default) {
-    $answer = Read-Host "$question [$default]"
-    if ([string]::IsNullOrWhiteSpace($answer)) { return $default }
-    return $answer.Trim()
-}
-function AskSecret($question, $minLength) {
-    while ($true) {
-        $secure = Read-Host "$question (paste with RIGHT-click; Ctrl+V does not work here)" -AsSecureString
-        $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-        try { $value = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim() }
-        finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-        if ($value -match "[\x00-\x1F]") { Write-Host "That included a Ctrl key instead of the text. Right-click to paste, then press Enter." -ForegroundColor Yellow; continue }
-        if ($value.Length -lt $minLength) { Write-Host "That is too short to be right ($($value.Length) characters). Try again." -ForegroundColor Yellow; continue }
-        return $value
-    }
-}
 function Find-Python {
     # The "python" that ships with Windows can be a shortcut to the Store, so ask each candidate for its real path.
     $candidates = @("py", "python") + @(Get-ChildItem "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe", "$env:ProgramFiles\Python3*\python.exe" -ErrorAction SilentlyContinue |
@@ -90,15 +74,21 @@ $runDigest = @(
     "set attempt=1",
     ":run",
     "`"$py`" digest.py >> digest.log 2>&1 && exit /b 0",
-    "if %attempt% geq 4 exit /b 1",
+    "if %attempt% geq 4 goto failed",
     "set /a attempt+=1",
     "echo %time:~0,8% The run failed; trying again in 30 minutes.>> digest.log",
     "`"$py`" -c `"import time; time.sleep(1800)`"",
     "goto run",
+    ":failed",
+    "`"$py`" app.py --notify-failure",
+    "exit /b 1",
     ""
 ) -join "`r`n"
-$runChat = "@echo off`r`nrem Starts the chat page. Keep this window open while you use it.`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" chat.py`r`npause`r`n"
+$runApp = "@echo off`r`nrem Opens Market Digest (status, settings and chat) in your browser. Keep this window open while you use it.`r`ntitle Market Digest`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" app.py`r`npause`r`n"
+# Older "Digest chat" shortcuts keep working: they open the same app, on its Chat page.
+$runChat = "@echo off`r`ntitle Market Digest`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" chat.py`r`npause`r`n"
 [IO.File]::WriteAllText((Join-Path $InstallDir "run_digest.bat"), $runDigest)
+[IO.File]::WriteAllText((Join-Path $InstallDir "run_app.bat"), $runApp)
 [IO.File]::WriteAllText((Join-Path $InstallDir "run_chat.bat"), $runChat)
 
 Push-Location $InstallDir
@@ -106,81 +96,31 @@ try {
     & $py ytmd doctor | Out-Null
     if ($LASTEXITCODE -ne 0) { & $py ytmd doctor | Out-Host; Fail "The caption reader (ytmd) is not ready. See the lines above." }
 
-    Step "4. Settings"
-    $config = Join-Path $InstallDir "digest_config.json"
-    $time = "07:30"
-    $write = -not (Test-Path $config)
-    if (-not $write -and -not $Unattended) { $write = (Ask "Settings already exist. Enter them again?" "n") -match "^y" }
-    if (-not $write -and -not (Test-Path $config)) { Fail "No settings. Run install.bat without -Unattended." }
-    if ($write) {
-        Write-Host "Your answers are saved only on this computer, in $config"
-        Write-Host "Typed keys and passwords are hidden as you type or paste them."
-        $key = AskSecret "Gemini API key (from https://aistudio.google.com/apikey)" 30
-        $channels = Ask "YouTube channels to follow, separated by commas" "https://www.youtube.com/@TheStreet"
-        $to = Ask "Email address that should receive the digest (blank = no email, just save it)" ""
-        $user = ""; $pass = ""
-        if ($to) {
-            $user = Ask "Gmail address that sends it" $to
-            Write-Host "Gmail needs an app password: Google Account > Security > 2-Step Verification > App passwords."
-            $pass = (AskSecret "Gmail app password (16 letters)" 16) -replace "\s", ""
-        }
-        Write-Host "Each digest is also saved as a JSON file for the Econova hub. To share it, give a Google Drive for desktop folder,"
-        Write-Host "for example G:\My Drive\Econova\Video Digests\json"
-        $jsonDir = Ask "Folder for the daily JSON file (blank = digest_json in the program folder)" ""
-        Write-Host "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
-        $watchlist = Ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" ""
-        Write-Host "Optional: a TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus, price targets and earnings dates."
-        $tipranks = AskSecret "TipRanks API key (press Enter to skip)" 0
-        $settings = [ordered]@{
-            channels = @($channels -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-            gemini_api_key = $key
-            models = @("gemini-3.7-flash", "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
-            lookback_hours = 26
-            max_videos = 20
-            email_to = @($to -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-            smtp_user = $user
-            smtp_password = $pass
-            smtp_host = "smtp.gmail.com"
-            smtp_port = 465
-            json_dir = $jsonDir
-            watchlist_csv = $watchlist
-            tipranks_api_key = $tipranks
-        }
-        [IO.File]::WriteAllText($config, ($settings | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
-        Write-Host "Saved."
-    }
     if (-not $Unattended) {
-        do { $time = Ask "Time to make the digest each day (24-hour, HH:MM)" "07:30" } while ($time -notmatch "^([01]\d|2[0-3]):[0-5]\d$")
+        Step "4. Settings (in your browser)"
+        Write-Host "The settings page is opening in your browser. Paste your keys there, test them, click Save, then Finish."
+        Write-Host "(If no page opens, copy the address below into your browser.)"
+        & $py app.py --setup
+        if ($LASTEXITCODE -ne 0) { Fail "The settings page stopped. Run install.bat again." }
     }
 
-    Step "5. Testing channels, Gemini key and email"
-    & $py digest.py --check | Out-Host
-    if ($LASTEXITCODE -ne 0) { Fail "A test failed (see FAILED above). Fix it by running install.bat again and re-entering the settings." }
-
-    Step "6. Daily schedule"
-    $action = New-ScheduledTaskAction -Execute (Join-Path $InstallDir "run_digest.bat") -WorkingDirectory $InstallDir
-    $trigger = New-ScheduledTaskTrigger -Daily -At $time
-    # StartWhenAvailable: if the computer was off at that time, run as soon as it is back on.
-    # Retries happen inside run_digest.bat (up to 3 waits of 30 minutes), so the time limit leaves room for them.
-    $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 3)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $taskSettings -Description "Emails the market video digest. Installed by install.bat." -Force | Out-Null
-    Write-Host "Scheduled '$TaskName' every day at $time (while you are logged in; a missed time runs when the computer is next on)."
+    Step "5. Daily schedule"
+    & $py app.py --schedule | Out-Host
+    if ($LASTEXITCODE -ne 0) { Fail "No settings were saved, or the schedule could not be set. Run install.bat again (without -Unattended) and click Save on the page." }
 
     if (-not $Unattended) {
-        Step "7. Desktop shortcut for the chat page"
-        $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "Digest chat.lnk"))
-        $lnk.TargetPath = Join-Path $InstallDir "run_chat.bat"
+        Step "6. Market Digest on the desktop"
+        $desktop = [Environment]::GetFolderPath("Desktop")
+        Remove-Item (Join-Path $desktop "Digest chat.lnk") -ErrorAction SilentlyContinue   # replaced by Market Digest, which has the chat too
+        $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop "Market Digest.lnk"))
+        $lnk.TargetPath = Join-Path $InstallDir "run_app.bat"
         $lnk.WorkingDirectory = $InstallDir
         $lnk.Save()
-        Write-Host "Added 'Digest chat' to the desktop."
-
-        if ((Ask "Make a test digest of the last 3 days now? It opens in the browser and is not emailed (y/n)" "y") -match "^y") {
-            & $py digest.py --hours 72 --dry-run --open | Out-Host
-        }
+        Write-Host "Added 'Market Digest' to the desktop: it shows whether the digest ran, your settings, and the chat."
     }
 } finally { Pop-Location }
 
 Write-Host ""
-Write-Host "Done. The digest arrives by email every day at $time." -ForegroundColor Green
-Write-Host "Chat about the videos: double-click 'Digest chat' on the desktop."
-Write-Host "Program folder: $InstallDir (run install.bat again to change settings or update)."
+Write-Host "Done. You can close this window." -ForegroundColor Green
+Write-Host "To check on the digest, change a setting or chat about the videos: double-click 'Market Digest' on the desktop."
+Write-Host "Program folder: $InstallDir (run install.bat again to update; your settings are kept)."

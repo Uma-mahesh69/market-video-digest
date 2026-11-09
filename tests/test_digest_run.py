@@ -32,9 +32,10 @@ class DailyRun(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.saved = {k: getattr(digest, k) for k in ("CACHE_DIR", "OUT_DIR", "JSON_DIR", "STATE", "CONFIG", "YTMD", "wait_for_internet",
-                                                     "latest_uploads", "transcript", "gemini", "send")}
+                                                     "latest_uploads", "transcript", "gemini", "send", "LAST_RUN")}
         digest.CACHE_DIR, digest.OUT_DIR, digest.JSON_DIR = self.tmp / "cache", self.tmp / "digests", self.tmp / "json"
         digest.STATE, digest.CONFIG, digest.YTMD = self.tmp / "state.json", self.tmp / "cfg.json", self.tmp / "ytmd"
+        digest.LAST_RUN = self.tmp / "last_run.json"
         digest.CONFIG.write_text(json.dumps({"channels": ["https://www.youtube.com/channel/UC" + "x" * 22], "gemini_api_key": "k", "email_to": ["anil@example.com"]}))
         digest.YTMD.write_text("")
         digest.wait_for_internet = lambda: True
@@ -86,6 +87,26 @@ class DailyRun(unittest.TestCase):
         self.assertEqual(day["mentions"][0]["analyst"], "Sam Stovall")
         self.assertEqual(day["videos"][0]["sp500_targets"], [{"value": 8050, "horizon": "year-end"}])
         self.assertIn("no ticker for 'Weird Co'", out)
+
+    def test_last_run_is_recorded_for_the_app(self):
+        self.run_digest()
+        last = json.loads(digest.LAST_RUN.read_text(encoding="utf-8"))
+        self.assertTrue(last["ok"])
+        self.assertEqual(last["message"], "2 new videos, emailed.")
+        self.assertEqual(last["emailed_to"], ["anil@example.com"])
+        self.assertTrue((self.tmp / "digests" / last["digest_file"]).exists())
+
+    def test_failed_email_is_recorded_in_plain_words(self):
+        import smtplib
+
+        def refuse(*a):
+            raise smtplib.SMTPAuthenticationError(535, b"5.7.8 Username and Password not accepted")
+        digest.send = refuse
+        code, out = self.run_digest()
+        self.assertEqual(code, 1)
+        last = json.loads(digest.LAST_RUN.read_text(encoding="utf-8"))
+        self.assertFalse(last["ok"])
+        self.assertEqual(last["message"], "The email could not be sent: Gmail did not accept the sending address and app password")
 
     def test_second_run_same_day_adds_to_the_file(self):
         self.run_digest()
