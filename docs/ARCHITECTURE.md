@@ -6,10 +6,11 @@ a plain-language summary.
 ## 1. The big picture
 
 > In one sentence: a scheduled Python script finds new YouTube videos, reads their captions, asks Gemini to turn
-> each one into structured notes, and emails a digest; a small local web server lets you chat over the same notes.
+> each one into structured notes, and emails a digest; a small local web app (Market Digest) shows whether it ran,
+> holds the settings, and lets you chat over the same notes.
 
 ```
-                         every morning (Windows Task Scheduler)
+              every morning (Task Scheduler on Windows, launchd on a Mac)
                                          |
                                          v
  YouTube channel  --RSS feed-->  digest.py  --ytmd + yt-dlp-->  captions  ("[12:34] text")
@@ -21,13 +22,15 @@ a plain-language summary.
                                     |  one request for the day's overview
                                     v
                           HTML digest  --SMTP (Gmail)-->  your inbox
-                                    \--> digests/digest-YYYY-MM-DD-HHMM.html
+                                    \--> digests/digest-YYYY-MM-DD-HHMM.html, last_run.json,
+                                         daily JSON files for the Econova hub (Google Drive)
 
- You  --browser-->  chat.html  --HTTP 127.0.0.1:8765-->  chat.py
-                                                         |  notes + matching caption passages
-                                                         v
-                                                   Google Gemini  --> answer with [V2 12:34] citations
-                                                         \--> chats.json
+ You  --browser-->  app.html / chat.html  --HTTP 127.0.0.1:8765-->  app.py (Market Digest)
+                      Home: last_run.json, digests, schedule      |  Settings: digest_config.json + Test buttons,
+                      Chat: notes + matching caption passages    |  sets the daily schedule
+                                                                 v
+                                                   chat.py --> Google Gemini --> answer with [V2 12:34] citations
+                                                                 \--> chats.json
 ```
 
 ## 2. Components
@@ -35,18 +38,20 @@ a plain-language summary.
 | Component | File | What it does |
 |---|---|---|
 | **Digest pipeline** | `digest.py` | The daily job: find new videos, get captions, summarise with Gemini, render, email. Also `--check` and `--rebuild`. |
-| **Chat server** | `chat.py` | A small web server on `127.0.0.1:8765` (this PC only). Builds context from saved notes and captions, calls Gemini, saves chats. |
-| **Chat page** | `chat.html` | The browser interface: chat list, scope selectors, answers with clickable citations. |
+| **Market Digest app** | `app.py`, `app.html` | A small web server on `127.0.0.1:8765` (this computer only), started by the **Market Digest** desktop shortcut. **Home** reads `last_run.json`, the saved digests and the schedule; **Settings** edits `digest_config.json` with a plain-words test per setting (reusing digest.py's own calls), and sets the daily schedule itself (Task Scheduler through PowerShell, or a launchd plist); it also serves the chat. `--setup` is the installer's settings step; `--schedule` re-applies the saved time on updates; `--notify-failure` shows a desktop notice after the last retry fails. |
+| **Chat** | `chat.py`, `chat.html` | `chat.py` builds context from saved notes and captions, calls Gemini and saves chats; `app.py` serves it at `/chat`. `chat.html`: chat list, scope selectors, answers with clickable citations. |
+| **Filters** | `digest.py` (`analyst_patterns`, `names_in`, `left_out`) | With `analysts` set, a video is read only if a followed name is in its title or captions (free, before Gemini), and kept only if that person is among the notes' speakers or stock-call analysts (or in the title): quoted is not enough. `markets_only` drops notes with no stocks, levels, sectors, predictions or S&P targets. Left-out videos are marked done (`"left out: ..."`), listed in small print in the email, and hidden from the chat (`_left_out` in their saved notes). `max_videos` then caps the ones that reach Gemini. |
+| **Run record** | `last_run.json` (written by `digest.py`) | How the latest run went: when, ok or not, a plain-words message (for example "Gmail did not accept the sending address and app password"), video count, the saved digest file. |
 | **Caption reader** | `ytmd` (external, MIT licence, v0.7.0) | Downloads captions through yt-dlp and stores them in a SQLite full-text index at `%USERPROFILE%\ytmd`. Provides `add`, `read`, `search`, `info`, `doctor`. |
 | **yt-dlp** | `bin\yt-dlp.exe` or already installed | Fetches caption files from YouTube for ytmd. |
-| **Installer** | `install.bat` + `install.ps1` (Windows), `install-mac.command` (Mac) | One-step setup: Python, yt-dlp, settings, tests, daily schedule (Task Scheduler on Windows, a launchd agent on a Mac), desktop shortcut. |
+| **Installer** | `install.bat` + `install.ps1` (Windows), `install-mac.command` (Mac) | Double-click setup: Python, yt-dlp, the launchers, then the settings page in the browser (`app.py --setup`), the daily schedule (`app.py --schedule`) and the Market Digest desktop shortcut. It asks nothing in the terminal. |
 | **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
-| **Launchers** | `run_digest.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. Both retry a failed run every 30 minutes, 3 times (Task Scheduler's own "restart on failure" ignores a program's exit code, so it cannot do this). |
+| **Launchers** | `run_digest.bat`, `run_app.bat`, `run_chat.bat` (Windows); `run_digest.sh`, `run_app.command`, `run_chat.command` (Mac) | Written by the installer with the computer's own Python path, and `bin` on PATH. `run_digest` retries a failed run every 30 minutes, 3 times (Task Scheduler's own "restart on failure" ignores a program's exit code, so it cannot do this), then shows a desktop notice. `run_chat` is kept so old Digest chat shortcuts open the app's chat. |
 | **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
 | **Watchlist** | `market_data.py`, `market_schema.json`, `watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
 | **Backfill** | `email_backfill.py` | Turns digests already sent (saved HTML or the email) back into the day's JSON file, through the same export. |
 | **Dashboard page** | `docs/econova_dashboard/` | The Analyst Video Digest page that reads the daily files and the watchlist sheet live from Google Drive. |
-| **Tests** | `tests/test_digest_export.py`, `tests/test_digest_run.py` | `python -m unittest` in the project folder runs them; no network needed. |
+| **Tests** | `tests/test_*.py` (export, daily run, app, market data, TipRanks, ...) | `python -m unittest` in the project folder runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |
 
 ## 3. The daily run, step by step (`digest.py`, `main()`)
@@ -140,7 +145,7 @@ a plain-language summary.
   the Flash models are often overloaded. The old design (long retries on one model) took 20+ minutes per run and
   burned the daily quota on retries.
 
-## 5. The chat (`chat.py` + `chat.html`)
+## 5. The chat (`chat.py` + `chat.html`, served by `app.py` at `/chat`)
 
 1. The page asks `/api/state` for the saved videos (from `digest_cache/`) and past chats.
 2. A question goes to `/api/ask` with a scope: last N days, all videos, or one video.
@@ -154,8 +159,10 @@ a plain-language summary.
    Web sources are listed as links. Google's search suggestions are shown in a sandboxed frame.
 7. Chats are saved in `chats.json`.
 
-**Endpoints:** `GET /` (page), `GET /api/state`, `GET /api/chat?id=`, `POST /api/ask`, `POST /api/delete`,
-`POST /api/rename`.
+**Endpoints (all in `app.py`):** chat: `GET /chat` (also `/?video=` from saved digests), `GET /api/state`,
+`GET /api/chat?id=`, `POST /api/ask`, `POST /api/delete`, `POST /api/rename`. Home and settings: `GET /`, `GET /settings`,
+`GET /api/status`, `GET /api/settings`, `GET /api/log`, `GET /digests/<file>`, `POST /api/save`, `POST /api/test/<name>`,
+`POST /api/run`, `POST /api/pick-folder`, `POST /api/finish` (installer only).
 
 ## 6. Files and data
 
@@ -170,7 +177,9 @@ a plain-language summary.
 | `watchlist_template.csv` | The watchlist sheet's formulas, to import into Google Sheets | No |
 | `tickers.json` | Company name to ticker lookup. Add a line when the log reports an unmatched name | No |
 | `chats.json` | Saved chats | Private |
-| `digest.log` | Output of scheduled runs | No |
+| `digest.log` | Output of scheduled runs, and of "Make today's digest now" | No |
+| `last_run.json` | How the latest run went, for the Market Digest home page | No |
+| `preview.log` | Output of the latest preview made from the home page | No |
 | `%USERPROFILE%\ytmd\` | Transcripts and the search index (ytmd library) | No |
 
 ## 7. Dependencies
@@ -190,8 +199,9 @@ a plain-language summary.
 | `StartWhenAvailable` on the task | A missed time runs when the PC is next on. |
 | Model chain with resting | Fast despite overloaded models and small free quotas. |
 | Cache Gemini notes per video | Re-runs and the chat cost no extra quota. |
-| Chat server bound to `127.0.0.1`, Host-header check, JSON-only POSTs | Only this PC can use it; other web pages can't call it. |
-| Key never sent to the browser | The chat page talks only to `chat.py`; `chat.py` talks to Gemini. |
+| App server bound to `127.0.0.1`, Host-header check, JSON-only POSTs, `X-Frame-Options: DENY` | Only this computer can use it; other web pages can't call it, read it through DNS rebinding, or frame it. |
+| Keys never sent to the browser | The settings page only learns whether a secret is saved (and a key's last 4 characters); a blank box keeps the saved one. The chat page talks only to `app.py`, which talks to Gemini. |
+| Settings written atomically, mode 600 on a Mac | A crash cannot leave half a settings file; other users cannot read the key. |
 | All model text HTML-escaped, citations resolved by code | Model output can't inject HTML or invent sources. |
 | Packager uses an allow-list | `digest_config.json` cannot end up in the shared zip. |
 

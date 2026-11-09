@@ -32,9 +32,10 @@ class DailyRun(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.saved = {k: getattr(digest, k) for k in ("CACHE_DIR", "OUT_DIR", "JSON_DIR", "STATE", "CONFIG", "YTMD", "wait_for_internet",
-                                                     "latest_uploads", "transcript", "gemini", "send")}
+                                                     "latest_uploads", "transcript", "gemini", "send", "LAST_RUN", "ytmd")}
         digest.CACHE_DIR, digest.OUT_DIR, digest.JSON_DIR = self.tmp / "cache", self.tmp / "digests", self.tmp / "json"
         digest.STATE, digest.CONFIG, digest.YTMD = self.tmp / "state.json", self.tmp / "cfg.json", self.tmp / "ytmd"
+        digest.LAST_RUN = self.tmp / "last_run.json"
         digest.CONFIG.write_text(json.dumps({"channels": ["https://www.youtube.com/channel/UC" + "x" * 22], "gemini_api_key": "k", "email_to": ["anil@example.com"]}))
         digest.YTMD.write_text("")
         digest.wait_for_internet = lambda: True
@@ -86,6 +87,71 @@ class DailyRun(unittest.TestCase):
         self.assertEqual(day["mentions"][0]["analyst"], "Sam Stovall")
         self.assertEqual(day["videos"][0]["sp500_targets"], [{"value": 8050, "horizon": "year-end"}])
         self.assertIn("no ticker for 'Weird Co'", out)
+
+    def test_last_run_is_recorded_for_the_app(self):
+        self.run_digest()
+        last = json.loads(digest.LAST_RUN.read_text(encoding="utf-8"))
+        self.assertTrue(last["ok"])
+        self.assertEqual(last["message"], "2 new videos, emailed.")
+        self.assertEqual(last["emailed_to"], ["anil@example.com"])
+        self.assertTrue((self.tmp / "digests" / last["digest_file"]).exists())
+
+    def test_failed_email_is_recorded_in_plain_words(self):
+        import smtplib
+
+        def refuse(*a):
+            raise smtplib.SMTPAuthenticationError(535, b"5.7.8 Username and Password not accepted")
+        digest.send = refuse
+        code, out = self.run_digest()
+        self.assertEqual(code, 1)
+        last = json.loads(digest.LAST_RUN.read_text(encoding="utf-8"))
+        self.assertFalse(last["ok"])
+        self.assertEqual(last["message"], "The email could not be sent: Gmail did not accept the sending address and app password")
+
+    def set_config(self, **extra):
+        cfg = json.loads(digest.CONFIG.read_text())
+        digest.CONFIG.write_text(json.dumps({**cfg, **extra}))
+
+    def test_analysts_filter_leaves_out_videos_before_gemini(self):
+        self.set_config(analysts=["Sam Stovall"])
+        transcripts = {"video000001": "[0:10] joining us is sam\n[0:12] stovall of cfra " * 20, "video000002": "[0:53] no one you follow " * 20}
+        digest.transcript = lambda v: transcripts[v["id"]]
+        code, out = self.run_digest()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.calls["extract"], 1)   # the video without him never reached Gemini
+        state = json.loads(digest.STATE.read_text())
+        self.assertTrue(state["done"]["video000002"].startswith("left out: none of the analysts you follow"))
+        self.assertEqual(self.day_file()["video_count"], 1)
+        last = json.loads(digest.LAST_RUN.read_text())
+        self.assertIn("1 left out by your settings", last["message"])
+
+    def test_an_analyst_only_quoted_is_left_out(self):
+        self.set_config(analysts=["Dan Ives / Daniel Ives"])
+        digest.transcript = lambda v: "[0:10] as dan ives said last week " * 20   # named, but the notes' speaker is Sam Stovall
+        code, out = self.run_digest()
+        self.assertEqual(self.calls["extract"], 2)
+        self.assertIn("Dan Ives only mentioned, not speaking", out)
+        self.assertEqual(self.day_file()["video_count"], 0)
+        notes = json.loads((digest.CACHE_DIR / "video000001.json").read_text())
+        self.assertIn("_left_out", notes)   # so the chat does not offer it
+
+    def test_markets_only_leaves_out_videos_with_nothing_on_markets(self):
+        empty = {k: [] for k in ("key_points", "market_levels", "stocks", "sectors_and_themes", "predictions", "risks", "upcoming_events", "sp500_targets")}
+        digest.gemini = lambda cfg, system, prompt: ({"overview": "", "themes": [], "disagreements": []} if system is digest.DAY_SYSTEM
+                                                     else {"summary": "A chat about football.", "speakers": [], **empty})
+        code, out = self.run_digest()
+        self.assertIn("not about markets or stocks", out)
+        self.set_config(markets_only=False)
+        self.feed[:] = [upload(5)]
+        code, out = self.run_digest()
+        self.assertNotIn("not about markets or stocks", out)
+
+    def test_a_single_video_you_ask_for_is_never_left_out(self):
+        self.set_config(analysts=["Nobody Here"])
+        digest.ytmd = lambda *a: {"title": "One video", "channel": "TheStreet"}
+        code, out = self.run_digest("--video", "https://www.youtube.com/watch?v=video000009", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Left out", out)
 
     def test_second_run_same_day_adds_to_the_file(self):
         self.run_digest()

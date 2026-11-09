@@ -9,6 +9,8 @@ digests/
 digest_json/
 chats.json
 digest.log
+last_run.json
+preview.log
 
 # Distribution packages
 *.zip
@@ -18,6 +20,8 @@ run_digest.bat
 run_chat.bat
 run_digest.sh
 run_chat.command
+run_app.bat
+run_app.command
 
 # Python
 __pycache__/

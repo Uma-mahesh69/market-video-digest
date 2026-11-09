@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Digest</title>
+<style>
+:root{--paper:#F4F6F9;--surface:#FFFFFF;--ink:#16202E;--muted:#5C6878;--line:#DCE2EA;--blue:#2447C5;--blue-soft:#E8EDFB;
+  --red:#B42318;--red-soft:#FDECEA;--green:#1A7F37;--green-soft:#E6F4EA;--amber:#8A5A00;--amber-soft:#FFF4D6;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Charter,"Iowan Old Style","Palatino Linotype",Georgia,serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--paper:#111822;--surface:#18212E;--ink:#E6EBF2;--muted:#94A1B3;--line:#2A3646;--blue:#9DB2FF;--blue-soft:#222E4A;
+  --red:#FF8A80;--red-soft:#3A1F22;--green:#7EE2A0;--green-soft:#173326;--amber:#F5C76B;--amber-soft:#3A2F17;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans)}
+a{color:var(--blue)}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 14px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.55;cursor:default}
+button.primary{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
+button.link{border:0;background:none;padding:0;color:var(--blue);text-decoration:underline;cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+input[type=text],input[type=password],input[type=email],input[type=url],input[type=time],input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+input.bad{border-color:var(--red)}
+[hidden]{display:none!important}
+
+.bar{position:sticky;top:0;z-index:5;display:flex;gap:18px;align-items:center;padding:10px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{font:600 18px/1.2 var(--serif);color:var(--ink);text-decoration:none}
+nav{display:flex;gap:4px}
+nav a{padding:6px 12px;border-radius:6px;text-decoration:none;color:var(--muted)}
+nav a:hover{background:var(--blue-soft)}
+nav a[aria-current=page]{background:var(--blue-soft);color:var(--blue);font-weight:600}
+main{max-width:820px;margin:0 auto;padding:24px 20px 120px}
+h1{font:600 26px/1.25 var(--serif);margin:4px 0 6px}
+h2{font:600 18px/1.3 var(--serif);margin:0 0 4px}
+.lead{color:var(--muted);margin:0 0 20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:0 0 16px}
+.card > p.what{color:var(--muted);margin:0 0 12px;font-size:14px}
+.tag{display:inline-block;font:600 11px/1.6 var(--sans);letter-spacing:.03em;text-transform:uppercase;border-radius:4px;padding:0 6px;margin-left:8px;vertical-align:2px}
+.tag.req{background:var(--blue-soft);color:var(--blue)}
+.tag.opt{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+label.f{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
+.help{font-size:13px;color:var(--muted);margin:4px 0 0}
+.row{display:flex;gap:8px;align-items:center}
+.row > input{flex:1}
+.err{color:var(--red);font-size:13px;margin:4px 0 0}
+.saved{font-size:13px;color:var(--green);margin:4px 0 0}
+.result{font-size:14px;margin:8px 0 0;padding:8px 10px;border-radius:6px}
+.result:empty{display:none}
+.result.ok{background:var(--green-soft);color:var(--green)}
+.result.warn{background:var(--amber-soft);color:var(--amber)}
+.result.bad{background:var(--red-soft);color:var(--red)}
+.result.busy{background:var(--paper);color:var(--muted)}
+.tests{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chan{margin:0 0 8px}
+.chan .result{margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chips button{font-size:13px;padding:3px 10px;border-radius:999px;background:var(--blue-soft);border-color:transparent;color:var(--blue);white-space:normal;text-align:left}
+details summary{cursor:pointer;font-weight:600}
+.switch{display:flex;gap:10px;align-items:center;font-weight:600}
+.switch input{width:18px;height:18px}
+
+.foot{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line)}
+.foot .in{max-width:820px;margin:0 auto;padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.foot .msg{flex:1;min-width:200px;font-size:14px;color:var(--muted)}
+.foot .msg.ok{color:var(--green)}.foot .msg.bad{color:var(--red)}
+
+.status{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;align-items:start}
+.dot{width:12px;height:12px;border-radius:50%;margin-top:6px;background:var(--line)}
+.dot.ok{background:var(--green)}.dot.bad{background:var(--red)}.dot.warn{background:#D29922}
+.status b{display:block}
+.status .sub{color:var(--muted);font-size:14px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+pre.log{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:10px;max-height:320px;overflow:auto;font:12px/1.5 var(--mono);white-space:pre-wrap;margin:10px 0 0}
+ul.plain{list-style:none;margin:0;padding:0}
+ul.plain li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+ul.plain li:first-child{border-top:0}
+dl.facts{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:6px 16px;margin:0}
+dl.facts dt{color:var(--muted);font-size:14px}
+dl.facts dd{margin:0;overflow-wrap:anywhere}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid2 .card{margin:0}
+.welcome{background:var(--blue-soft);border-color:transparent}
+.welcome ol{margin:8px 0 0;padding-left:20px}
+.done{text-align:center;padding:60px 20px}
+@media (max-width:640px){.grid2{grid-template-columns:1fr}.bar{padding:10px 16px;gap:10px}main{padding:18px 16px 140px}.row{flex-wrap:wrap}}
+</style></head>
+<body>
+<header class="bar">
+  <a class="brand" href="/">Market Digest</a>
+  <nav id="nav"><a href="/" data-v="home">Home</a><a href="/settings" data-v="settings">Settings</a><a href="/chat">Chat</a></nav>
+</header>
+
+<main>
+<!-- ================================================================ HOME -->
+<section id="home" hidden>
+  <h1>Your daily digest</h1>
+  <p class="lead" id="homeLead">Loading…</p>
+
+  <div class="card">
+    <div class="status">
+      <span class="dot" id="schedDot"></span>
+      <div><b id="schedText">Daily digest</b><span class="sub" id="schedSub"></span></div>
+      <span class="dot" id="lastDot"></span>
+      <div><b id="lastText">Last digest</b><span class="sub" id="lastSub"></span></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="runNow">Make today's digest now</button>
+      <button id="runPreview">Preview the last 3 days (no email)</button>
+      <button id="openLast" hidden>Open the last digest</button>
+    </div>
+    <p class="help" id="runHelp">"Make today's digest now" does what the daily run does, including the email. The preview only shows it in your browser.</p>
+    <div id="job" hidden>
+      <p class="result busy" id="jobText"></p>
+      <pre class="log" id="jobLog"></pre>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Recent digests</h2>
+      <ul class="plain" id="digests"></ul>
+    </div>
+    <div class="card">
+      <h2>Where things go</h2>
+      <dl class="facts" id="facts"></dl>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row"><h2 style="flex:1;margin:0">The log</h2><button id="logBtn">Show the log</button></div>
+    <p class="help">Every run writes what it did here. Useful when something did not arrive.</p>
+    <pre class="log" id="log" hidden></pre>
+  </div>
+</section>
+
+<!-- ================================================================ SETTINGS -->
+<section id="settings" hidden>
+  <div class="card welcome" id="welcome" hidden>
+    <h1>Set up your market digest</h1>
+    <p style="margin:0">Fill in the boxes below, test each one, then click <b>Save</b>. Only the first two are needed; the rest are extras you can add any time.</p>
+    <ol>
+      <li>A <b>Gemini key</b>, so Google's AI can read the videos (free).</li>
+      <li>The <b>YouTube channels</b> to follow.</li>
+      <li>Optional: your <b>email</b>, a shared <b>folder</b>, a <b>watchlist</b> sheet and <b>TipRanks</b>.</li>
+    </ol>
+  </div>
+  <div id="settingsHead"><h1>Settings</h1><p class="lead">Change anything, test it, then click <b>Save</b>. Everything stays on this computer.</p></div>
+  <p class="result bad" id="broken" hidden>The settings file could not be read, so these boxes show the defaults. Saving replaces it.</p>
+
+  <form id="form" autocomplete="off" novalidate>
+  <div class="card">
+    <h2>Gemini key <span class="tag req">Needed</span></h2>
+    <p class="what">Gemini is Google's AI. It reads each video's captions and writes the digest. The key is free:
+      open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>, click <i>Create API key</i>, copy it and paste it here.</p>
+    <label class="f" for="gemini_api_key">API key</label>
+    <div class="row"><input type="password" id="gemini_api_key" spellcheck="false"><button type="button" class="show" data-for="gemini_api_key">Show</button></div>
+    <p class="saved" id="saved-gemini_api_key" hidden></p>
+    <p class="err" id="e-gemini_api_key"></p>
+    <div class="tests"><button type="button" data-test="gemini">Test the key</button></div>
+    <p class="result" id="r-gemini" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <h2>YouTube channels <span class="tag req">Needed</span></h2>
+    <p class="what">The channels whose new videos go into the digest. Open a channel on YouTube and copy the address from the top of the browser,
+      like <i>https://www.youtube.com/@TheStreet</i>, or type its handle, like <i>@TheStreet</i>.</p>
+    <div id="chans"></div>
+    <p class="err" id="e-channels"></p>
+    <div class="tests"><button type="button" id="addChan">+ Add a channel</button><button type="button" data-test="channels">Test the channels</button></div>
+    <p class="result" id="r-channels" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <h2>Analysts to follow <span class="tag opt">Optional</span></h2>
+    <p class="what">Only videos with these people go into the digest. Leave the list empty to include every video from your channels.
+      A video counts when the analyst <b>speaks</b> in it (or is named in its title), not when someone only quotes them.
+      Videos without any of them are left out before Gemini reads them, so they cost nothing.</p>
+    <div id="analysts"></div>
+    <p class="err" id="e-analysts"></p>
+    <div class="tests"><button type="button" id="addAnalyst">+ Add an analyst</button></div>
+    <p class="help">Write the full name, like <i>Dan Ives</i>. If captions spell it differently, add the other spelling after a slash: <i>Tom Lee / Thomas Lee</i>.</p>
+    <div id="suggestBox" hidden>
+      <p class="help" style="margin-top:12px"><b>Seen in your saved videos</b> (click to add; the number is how many videos):</p>
+      <div class="chips" id="suggest"></div>
+    </div>
+    <label class="switch" style="margin-top:14px"><input type="checkbox" id="markets_only"> Leave out videos that are not about markets or stocks</label>
+    <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
+  </div>
+
+  <div class="card">
+    <h2>Email <span class="tag opt">Optional</span></h2>
+    <p class="what">Where the digest is sent each day. Leave the first box empty to skip email; digests are still saved and shown on the home page.</p>
+    <label class="f" for="email_to">Send the digest to</label>
+    <input type="text" id="email_to" placeholder="you@example.com (several: separate with commas)" spellcheck="false">
+    <p class="err" id="e-email_to"></p>
+    <div id="smtpBox">
+      <label class="f" for="smtp_user">Gmail address that sends it</label>
+      <input type="email" id="smtp_user" spellcheck="false">
+      <p class="err" id="e-smtp_user"></p>
+      <label class="f" for="smtp_password">Gmail app password</label>
+      <div class="row"><input type="password" id="smtp_password" spellcheck="false" placeholder="16 letters"><button type="button" class="show" data-for="smtp_password">Show</button></div>
+      <p class="saved" id="saved-smtp_password" hidden></p>
+      <p class="help">Not your normal Gmail password. With 2-Step Verification on, make one at
+        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">Google Account &gt; App passwords</a> (name it "Market digest") and paste the 16 letters.</p>
+      <p class="err" id="e-smtp_password"></p>
+      <div class="tests"><button type="button" data-test="email">Test the login</button><button type="button" data-test="send_email">Send a test email</button></div>
+      <p class="result" id="r-email" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Daily time</h2>
+    <p class="what">When the digest is made and sent each day. The computer must be on and you must be logged in; a time missed while it was off runs as soon as it is back on.</p>
+    <label class="switch"><input type="checkbox" id="schedule_on"> Make the digest every day</label>
+    <label class="f" for="daily_time">At</label>
+    <input type="time" id="daily_time" style="max-width:160px">
+    <p class="err" id="e-daily_time"></p>
+  </div>
+
+  <div class="card">
+    <h2>Shared folder for the Econova hub <span class="tag opt">Optional</span></h2>
+    <p class="what">Each day's digest is also saved as data files, which the Econova dashboard reads. To share them, choose a folder inside Google Drive
+      (Google Drive for desktop must be installed). Leave it empty to keep them in the program folder only.</p>
+    <label class="f" for="json_dir">Folder</label>
+    <div class="row"><input type="text" id="json_dir" spellcheck="false" placeholder="Empty: the program folder"><button type="button" id="pick">Choose…</button></div>
+    <div class="chips" id="driveChips"></div>
+    <p class="err" id="e-json_dir"></p>
+    <div class="tests"><button type="button" data-test="folder">Test the folder</button></div>
+    <p class="result" id="r-folder" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <h2>Watchlist <span class="tag opt">Optional</span></h2>
+    <p class="what">A Google Sheet of the stocks you follow, with live prices, adds a price table to the digest. In the sheet, use
+      <i>File &gt; Share &gt; Publish to web</i>, choose <i>Comma-separated values (.csv)</i>, and paste that link. (USER_GUIDE.md, "Your watchlist", has a ready-made sheet.)</p>
+    <label class="f" for="watchlist_csv">Sheet link (CSV)</label>
+    <input type="url" id="watchlist_csv" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv">
+    <p class="err" id="e-watchlist_csv"></p>
+    <div class="tests"><button type="button" data-test="watchlist">Test the sheet</button></div>
+    <p class="result" id="r-watchlist" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <h2>TipRanks <span class="tag opt">Optional</span></h2>
+    <p class="what">Adds Wall Street's view (analyst consensus, price targets, earnings dates) for the stocks in the digest. A free key gives 50 look-ups a month;
+      the digest uses at most one each weekday. Get one at <a href="https://mcp.tipranks.com/dev/keys" target="_blank" rel="noopener">TipRanks</a>; it starts with <i>tr_live_</i>.</p>
+    <label class="f" for="tipranks_api_key">API key</label>
+    <div class="row"><input type="password" id="tipranks_api_key" spellcheck="false" placeholder="tr_live_…"><button type="button" class="show" data-for="tipranks_api_key">Show</button></div>
+    <p class="saved" id="saved-tipranks_api_key" hidden></p>
+    <p class="err" id="e-tipranks_api_key"></p>
+    <div class="tests"><button type="button" data-test="tipranks">Check the key (free)</button><button type="button" data-test="tipranks_live">Test with TipRanks (uses 1 look-up)</button></div>
+    <p class="result" id="r-tipranks" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>More options</summary>
+      <label class="f" for="lookback_hours">On the first run, look back this many hours</label>
+      <input type="number" id="lookback_hours" min="1" max="168" style="max-width:160px">
+      <p class="help">After that, each digest covers everything since the last one (up to a week, so days the computer was off are not lost).</p>
+      <p class="err" id="e-lookback_hours"></p>
+      <label class="f" for="max_videos">At most this many videos a day</label>
+      <input type="number" id="max_videos" min="1" max="50" style="max-width:160px">
+      <p class="help">The newest are kept. Gemini's free tier handles about 20 a day.</p>
+      <p class="err" id="e-max_videos"></p>
+      <p class="help" id="programFolder"></p>
+    </details>
+  </div>
+  </form>
+
+  <div class="card" id="setupJob" hidden>
+    <h2>Test digest</h2>
+    <p class="result busy" id="setupJobText"></p>
+    <pre class="log" id="setupJobLog"></pre>
+  </div>
+</section>
+
+<section id="finished" class="done" hidden>
+  <h1>All set</h1>
+  <p class="lead">Your digest will be made every day at the time you chose. You can close this tab.</p>
+  <p>To check on it, change a setting or chat about the videos, double-click <b>Market Digest</b> on the desktop.</p>
+</section>
+</main>
+
+<div class="foot" id="foot" hidden>
+  <div class="in">
+    <span class="msg" id="footMsg" aria-live="polite"></span>
+    <button type="button" id="testDigest" hidden>Make a test digest</button>
+    <button type="button" class="primary" id="save">Save</button>
+    <button type="button" id="finish" hidden>Finish</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const view = location.pathname === '/settings' ? 'settings' : 'home';
+let S = null, dirty = false, pollTimer = null, cleared = {};
+
+async function api(path, body) {
+  let r;
+  try { r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}); }
+  catch (e) { throw new Error('Market Digest stopped. Start it again with Market Digest on the desktop.'); }
+  const data = await r.json().catch(() => ({ error: 'Market Digest stopped responding. Start it again with Market Digest on the desktop.' }));
+  if (!r.ok) { const e = new Error(data.error || 'Something went wrong.'); e.fields = data.fields; throw e; }
+  return data;
+}
+function show(el, cls, text) { el.className = 'result ' + cls; el.textContent = text; }
+function when(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
+  const t = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return 'today at ' + t;
+  if (d.toDateString() === y.toDateString()) return 'yesterday at ' + t;
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ' at ' + t;
+}
+
+// ---------------------------------------------------------------- home
+async function loadHome() {
+  let st;
+  try { st = await api('/api/status'); } catch (e) { $('homeLead').textContent = e.message; return; }
+  if (!st.configured) { location.href = '/settings'; return; }
+  const sc = st.schedule;
+  $('homeLead').textContent = `${st.channels} channel${st.channels === 1 ? '' : 's'} followed, ${st.videos_saved} videos saved so far.`;
+  if (!sc.on) { $('schedDot').className = 'dot warn'; $('schedText').textContent = 'The daily digest is off'; $('schedSub').textContent = ' Turn it on in Settings > Daily time.'; }
+  else if (sc.active === false) { $('schedDot').className = 'dot bad'; $('schedText').textContent = `The daily digest is set for ${sc.time}, but this computer has no schedule for it`; $('schedSub').textContent = ' Open Settings and click Save to set it again.'; }
+  else { $('schedDot').className = 'dot ok'; $('schedText').textContent = `Every day at ${sc.time}`; $('schedSub').textContent = ` Next: ${sc.next}.`; }
+  const lr = st.last_run;
+  if (!lr) { $('lastDot').className = 'dot'; $('lastText').textContent = 'No digest yet'; $('lastSub').textContent = ' The first one comes at the daily time, or click "Make today\'s digest now".'; }
+  else {
+    $('lastDot').className = 'dot ' + (lr.ok ? 'ok' : 'bad');
+    $('lastText').textContent = (lr.ok ? 'Last digest ' : 'The last run failed ') + when(lr.finished_at) + (lr.test ? ' (a test)' : '');
+    let sub = ' ' + lr.message;
+    if (!lr.ok) sub += /email/i.test(lr.message) ? ' Check the email part of Settings and click "Test the login".' :
+                       /internet/i.test(lr.message) ? ' It tries again by itself every 30 minutes, 3 times.' :
+                       /summarised|Gemini/i.test(lr.message) ? ' Check the Gemini key in Settings.' : ' The log below has the details.';
+    $('lastSub').textContent = sub;
+  }
+  const lastFile = lr && lr.digest_file ? lr.digest_file : (st.digests[0] && st.digests[0].name);
+  $('openLast').hidden = !lastFile; $('openLast').onclick = () => window.open('/digests/' + lastFile, '_blank');
+
+  const ul = $('digests'); ul.textContent = '';
+  if (!st.digests.length) { const li = document.createElement('li'); li.textContent = 'None yet.'; li.style.color = 'var(--muted)'; ul.append(li); }
+  for (const d of st.digests) {
+    const li = document.createElement('li'), a = document.createElement('a');
+    a.href = '/digests/' + d.name; a.target = '_blank'; a.textContent = when(d.when).replace(/^./, c => c.toUpperCase());
+    li.append(a);
+    if (d.test) { const s = document.createElement('span'); s.className = 'sub'; s.style.color = 'var(--muted)'; s.textContent = 'test, not emailed'; li.append(s); }
+    ul.append(li);
+  }
+  const facts = [
+    ['Email', st.email_to.length ? st.email_to.join(', ') : 'Off (digests are saved on this computer)'],
+    ['Data files', (st.json_shared ? st.json_dir : 'The program folder (not shared)') + (st.latest_json ? ` · newest: ${st.latest_json}` : '')],
+    ['Videos included', (st.analysts.length ? `Only with ${st.analysts.map(a => a.split('/')[0].trim()).join(', ')}` : 'Every video from your channels')
+      + (st.markets_only ? '; markets and stocks only' : '')],
+    ['Watchlist', st.watchlist ? 'On' : 'Off'],
+    ['TipRanks', st.tipranks.on ? `On · ${st.tipranks.calls} look-ups used this month` : 'Off'],
+    ['Chat', 'Ask about the videos on the Chat page'],
+  ];
+  const dl = $('facts'); dl.textContent = '';
+  for (const [k, v] of facts) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
+  dl.lastChild.innerHTML = '<a href="/chat">Ask about the videos</a>';
+  showJob(st.job, $('job'), $('jobText'), $('jobLog'));
+}
+function showJob(job, box, text, log) {
+  const busy = job && job.running;
+  for (const b of [$('runNow'), $('runPreview'), $('testDigest')]) if (b) b.disabled = busy;
+  if (!job || (!job.running && job.exit === null)) { box.hidden = true; return; }
+  box.hidden = false;
+  log.textContent = job.lines.join('\n'); log.scrollTop = log.scrollHeight;
+  if (busy) { show(text, 'busy', (job.kind === 'now' ? 'Making today\'s digest' : 'Making a preview of the last 3 days') + '… This takes a few minutes; you can leave this page open or come back later.'); }
+  else if (job.exit === 0) show(text, 'ok', job.kind === 'now' ? 'Done. See the result above.' : 'Done. The preview opened in your browser (or use "Open the last digest").');
+  else show(text, 'bad', 'It did not finish. The lines below say why.');
+  clearTimeout(pollTimer);
+  if (busy) pollTimer = setTimeout(async () => {
+    try { const st = await api('/api/status'); if (view === 'home' && !st.job.running) loadHome(); else showJob(st.job, box, text, log); } catch (e) {}
+  }, 2500);
+}
+async function run(kind, box, text, log) {
+  if (kind === 'now' && !confirm('Make today\'s digest now? It is emailed, as the daily run does.')) return;
+  try { showJob(await api('/api/run', { kind }), box, text, log); } catch (e) { box.hidden = false; show(text, 'bad', e.message); }
+}
+$('runNow').onclick = () => run('now', $('job'), $('jobText'), $('jobLog'));
+$('runPreview').onclick = () => run('preview', $('job'), $('jobText'), $('jobLog'));
+$('logBtn').onclick = async () => {
+  const pre = $('log');
+  if (!pre.hidden) { pre.hidden = true; $('logBtn').textContent = 'Show the log'; return; }
+  const { lines } = await api('/api/log');
+  pre.textContent = lines.length ? lines.join('') : 'The log is empty: the daily run has not run yet.';
+  pre.hidden = false; pre.scrollTop = pre.scrollHeight; $('logBtn').textContent = 'Hide the log';
+};
+
+// ---------------------------------------------------------------- settings
+const SECRETS = ['gemini_api_key', 'smtp_password', 'tipranks_api_key'];
+const OPTIONAL_SECRETS = ['smtp_password', 'tipranks_api_key'];
+
+function chanRow(value) {
+  const div = document.createElement('div'), row = document.createElement('div'), inp = document.createElement('input'), rm = document.createElement('button'), res = document.createElement('p');
+  div.className = 'chan'; row.className = 'row'; inp.type = 'text'; inp.value = value || ''; inp.placeholder = 'https://www.youtube.com/@ChannelName'; inp.spellcheck = false;
+  inp.setAttribute('aria-label', 'YouTube channel'); rm.type = 'button'; rm.textContent = 'Remove'; res.className = 'result';
+  rm.onclick = () => { div.remove(); if (!$('chans').children.length) $('chans').append(chanRow('')); changed(); };
+  inp.oninput = () => { res.textContent = ''; res.className = 'result'; changed(); };
+  row.append(inp, rm); div.append(row, res); return div;
+}
+function analystRow(value) {
+  const div = document.createElement('div'), row = document.createElement('div'), inp = document.createElement('input'), rm = document.createElement('button');
+  div.className = 'chan'; row.className = 'row'; inp.type = 'text'; inp.value = value || ''; inp.placeholder = 'Full name, like Dan Ives'; inp.spellcheck = false;
+  inp.setAttribute('aria-label', 'Analyst to follow'); rm.type = 'button'; rm.textContent = 'Remove';
+  rm.onclick = () => { div.remove(); changed(); renderSuggestions(); };
+  inp.oninput = () => { changed(); };
+  row.append(inp, rm); div.append(row); return div;
+}
+function analystValues() { return [...$('analysts').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean); }
+function renderSuggestions() {
+  const have = new Set(analystValues().flatMap(a => a.split('/').map(x => x.trim().toLowerCase())));
+  const box = $('suggest'); box.textContent = '';
+  const list = (S.analyst_suggestions || []).filter(r => !have.has(r.name.toLowerCase()));
+  $('suggestBox').hidden = !list.length;
+  for (const r of list) {
+    const b = document.createElement('button'); b.type = 'button';
+    b.textContent = `+ ${r.name}${r.role ? ' (' + r.role.slice(0, 40) + ')' : ''} · ${r.videos}`;
+    b.onclick = () => { const empty = [...$('analysts').querySelectorAll('input')].find(i => !i.value.trim());
+      if (empty) empty.value = r.name; else $('analysts').append(analystRow(r.name)); changed(); renderSuggestions(); };
+    box.append(b);
+  }
+}
+function fillSettings(s) {
+  S = s; cleared = {};
+  $('gemini_api_key').value = ''; $('smtp_password').value = ''; $('tipranks_api_key').value = '';
+  for (const k of SECRETS) {
+    const p = $('saved-' + k), saved = s[k].saved;
+    p.hidden = !saved; p.textContent = '';
+    if (saved) {
+      p.append(`✓ Saved${s[k].hint && s[k].hint !== 'saved' ? ' (' + s[k].hint + ')' : ''}. Paste a new one only to change it.`);
+      if (OPTIONAL_SECRETS.includes(k)) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = 'Remove it'; b.style.marginLeft = '8px';
+        b.onclick = () => { cleared[k] = true; p.textContent = 'It will be removed when you save.'; p.style.color = 'var(--amber)'; changed(); }; p.append(b);
+      }
+      p.style.color = '';
+    }
+    $(k).placeholder = saved ? '•••••••• (saved)' : (k === 'tipranks_api_key' ? 'tr_live_…' : k === 'smtp_password' ? '16 letters' : 'Paste the key here');
+  }
+  $('chans').textContent = '';
+  for (const c of (s.channels.length ? s.channels : [''])) $('chans').append(chanRow(c));
+  $('analysts').textContent = '';
+  for (const a of s.analysts) $('analysts').append(analystRow(a));
+  $('markets_only').checked = s.markets_only;
+  renderSuggestions();
+  $('email_to').value = s.email_to.join(', ');
+  $('smtp_user').value = s.smtp_user || '';
+  $('json_dir').value = s.json_dir || '';
+  $('watchlist_csv').value = s.watchlist_csv || '';
+  $('daily_time').value = s.daily_time; $('schedule_on').checked = s.schedule_on;
+  $('lookback_hours').value = s.lookback_hours; $('max_videos').value = s.max_videos;
+  $('programFolder').textContent = 'Program folder: ' + s.program_folder;
+  $('broken').hidden = !s.broken;
+  $('pick').hidden = s.platform === 'other';
+  const chips = $('driveChips'); chips.textContent = '';
+  for (const f of s.drive_folders) { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Use ' + f; b.onclick = () => { $('json_dir').value = f; changed(); }; chips.append(b); }
+  smtpVisibility();
+}
+function smtpVisibility() {
+  const on = $('email_to').value.trim() !== '';
+  $('smtpBox').hidden = !on;
+  $('smtp_user').placeholder = on ? $('email_to').value.split(/[,;\s]+/)[0] : '';
+}
+function collect() {
+  const f = {
+    channels: [...$('chans').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
+    analysts: analystValues(), markets_only: $('markets_only').checked,
+    email_to: $('email_to').value, smtp_user: $('smtp_user').value.trim(),
+    json_dir: $('json_dir').value, watchlist_csv: $('watchlist_csv').value,
+    daily_time: $('daily_time').value, schedule_on: $('schedule_on').checked,
+    lookback_hours: $('lookback_hours').value, max_videos: $('max_videos').value,
+  };
+  for (const k of SECRETS) { f[k] = $(k).value; if (cleared[k]) f[k + '_clear'] = true; }
+  return f;
+}
+function clearErrors() { document.querySelectorAll('.err').forEach(e => e.textContent = ''); document.querySelectorAll('input.bad').forEach(i => i.classList.remove('bad')); }
+function changed() { dirty = true; foot('You have changes that are not saved yet.', ''); }
+function foot(text, cls) { $('footMsg').textContent = text; $('footMsg').className = 'msg ' + (cls || ''); }
+
+const RESULT = { gemini: 'r-gemini', channels: 'r-channels', email: 'r-email', send_email: 'r-email', folder: 'r-folder', watchlist: 'r-watchlist', tipranks: 'r-tipranks', tipranks_live: 'r-tipranks' };
+document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () => {
+  const name = btn.dataset.test, out = $(RESULT[name]);
+  btn.disabled = true; show(out, 'busy', name === 'channels' ? 'Looking up each channel on YouTube…' : 'Testing…');
+  try {
+    const r = await api('/api/test/' + name, collect());
+    show(out, r.ok ? (r.warn ? 'warn' : 'ok') : 'bad', (r.ok ? (r.warn ? '' : '✓ ') : '✕ ') + r.message);
+    if (r.channels) {
+      const rows = [...$('chans').children].filter(d => d.querySelector('input').value.trim());
+      r.channels.forEach((c, i) => { const p = rows[i] && rows[i].querySelector('.result'); if (p) show(p, c.ok ? (c.warn ? 'warn' : 'ok') : 'bad', (c.ok ? '✓ ' : '✕ ') + c.message); });
+    }
+  } catch (e) { show(out, 'bad', '✕ ' + e.message); }
+  btn.disabled = false;
+});
+document.querySelectorAll('.show').forEach(b => b.onclick = () => {
+  const i = $(b.dataset.for); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Show' : 'Hide';
+});
+$('addAnalyst').onclick = () => { const r = analystRow(''); $('analysts').append(r); r.querySelector('input').focus(); changed(); };
+$('addChan').onclick = () => { const r = chanRow(''); $('chans').append(r); r.querySelector('input').focus(); changed(); };
+$('form').addEventListener('input', e => { if (e.target.id === 'email_to') smtpVisibility(); changed(); });
+$('form').addEventListener('change', changed);
+$('pick').onclick = async () => {
+  $('pick').disabled = true; show($('r-folder'), 'busy', 'A folder window opened (it may be behind this browser window).');
+  try { const r = await api('/api/pick-folder', {}); if (r.path) { $('json_dir').value = r.path; changed(); } $('r-folder').textContent = ''; $('r-folder').className = 'result'; }
+  catch (e) { show($('r-folder'), 'bad', e.message); }
+  $('pick').disabled = false;
+};
+$('save').onclick = async () => {
+  clearErrors(); $('save').disabled = true; foot('Saving…', '');
+  try {
+    const r = await api('/api/save', collect());
+    dirty = false; fillSettings({ ...S, ...r.settings });
+    foot('✓ Saved. ' + r.schedule, r.schedule_ok ? 'ok' : 'bad');
+    if (S.setup) { $('testDigest').hidden = false; $('finish').hidden = false; $('finish').classList.add('primary'); $('save').classList.remove('primary'); }
+  } catch (e) {
+    foot(e.message, 'bad');
+    if (e.fields) {
+      let first = null;
+      for (const [k, msg] of Object.entries(e.fields)) {
+        const el = $('e-' + k); if (el) el.textContent = msg;
+        const inp = k === 'channels' ? $('chans').querySelector('input') : k === 'analysts' ? $('analysts').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
+      }
+      if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus({ preventScroll: true }); }
+    }
+  }
+  $('save').disabled = false;
+};
+$('testDigest').onclick = () => { $('setupJob').hidden = false; $('setupJob').scrollIntoView({ behavior: 'smooth' }); run('preview', $('setupJob'), $('setupJobText'), $('setupJobLog')); };
+$('finish').onclick = async () => {
+  if (dirty && !confirm('Some changes are not saved. Finish without saving them?')) return;
+  try { await api('/api/finish', {}); } catch (e) {}
+  dirty = false; $('settings').hidden = true; $('foot').hidden = true; $('finished').hidden = false;
+};
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+async function loadSettings() {
+  $('foot').hidden = false;
+  let s;
+  try { s = await api('/api/settings'); } catch (e) { foot(e.message, 'bad'); return; }
+  s.setup = s.setup || new URLSearchParams(location.search).has('setup');
+  fillSettings(s);
+  if (s.setup) {
+    $('nav').hidden = true; $('welcome').hidden = !s.first_time; $('settingsHead').hidden = s.first_time;
+    if (!s.first_time) { $('finish').hidden = false; $('testDigest').hidden = false; foot('Your settings are kept from before. Change anything you like, or click Finish.', ''); }
+    else foot('Start with the Gemini key.', '');
+  } else if (s.first_time) { $('welcome').hidden = false; $('settingsHead').hidden = true; }
+}
+
+document.querySelectorAll('#nav a').forEach(a => { if (a.dataset.v === view) a.setAttribute('aria-current', 'page'); });
+$(view).hidden = false;
+if (view === 'home') loadHome(); else loadSettings();
+</script>
+</body></html>

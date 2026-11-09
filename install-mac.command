@@ -1,37 +1,16 @@
 #!/bin/bash
 # Sets up the market video digest on this Mac. The Windows version is install.bat.
-# Easiest way to start it: open Terminal, type "bash " (with the space), drag this file into the window, press Return.
+# Start it by double-clicking it in Finder (the first time, macOS may ask: then right-click it > Open > Open).
+# It installs what is needed, then opens the settings page in your browser, where you paste your keys.
 # Safe to run again: it updates the program files and keeps the settings, saved videos and chats.
 set -uo pipefail
 
 INSTALL_DIR="${MARKET_DIGEST_DIR:-$HOME/market-digest}"
-LABEL="com.nugenix.market-digest"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 SRC="$(cd "$(dirname "$0")" && pwd)"
-FILES=(digest.py digest_export.py digest_schema.json tickers.json market_data.py market_schema.json tipranks.py chat.py chat.html ytmd README.md digest_config.example.json)
+FILES=(app.py app.html digest.py digest_export.py digest_schema.json tickers.json market_data.py market_schema.json tipranks.py chat.py chat.html ytmd README.md digest_config.example.json)
 
 step() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[31mSTOPPED: %s\033[0m\n' "$1"; exit 1; }
-ask() {   # ask "question" "default"  -> prints the answer
-    local answer
-    read -r -p "$1 [$2] " answer
-    printf '%s' "${answer:-$2}"
-}
-ask_secret() {   # ask_secret "question" min_length  -> prints the answer; typing is hidden
-    local value
-    while true; do
-        read -r -s -p "$1 (paste with Cmd+V; it stays hidden): " value
-        printf '\n' >&2
-        value="$(printf '%s' "$value" | tr -d '[:space:]')"
-        if [ "${#value}" -lt "$2" ]; then
-            printf 'That is too short to be right (%s characters). Try again.\n' "${#value}" >&2
-            continue
-        fi
-        printf '%s' "$value"
-        return
-    done
-}
-
 for f in "${FILES[@]}"; do
     [ -e "$SRC/$f" ] || fail "$f is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
 done
@@ -83,24 +62,32 @@ export PATH="$INSTALL_DIR/bin:$PATH"
 # The launchers use this Mac's own Python, and the yt-dlp in bin/.
 cat > "$INSTALL_DIR/run_digest.sh" <<EOF
 #!/bin/bash
-# Runs the daily digest and keeps a log next to this file. Started every day by launchd ($PLIST).
-# A failed run (no internet yet, email down) is tried again every 30 minutes, 3 times.
+# Runs the daily digest and keeps a log next to this file. Started every day by launchd (set up by Market Digest).
+# A failed run (no internet yet, email down) is tried again every 30 minutes, 3 times; then a notice says so.
 cd "\$(dirname "\$0")"
 export PATH="\$PWD/bin:\$PATH"
 for attempt in 1 2 3 4; do
     "$PY" digest.py >> digest.log 2>&1 && exit 0
     [ "\$attempt" = 4 ] || { echo "\$(date '+%H:%M:%S') The run failed; trying again in 30 minutes." >> digest.log; sleep 1800; }
 done
+"$PY" app.py --notify-failure
 exit 1
 EOF
+cat > "$INSTALL_DIR/run_app.command" <<EOF
+#!/bin/bash
+# Opens Market Digest (status, settings and chat) in your browser. Keep this window open while you use it.
+cd "$INSTALL_DIR"
+export PATH="$INSTALL_DIR/bin:\$PATH"
+"$PY" app.py
+EOF
+# Older "Digest chat" shortcuts keep working: they open the same app, on its Chat page.
 cat > "$INSTALL_DIR/run_chat.command" <<EOF
 #!/bin/bash
-# Starts the chat page. Keep this window open while you use it.
 cd "$INSTALL_DIR"
 export PATH="$INSTALL_DIR/bin:\$PATH"
 "$PY" chat.py
 EOF
-chmod +x "$INSTALL_DIR/run_digest.sh" "$INSTALL_DIR/run_chat.command"
+chmod +x "$INSTALL_DIR/run_digest.sh" "$INSTALL_DIR/run_app.command" "$INSTALL_DIR/run_chat.command"
 
 cd "$INSTALL_DIR" || fail "Could not open $INSTALL_DIR."
 if ! "$PY" ytmd doctor >/dev/null 2>&1; then
@@ -108,94 +95,23 @@ if ! "$PY" ytmd doctor >/dev/null 2>&1; then
     fail "The caption reader (ytmd) is not ready. See the lines above."
 fi
 
-step "4. Settings"
-CONFIG="$INSTALL_DIR/digest_config.json"
-write=yes
-if [ -f "$CONFIG" ]; then
-    case "$(ask "Settings already exist. Enter them again?" "n")" in [yY]*) write=yes ;; *) write=no ;; esac
-fi
-if [ "$write" = yes ]; then
-    echo "Your answers are saved only on this Mac, in $CONFIG"
-    key="$(ask_secret "Gemini API key (from https://aistudio.google.com/apikey)" 30)"
-    channels="$(ask "YouTube channels to follow, separated by commas" "https://www.youtube.com/@TheStreet")"
-    to="$(ask "Email address that should receive the digest (blank = no email, just save it)" "")"
-    user=""; pass=""
-    if [ -n "$to" ]; then
-        user="$(ask "Gmail address that sends it" "${to%%,*}")"
-        echo "Gmail needs an app password: Google Account > Security > 2-Step Verification > App passwords."
-        pass="$(ask_secret "Gmail app password (16 letters)" 16)"
-    fi
-    echo "Each digest is also saved as a JSON file for the Econova hub. To share it, give a Google Drive folder."
-    drive="$(ls -d "$HOME"/Library/CloudStorage/GoogleDrive-*/"My Drive" 2>/dev/null | head -1)"
-    [ -n "$drive" ] && echo "Your Google Drive is at: $drive   (for example: $drive/Econova/Video Digests/json)"
-    jsondir="$(ask "Folder for the daily JSON file (blank = digest_json in the program folder)" "")"
-    echo "Optional: a watchlist Google Sheet with GOOGLEFINANCE() prices (see USER_GUIDE.md, 'Your watchlist')."
-    watchlist="$(ask "Its CSV link from File > Share > Publish to web (blank = no watchlist)" "")"
-    echo "Optional: a TipRanks API key (https://mcp.tipranks.com/) adds Wall Street's consensus, price targets and earnings dates."
-    tipranks="$(ask_secret "TipRanks API key (press Enter to skip)" 0)"
-    KEY="$key" CHANNELS="$channels" TO="$to" SMTP_USER="$user" SMTP_PASS="$pass" JSON_DIR="$jsondir" WATCHLIST="$watchlist" TIPRANKS="$tipranks" "$PY" - "$CONFIG" <<'EOF' || fail "Could not save the settings."
-import json, os, sys
-split = lambda s: [x.strip() for x in s.split(",") if x.strip()]
-settings = {
-    "channels": split(os.environ["CHANNELS"]),
-    "gemini_api_key": os.environ["KEY"],
-    "models": ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
-    "lookback_hours": 26,
-    "max_videos": 20,
-    "email_to": split(os.environ["TO"]),
-    "smtp_user": os.environ["SMTP_USER"],
-    "smtp_password": os.environ["SMTP_PASS"],
-    "smtp_host": "smtp.gmail.com",
-    "smtp_port": 465,
-    # A folder dragged into Terminal arrives as /Users/x/My\ Drive or in quotes.
-    "json_dir": os.path.expanduser(os.environ["JSON_DIR"].strip().strip("'\"").replace("\\ ", " ")),
-    "watchlist_csv": os.environ["WATCHLIST"].strip(),
-    "tipranks_api_key": os.environ["TIPRANKS"].strip(),
-}
-with open(sys.argv[1], "w", encoding="utf-8") as f:
-    json.dump(settings, f, indent=2)
-EOF
-    chmod 600 "$CONFIG"   # only this user can read the key and password
-    echo "Saved."
-fi
-while true; do
-    time="$(ask "Time to make the digest each day (24-hour, HH:MM)" "07:30")"
-    [[ "$time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] && break
-done
+step "4. Settings (in your browser)"
+echo "The settings page is opening in your browser. Paste your keys there, test them, click Save, then Finish."
+echo "(If no page opens, copy the address below into your browser.)"
+"$PY" app.py --setup || fail "The settings page stopped. Run this installer again."
 
-step "5. Testing channels, Gemini key, JSON folder and email"
-"$PY" digest.py --check || fail "A test failed (see FAILED above). Fix it by running this installer again and re-entering the settings."
+step "5. Daily schedule"
+"$PY" app.py --schedule || fail "No settings were saved, or the schedule could not be set. Run this installer again and click Save on the page."
 
-step "6. Daily schedule"
-mkdir -p "$HOME/Library/LaunchAgents"
-cat > "$PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key><string>$LABEL</string>
-    <key>ProgramArguments</key><array><string>/bin/bash</string><string>$INSTALL_DIR/run_digest.sh</string></array>
-    <key>WorkingDirectory</key><string>$INSTALL_DIR</string>
-    <key>StartCalendarInterval</key><dict><key>Hour</key><integer>$((10#${time%%:*}))</integer><key>Minute</key><integer>$((10#${time##*:}))</integer></dict>
-</dict>
-</plist>
-EOF
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
-launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load "$PLIST" || fail "Could not schedule the daily run."
-echo "Scheduled every day at $time (while you are logged in; if the Mac is asleep then, it runs when it wakes)."
-
-step "7. Desktop shortcut for the chat page"
-if cp -f "$INSTALL_DIR/run_chat.command" "$HOME/Desktop/Digest chat.command" 2>/dev/null; then
-    chmod +x "$HOME/Desktop/Digest chat.command"
-    echo "Added 'Digest chat' to the desktop."
+step "6. Market Digest on the desktop"
+rm -f "$HOME/Desktop/Digest chat.command"   # replaced by Market Digest, which has the chat too
+if cp -f "$INSTALL_DIR/run_app.command" "$HOME/Desktop/Market Digest.command" 2>/dev/null; then
+    chmod +x "$HOME/Desktop/Market Digest.command"
+    echo "Added 'Market Digest' to the desktop: it shows whether the digest ran, your settings, and the chat."
 else
-    echo "Could not add it to the desktop (macOS may have asked Terminal for access). Use $INSTALL_DIR/run_chat.command instead."
+    echo "Could not add it to the desktop (macOS may have asked Terminal for access). Use $INSTALL_DIR/run_app.command instead."
 fi
 
-case "$(ask "Make a test digest of the last 3 days now? It opens in the browser and is not emailed (y/n)" "y")" in
-    [yY]*) "$PY" digest.py --hours 72 --dry-run --open ;;
-esac
-
-printf '\n\033[32mDone. The digest arrives by email every day at %s.\033[0m\n' "$time"
-echo "Chat about the videos: double-click 'Digest chat' on the desktop."
-echo "Program folder: $INSTALL_DIR (run this installer again to change settings or update)."
+printf '\n\033[32mDone. You can close this window.\033[0m\n'
+echo "To check on the digest, change a setting or chat about the videos: double-click 'Market Digest' on the desktop."
+echo "Program folder: $INSTALL_DIR (run this installer again to update; your settings are kept)."
