@@ -57,7 +57,6 @@ it shows whether the last digest worked, lets you change any setting, and has th
 | See the dashboard | Open it in Claude (the link is in the Drive folder's START HERE doc). Every number has an (i) that explains it. |
 | Add Wall Street's view | Get a key at https://mcp.tipranks.com/ (Keys) and paste it in Settings > TipRanks |
 | Update to the newest version | `git pull` (or a new zip), then double-click the installer again and click **Finish** (settings are kept) |
-| Change channels, email or time | Run `install.bat` again and answer `y` to "Enter them again?" |
 
 ## Documents
 

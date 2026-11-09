@@ -22,8 +22,10 @@ Six slides, about 10 minutes plus questions. Each slide has what goes on the sli
 
 **On the slide**
 - **A daily email digest**, made automatically from every new video on the channels you follow.
-- **A chat page** to ask questions across the videos, with answers that link to the exact moment.
-- **Runs on your own Windows PC.** Installed with one double-click. Your keys and data stay on your machine.
+- **Only the analysts you follow:** videos without them are left out before any AI cost.
+- **Market Digest on the desktop:** shows whether today's digest ran, all settings with a Test button each, and a chat
+  to ask questions across the videos, with answers that link to the exact moment.
+- **Runs on your own Windows PC or Mac.** Installed with one double-click. Your keys and data stay on your machine.
 - **Costs nothing today:** it uses the free tier of Google Gemini.
 
 **Say**
@@ -90,13 +92,14 @@ is busy.
 1. **Open the email** "Market video digest, <date>". Walk through Overview, then Stocks mentioned. Point out a
    bullish/bearish view and its reason.
 2. **Click a time** like [12:34] next to a stock. The video opens at that moment, which proves the point.
-3. **Open Digest chat** from the desktop (start it before the meeting; keep its black window open). Choose
+3. **Open Market Digest** from the desktop (start it before the meeting; keep its small window open). Show the home
+   page (did today's digest run, and the settings with their Test buttons), then click **Chat**. Choose
    **Last 7 days** and ask: *"Which AI stocks did the channels like this week, and why?"*. The answer takes about
    30 seconds. Click one citation.
-4. **Optional:** show `install.bat`: one double-click, a few questions, done.
+4. **Optional:** show the installer: one double-click, then the settings page in the browser, done.
 
-**Before the meeting:** run `python digest.py --open` in the install folder so a fresh digest exists, and open
-Digest chat once to check it starts. Have a saved digest page (in the `digests` folder) ready in case the internet
+**Before the meeting:** in Market Digest, click **Make today's digest now** so a fresh digest exists, and check the
+home page shows it. Have a saved digest page (in the `digests` folder) ready in case the internet
 fails.
 
 ---

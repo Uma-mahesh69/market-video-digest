@@ -80,7 +80,8 @@ without asking. Check `digest.log` after the first scheduled run.
 
 ### TipRanks: "refused the API key", "skipped", or an empty Wall Street table
 - **"refused the API key (HTTP 401)"**: the key is mistyped or was revoked. A key is 40 characters and starts with
-  `tr_live_`; add it again with a right-click paste, or make a new one at https://mcp.tipranks.com/ (Keys).
+  `tr_live_`; paste it again in Market Digest > Settings > TipRanks and click **Check the key (free)**, or make a new
+  one at https://mcp.tipranks.com/ (Keys).
 - **"TipRanks: skipped (...)"** in the log is normal: weekends, a look-up already made today, or the month's calls
   nearly used (3 are always kept spare). The quota resets on the 1st (UTC). `--tipranks-check` shows TipRanks' count.
 - **Empty "Wall Street's view" on the dashboard**: no `tipranks_*.json` in the json folder yet. Check that
@@ -184,7 +185,8 @@ without asking. Check `digest.log` after the first scheduled run.
 
 ### `Gemini key: FAILED: Gemini error 400`
 - **Cause:** the key is wrong or was pasted wrongly (see "Installing" above).
-- **Fix:** get the key again from https://aistudio.google.com/apikey and re-enter it with install.bat (right-click to paste).
+- **Fix:** get the key again from https://aistudio.google.com/apikey, paste it in Market Digest > Settings > Gemini key,
+  click **Test the key**, then **Save**.
 
 ### `error 404 ... no longer available to new users`
 - **Cause:** Google retired that model for new keys (seen with `gemini-2.5-flash`).

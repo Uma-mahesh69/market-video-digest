@@ -2,6 +2,9 @@
 
 Written 2026-10-12 for Claude Code. It records what was said and built. Nothing is invented.
 
+> **Historical record.** This describes the project as it was on 12 Oct 2026 and is kept unchanged. For how it works
+> now, see [README.md](../README.md), [USER_GUIDE.md](../USER_GUIDE.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+
 **Labels used**
 - **[CONFIRMED]** the user said it, or the user ran it and reported the result.
 - **[BUILT]** code exists and I tested it only against mocks or in the sandbox.
