@@ -80,12 +80,28 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
 .welcome{background:var(--blue-soft);border-color:transparent}
 .welcome ol{margin:8px 0 0;padding-left:20px}
 .done{text-align:center;padding:60px 20px}
+.bar .sp{flex:1}
+.bar .ver{font-size:12px;color:var(--muted)}
+.steps{display:flex;gap:8px;margin:14px 0 0;padding:0;list-style:none;flex-wrap:wrap}
+.steps li{display:flex;gap:8px;align-items:center;padding:6px 12px;border-radius:999px;background:var(--surface);color:var(--muted);font-size:14px}
+.steps li b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--ink);font-size:12px}
+.steps li.on{color:var(--ink);font-weight:600}
+.steps li.on b{background:var(--blue);color:var(--surface)}
+.steps li.past b{background:var(--green);color:var(--surface)}
+details.extras{margin:0 0 16px}
+details.extras > summary{padding:12px 4px;color:var(--muted)}
+details.extras[open] > summary{margin-bottom:8px}
+.banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--blue-soft);border-color:transparent}
+.banner p{flex:1;margin:0;min-width:200px}
+.indent{margin-left:28px}
 @media (max-width:640px){.grid2{grid-template-columns:1fr}.bar{padding:10px 16px;gap:10px}main{padding:18px 16px 140px}.row{flex-wrap:wrap}}
 </style></head>
 <body>
 <header class="bar">
   <a class="brand" href="/">Market Digest</a>
   <nav id="nav"><a href="/" data-v="home">Home</a><a href="/settings" data-v="settings">Settings</a><a href="/chat">Chat</a></nav>
+  <span class="sp"></span><span class="ver" id="ver"></span>
+  <button type="button" class="link" id="quit" title="Close Market Digest. The daily digest still runs.">Quit</button>
 </header>
 
 <main>
@@ -93,6 +109,11 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
 <section id="home" hidden>
   <h1>Your daily digest</h1>
   <p class="lead" id="homeLead">Loading…</p>
+
+  <div class="card banner" id="updateBox" hidden>
+    <p id="updateText"></p>
+    <button type="button" class="primary" id="updateNow">Update now</button>
+  </div>
 
   <div class="card">
     <div class="status">
@@ -106,7 +127,7 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
       <button id="runPreview">Preview the last 3 days (no email)</button>
       <button id="openLast" hidden>Open the last digest</button>
     </div>
-    <p class="help" id="runHelp">"Make today's digest now" does what the daily run does, including the email. The preview only shows it in your browser.</p>
+    <p class="help" id="runHelp">"Make today's digest now" does what the daily run does (and emails it, if you set up email). The preview only shows it in your browser.</p>
     <div id="job" hidden>
       <p class="result busy" id="jobText"></p>
       <pre class="log" id="jobLog"></pre>
@@ -135,18 +156,18 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
 <section id="settings" hidden>
   <div class="card welcome" id="welcome" hidden>
     <h1>Set up your market digest</h1>
-    <p style="margin:0">Fill in the boxes below, test each one, then click <b>Save</b>. Only the first two are needed; the rest are extras you can add any time.</p>
-    <ol>
-      <li>A <b>Gemini key</b>, so Google's AI can read the videos (free).</li>
-      <li>The <b>YouTube channels</b> to follow.</li>
-      <li>Optional: your <b>email</b>, a shared <b>folder</b>, a <b>watchlist</b> sheet and <b>TipRanks</b>.</li>
+    <p style="margin:0">Three short steps. Everything you enter stays on this computer.</p>
+    <ol class="steps" id="steps">
+      <li data-s="1"><b>1</b> Your Gemini key</li>
+      <li data-s="2"><b>2</b> Who to follow</li>
+      <li data-s="3"><b>3</b> When and how you get it</li>
     </ol>
   </div>
   <div id="settingsHead"><h1>Settings</h1><p class="lead">Change anything, test it, then click <b>Save</b>. Everything stays on this computer.</p></div>
   <p class="result bad" id="broken" hidden>The settings file could not be read, so these boxes show the defaults. Saving replaces it.</p>
 
   <form id="form" autocomplete="off" novalidate>
-  <div class="card">
+  <div class="card" data-step="1">
     <h2>Gemini key <span class="tag req">Needed</span></h2>
     <p class="what">Gemini is Google's AI. It reads each video's captions and writes the digest. The key is free:
       open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>, click <i>Create API key</i>, copy it and paste it here.</p>
@@ -158,36 +179,41 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
     <p class="result" id="r-gemini" aria-live="polite"></p>
   </div>
 
-  <div class="card">
+  <div class="card" data-step="2">
     <h2>YouTube channels <span class="tag req">Needed</span></h2>
-    <p class="what">The channels whose new videos go into the digest. Open a channel on YouTube and copy the address from the top of the browser,
-      like <i>https://www.youtube.com/@TheStreet</i>, or type its handle, like <i>@TheStreet</i>.</p>
+    <p class="what">The channels whose new videos go into the digest. Click a popular one, or add your own: open the channel on YouTube and copy
+      the address from the top of the browser, like <i>https://www.youtube.com/@TheStreet</i>, or type its handle, like <i>@TheStreet</i>.</p>
+    <div id="popBox"><p class="help" style="margin:0 0 4px"><b>Popular channels</b> (click to add):</p><div class="chips" id="popChans" style="margin-bottom:12px"></div></div>
     <div id="chans"></div>
     <p class="err" id="e-channels"></p>
     <div class="tests"><button type="button" id="addChan">+ Add a channel</button><button type="button" data-test="channels">Test the channels</button></div>
     <p class="result" id="r-channels" aria-live="polite"></p>
   </div>
 
-  <div class="card">
+  <div class="card" data-step="2">
     <h2>Analysts to follow <span class="tag opt">Optional</span></h2>
-    <p class="what">Only videos with these people go into the digest. Leave the list empty to include every video from your channels.
-      A video counts when the analyst <b>speaks</b> in it (or is named in its title), not when someone only quotes them.
-      Videos without any of them are left out before Gemini reads them, so they cost nothing.</p>
+    <p class="what">Want only certain people? Pick them, and only videos where they <b>speak</b> go into the digest.
+      Leave the list empty to include every video from your channels.</p>
     <div id="analysts"></div>
     <p class="err" id="e-analysts"></p>
     <div class="tests"><button type="button" id="addAnalyst">+ Add an analyst</button></div>
     <p class="help">Write the full name, like <i>Dan Ives</i>. If captions spell it differently, add the other spelling after a slash: <i>Tom Lee / Thomas Lee</i>.</p>
     <div id="suggestBox" hidden>
-      <p class="help" style="margin-top:12px"><b>Seen in your saved videos</b> (click to add; the number is how many videos):</p>
+      <p class="help" style="margin-top:12px"><b>Suggestions</b> (click to add; a number is how many of your saved videos they are in):</p>
       <div class="chips" id="suggest"></div>
     </div>
     <label class="switch" style="margin-top:14px"><input type="checkbox" id="markets_only"> Leave out videos that are not about markets or stocks</label>
     <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
   </div>
 
-  <div class="card">
-    <h2>Email <span class="tag opt">Optional</span></h2>
-    <p class="what">Where the digest is sent each day. Leave the first box empty to skip email; digests are still saved and shown on the home page.</p>
+  <div class="card" data-step="3">
+    <h2>How you get the digest</h2>
+    <p class="what">Every digest is kept in Market Digest, under Home &gt; Recent digests. Choose how you hear about a new one.</p>
+    <label class="switch"><input type="checkbox" id="notify"> Show a notice on my screen when it is ready</label>
+    <label class="switch" style="margin-top:8px"><input type="checkbox" id="open_when_ready"> Open it in my browser when it is ready</label>
+    <label class="switch" style="margin-top:8px"><input type="checkbox" id="email_on"> Also email it to me</label>
+    <div id="emailBox" class="indent" hidden>
+    <p class="help">Email needs a Gmail account to send from, with an app password (two minutes to set up; the link is below). Skip this if the notice is enough.</p>
     <label class="f" for="email_to">Send the digest to</label>
     <input type="text" id="email_to" placeholder="you@example.com (several: separate with commas)" spellcheck="false">
     <p class="err" id="e-email_to"></p>
@@ -204,17 +230,20 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
       <div class="tests"><button type="button" data-test="email">Test the login</button><button type="button" data-test="send_email">Send a test email</button></div>
       <p class="result" id="r-email" aria-live="polite"></p>
     </div>
+    </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-step="3">
     <h2>Daily time</h2>
-    <p class="what">When the digest is made and sent each day. The computer must be on and you must be logged in; a time missed while it was off runs as soon as it is back on.</p>
+    <p class="what">When the digest is made each day. The computer must be on and you must be logged in; a time missed while it was off runs as soon as it is back on.</p>
     <label class="switch"><input type="checkbox" id="schedule_on"> Make the digest every day</label>
     <label class="f" for="daily_time">At</label>
     <input type="time" id="daily_time" style="max-width:160px">
     <p class="err" id="e-daily_time"></p>
   </div>
 
+  <details class="extras" id="extras">
+  <summary>Extras: shared folder, watchlist, TipRanks and more options</summary>
   <div class="card">
     <h2>Shared folder for the Econova hub <span class="tag opt">Optional</span></h2>
     <p class="what">Each day's digest is also saved as data files, which the Econova dashboard reads. To share them, choose a folder inside Google Drive
@@ -264,7 +293,24 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
       <p class="help" id="programFolder"></p>
     </details>
   </div>
+  </details>
   </form>
+
+  <div class="card" id="claudeCard">
+    <h2>Ask Claude about your digest <span class="tag opt">Optional</span></h2>
+    <p class="what">If you use the Claude desktop app, connect it and Claude can read your saved videos and analyst calls on this computer. Then ask it
+      things like <i>"What did the analysts I follow say about Nvidia this week?"</i> or <i>"Build me a dashboard of this week's calls"</i>, or tell it
+      to add a channel or an analyst. What Claude reads for an answer is sent to Claude, like anything else you tell it; your keys and passwords never are.</p>
+    <div class="tests"><button type="button" id="claudeBtn">Connect to Claude</button></div>
+    <p class="result" id="r-claude" aria-live="polite"></p>
+  </div>
+
+  <div class="card welcome" id="wizDone" hidden>
+    <h1>You are set</h1>
+    <p id="wizDoneText" style="margin:0 0 12px"></p>
+    <div class="tests"><button type="button" class="primary" id="firstDigest">Make my first digest now</button><button type="button" id="wizFinish">Finish</button></div>
+    <p class="help">The first digest covers the last 3 days, takes a few minutes and opens in your browser.</p>
+  </div>
 
   <div class="card" id="setupJob" hidden>
     <h2>Test digest</h2>
@@ -283,6 +329,8 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
 <div class="foot" id="foot" hidden>
   <div class="in">
     <span class="msg" id="footMsg" aria-live="polite"></span>
+    <button type="button" id="back" hidden>Back</button>
+    <button type="button" class="primary" id="next" hidden>Next</button>
     <button type="button" id="testDigest" hidden>Make a test digest</button>
     <button type="button" class="primary" id="save">Save</button>
     <button type="button" id="finish" hidden>Finish</button>
@@ -292,7 +340,7 @@ dl.facts dd{margin:0;overflow-wrap:anywhere}
 <script>
 const $ = id => document.getElementById(id);
 const view = location.pathname === '/settings' ? 'settings' : 'home';
-let S = null, dirty = false, pollTimer = null, cleared = {};
+let S = null, dirty = false, pollTimer = null, cleared = {}, wizard = false, step = 1, warned = 0;
 
 async function api(path, body) {
   let r;
@@ -345,13 +393,17 @@ async function loadHome() {
     if (d.test) { const s = document.createElement('span'); s.className = 'sub'; s.style.color = 'var(--muted)'; s.textContent = 'test, not emailed'; li.append(s); }
     ul.append(li);
   }
+  $('ver').textContent = 'Version ' + st.update.version;
+  if (st.update.latest) { $('updateBox').hidden = false; $('updateText').textContent = `Version ${st.update.latest} is ready (you have ${st.update.version}). Updating takes a few seconds and keeps your settings and videos.`; }
+  const how = [st.notify ? 'a notice on screen' : '', st.open_when_ready ? 'opens in your browser' : '', st.email_to.length ? 'email to ' + st.email_to.join(', ') : ''].filter(Boolean);
   const facts = [
-    ['Email', st.email_to.length ? st.email_to.join(', ') : 'Off (digests are saved on this computer)'],
+    ['When ready', how.length ? how.join(', ').replace(/^./, c => c.toUpperCase()) : 'Kept here under Recent digests'],
     ['Data files', (st.json_shared ? st.json_dir : 'The program folder (not shared)') + (st.latest_json ? ` · newest: ${st.latest_json}` : '')],
     ['Videos included', (st.analysts.length ? `Only with ${st.analysts.map(a => a.split('/')[0].trim()).join(', ')}` : 'Every video from your channels')
       + (st.markets_only ? '; markets and stocks only' : '')],
     ['Watchlist', st.watchlist ? 'On' : 'Off'],
     ['TipRanks', st.tipranks.on ? `On · ${st.tipranks.calls} look-ups used this month` : 'Off'],
+    ['Claude', st.claude.connected ? 'Connected: ask Claude about your digest' : 'Not connected (Settings > Ask Claude)'],
     ['Chat', 'Ask about the videos on the Chat page'],
   ];
   const dl = $('facts'); dl.textContent = '';
@@ -379,6 +431,25 @@ async function run(kind, box, text, log) {
 }
 $('runNow').onclick = () => run('now', $('job'), $('jobText'), $('jobLog'));
 $('runPreview').onclick = () => run('preview', $('job'), $('jobText'), $('jobLog'));
+$('updateNow').onclick = async () => {
+  $('updateNow').disabled = true; $('updateText').textContent = 'Updating…';
+  try {
+    const r = await api('/api/update', {});
+    $('updateText').textContent = `Updated to version ${r.version}. Restarting…`;
+    for (let i = 0; i < 30; i++) {   // the app restarts itself; reload once the new one answers
+      await new Promise(ok => setTimeout(ok, 1000));
+      try { const st = await api('/api/status'); if (st.update.version === r.version) { location.reload(); return; } } catch (e) {}
+    }
+    $('updateText').textContent = 'Updated. Start Market Digest again from the desktop.';
+  } catch (e) { $('updateText').textContent = e.message; $('updateNow').disabled = false; }
+};
+$('quit').onclick = async () => {
+  if (dirty && !confirm('Some changes are not saved. Quit anyway?')) return;
+  dirty = false;
+  try { await api('/api/quit', {}); } catch (e) {}
+  document.querySelector('main').innerHTML = '<section class="done"><h1>Market Digest is closed</h1><p class="lead">The daily digest still runs at its time. To open this page again, double-click Market Digest on the desktop.</p></section>';
+  $('foot').hidden = true; $('nav').hidden = true; $('quit').hidden = true;
+};
 $('logBtn').onclick = async () => {
   const pre = $('log');
   if (!pre.hidden) { pre.hidden = true; $('logBtn').textContent = 'Show the log'; return; }
@@ -395,7 +466,7 @@ function chanRow(value) {
   const div = document.createElement('div'), row = document.createElement('div'), inp = document.createElement('input'), rm = document.createElement('button'), res = document.createElement('p');
   div.className = 'chan'; row.className = 'row'; inp.type = 'text'; inp.value = value || ''; inp.placeholder = 'https://www.youtube.com/@ChannelName'; inp.spellcheck = false;
   inp.setAttribute('aria-label', 'YouTube channel'); rm.type = 'button'; rm.textContent = 'Remove'; res.className = 'result';
-  rm.onclick = () => { div.remove(); if (!$('chans').children.length) $('chans').append(chanRow('')); changed(); };
+  rm.onclick = () => { div.remove(); if (!$('chans').children.length) $('chans').append(chanRow('')); changed(); renderPopular(); };
   inp.oninput = () => { res.textContent = ''; res.className = 'result'; changed(); };
   row.append(inp, rm); div.append(row, res); return div;
 }
@@ -407,15 +478,30 @@ function analystRow(value) {
   inp.oninput = () => { changed(); };
   row.append(inp, rm); div.append(row); return div;
 }
+const handle = c => (c.match(/@[\w.\-]+/) || [c])[0].toLowerCase().replace(/\/+$/, '');
+function renderPopular() {
+  const have = new Set([...$('chans').querySelectorAll('input')].map(i => handle(i.value.trim())));
+  const box = $('popChans'); box.textContent = '';
+  const list = (S.popular_channels || []).filter(c => !have.has(handle(c.url)));
+  $('popBox').hidden = !list.length;
+  for (const c of list) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = '+ ' + c.name;
+    b.onclick = () => { const empty = [...$('chans').querySelectorAll('input')].find(i => !i.value.trim());
+      if (empty) empty.value = c.url; else $('chans').append(chanRow(c.url)); changed(); renderPopular(); };
+    box.append(b);
+  }
+}
 function analystValues() { return [...$('analysts').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean); }
 function renderSuggestions() {
   const have = new Set(analystValues().flatMap(a => a.split('/').map(x => x.trim().toLowerCase())));
   const box = $('suggest'); box.textContent = '';
-  const list = (S.analyst_suggestions || []).filter(r => !have.has(r.name.toLowerCase()));
+  const seen = S.analyst_suggestions || [], known = new Set(seen.map(r => r.name.toLowerCase()));
+  const popular = (S.popular_analysts || []).filter(a => !known.has(a.split('/')[0].trim().toLowerCase())).map(a => ({ name: a, role: '', videos: 0 }));
+  const list = [...seen, ...popular].filter(r => !r.name.split('/').some(x => have.has(x.trim().toLowerCase())));
   $('suggestBox').hidden = !list.length;
   for (const r of list) {
     const b = document.createElement('button'); b.type = 'button';
-    b.textContent = `+ ${r.name}${r.role ? ' (' + r.role.slice(0, 40) + ')' : ''} · ${r.videos}`;
+    b.textContent = `+ ${r.name.split('/')[0].trim()}${r.role ? ' (' + r.role.slice(0, 40) + ')' : ''}${r.videos ? ' · ' + r.videos : ''}`;
     b.onclick = () => { const empty = [...$('analysts').querySelectorAll('input')].find(i => !i.value.trim());
       if (empty) empty.value = r.name; else $('analysts').append(analystRow(r.name)); changed(); renderSuggestions(); };
     box.append(b);
@@ -442,7 +528,12 @@ function fillSettings(s) {
   $('analysts').textContent = '';
   for (const a of s.analysts) $('analysts').append(analystRow(a));
   $('markets_only').checked = s.markets_only;
-  renderSuggestions();
+  renderSuggestions(); renderPopular();
+  $('notify').checked = s.notify; $('open_when_ready').checked = s.open_when_ready;
+  $('email_on').checked = s.email_to.length > 0;
+  $('extras').open = !!(s.json_dir || s.watchlist_csv || s.tipranks_api_key.saved);
+  $('ver').textContent = s.version ? 'Version ' + s.version : '';
+  showClaude(s.claude);
   $('email_to').value = s.email_to.join(', ');
   $('smtp_user').value = s.smtp_user || '';
   $('json_dir').value = s.json_dir || '';
@@ -457,15 +548,25 @@ function fillSettings(s) {
   smtpVisibility();
 }
 function smtpVisibility() {
-  const on = $('email_to').value.trim() !== '';
-  $('smtpBox').hidden = !on;
-  $('smtp_user').placeholder = on ? $('email_to').value.split(/[,;\s]+/)[0] : '';
+  $('emailBox').hidden = !$('email_on').checked;
+  $('smtp_user').placeholder = $('email_to').value.split(/[,;\s]+/)[0] || '';
+}
+function showClaude(c, justChanged) {
+  if (!c) return;
+  $('claudeBtn').textContent = c.connected ? 'Disconnect from Claude' : 'Connect to Claude';
+  $('claudeBtn').dataset.action = c.connected ? 'disconnect' : 'connect';
+  if (justChanged) show($('r-claude'), 'ok', c.connected ? '✓ Connected. Quit the Claude app completely and open it again. Then ask it: "What did my analysts say this week?"'
+                                                         : 'Disconnected. Quit and reopen the Claude app to finish.');
+  else if (c.connected) show($('r-claude'), 'ok', '✓ Connected to the Claude app on this computer.');
+  else if (!c.installed) show($('r-claude'), 'warn', 'The Claude desktop app was not found on this computer. Get it from claude.ai/download, open it once, then click Connect.');
+  else { $('r-claude').textContent = ''; $('r-claude').className = 'result'; }
 }
 function collect() {
   const f = {
     channels: [...$('chans').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
     analysts: analystValues(), markets_only: $('markets_only').checked,
-    email_to: $('email_to').value, smtp_user: $('smtp_user').value.trim(),
+    notify: $('notify').checked, open_when_ready: $('open_when_ready').checked,
+    email_to: $('email_on').checked ? $('email_to').value : '', smtp_user: $('smtp_user').value.trim(),
     json_dir: $('json_dir').value, watchlist_csv: $('watchlist_csv').value,
     daily_time: $('daily_time').value, schedule_on: $('schedule_on').checked,
     lookback_hours: $('lookback_hours').value, max_videos: $('max_videos').value,
@@ -474,7 +575,7 @@ function collect() {
   return f;
 }
 function clearErrors() { document.querySelectorAll('.err').forEach(e => e.textContent = ''); document.querySelectorAll('input.bad').forEach(i => i.classList.remove('bad')); }
-function changed() { dirty = true; foot('You have changes that are not saved yet.', ''); }
+function changed() { dirty = true; warned = 0; if (!wizard) foot('You have changes that are not saved yet.', ''); }
 function foot(text, cls) { $('footMsg').textContent = text; $('footMsg').className = 'msg ' + (cls || ''); }
 
 const RESULT = { gemini: 'r-gemini', channels: 'r-channels', email: 'r-email', send_email: 'r-email', folder: 'r-folder', watchlist: 'r-watchlist', tipranks: 'r-tipranks', tipranks_live: 'r-tipranks' };
@@ -496,7 +597,12 @@ document.querySelectorAll('.show').forEach(b => b.onclick = () => {
 });
 $('addAnalyst').onclick = () => { const r = analystRow(''); $('analysts').append(r); r.querySelector('input').focus(); changed(); };
 $('addChan').onclick = () => { const r = chanRow(''); $('chans').append(r); r.querySelector('input').focus(); changed(); };
-$('form').addEventListener('input', e => { if (e.target.id === 'email_to') smtpVisibility(); changed(); });
+$('form').addEventListener('input', e => { if (e.target.id === 'email_to' || e.target.id === 'email_on') smtpVisibility(); changed(); });
+$('claudeBtn').onclick = async () => {
+  $('claudeBtn').disabled = true;
+  try { showClaude(await api('/api/claude', { action: $('claudeBtn').dataset.action }), true); } catch (e) { show($('r-claude'), 'bad', e.message); }
+  $('claudeBtn').disabled = false;
+};
 $('form').addEventListener('change', changed);
 $('pick').onclick = async () => {
   $('pick').disabled = true; show($('r-folder'), 'busy', 'A folder window opened (it may be behind this browser window).');
@@ -510,6 +616,7 @@ $('save').onclick = async () => {
     const r = await api('/api/save', collect());
     dirty = false; fillSettings({ ...S, ...r.settings });
     foot('✓ Saved. ' + r.schedule, r.schedule_ok ? 'ok' : 'bad');
+    if (wizard) { finishWizard(r); $('save').disabled = false; return; }
     if (S.setup) { $('testDigest').hidden = false; $('finish').hidden = false; $('finish').classList.add('primary'); $('save').classList.remove('primary'); }
   } catch (e) {
     foot(e.message, 'bad');
@@ -519,6 +626,7 @@ $('save').onclick = async () => {
         const el = $('e-' + k); if (el) el.textContent = msg;
         const inp = k === 'channels' ? $('chans').querySelector('input') : k === 'analysts' ? $('analysts').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
       }
+      if (wizard && first) { const card = first.closest('[data-step]'); if (card) { step = Number(card.dataset.step); showStep(); } }
       if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus({ preventScroll: true }); }
     }
   }
@@ -532,17 +640,62 @@ $('finish').onclick = async () => {
 };
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
+// ---------------------------------------------------------------- the first run: three steps
+function showStep() {
+  document.querySelectorAll('#form [data-step]').forEach(c => c.hidden = Number(c.dataset.step) !== step);
+  document.querySelectorAll('#steps li').forEach(li => { const n = Number(li.dataset.s); li.className = n === step ? 'on' : n < step ? 'past' : ''; });
+  $('extras').hidden = true; $('claudeCard').hidden = true;
+  $('back').hidden = step === 1; $('next').hidden = step === 3; $('save').hidden = step !== 3;
+  $('save').textContent = 'Save and finish';
+  foot(['', 'Paste your key, then click Next. It is checked with Google.', 'Pick at least one channel. Analysts are optional.', 'Choose a time, then save.'][step], '');
+  window.scrollTo(0, 0);
+}
+async function nextStep() {
+  clearErrors(); $('next').disabled = true;
+  try {
+    if (step === 1) {
+      if (!$('gemini_api_key').value.trim()) { $('e-gemini_api_key').textContent = 'Paste your Gemini API key first. The link above opens the page where you get it.'; $('gemini_api_key').focus(); return; }
+      foot('Checking the key with Google…', '');
+      const r = await api('/api/test/gemini', collect());
+      show($('r-gemini'), r.ok ? (r.warn ? 'warn' : 'ok') : 'bad', (r.ok ? '✓ ' : '✕ ') + r.message);
+      if (!r.ok) { foot('The key did not work. See the message above.', 'bad'); return; }
+    }
+    if (step === 2) {
+      if (!collect().channels.length) { $('e-channels').textContent = 'Add at least one channel: click a popular one above.'; return; }
+      if (!warned) {
+        foot('Looking up your channels on YouTube…', '');
+        const r = await api('/api/test/channels', collect());
+        const rows = [...$('chans').children].filter(d => d.querySelector('input').value.trim());
+        r.channels.forEach((c, i) => { const p = rows[i] && rows[i].querySelector('.result'); if (p) show(p, c.ok ? 'ok' : 'bad', (c.ok ? '✓ ' : '✕ ') + c.message); });
+        if (!r.ok) { warned = 1; foot('A channel has a problem (in red). Fix or remove it, or click Next again to continue anyway.', 'bad'); return; }
+      }
+    }
+    step += 1; warned = 0; showStep();
+  } catch (e) { foot(e.message, 'bad'); }
+  finally { $('next').disabled = false; }
+}
+function finishWizard(r) {
+  wizard = false;
+  $('form').hidden = true; $('welcome').hidden = true; $('foot').hidden = true;
+  $('wizDone').hidden = false;
+  $('wizDoneText').textContent = r.schedule_ok ? r.schedule.replace('Scheduled', 'Your digest is made') : 'Your settings are saved. ' + r.schedule;
+  $('wizFinish').textContent = S.setup ? 'Finish' : 'Go to the home page';
+  window.scrollTo(0, 0);
+}
+$('next').onclick = nextStep;
+$('back').onclick = () => { step -= 1; warned = 0; showStep(); };
+$('firstDigest').onclick = () => { $('firstDigest').disabled = true; $('setupJob').hidden = false; run('preview', $('setupJob'), $('setupJobText'), $('setupJobLog')); };
+$('wizFinish').onclick = () => { if (S.setup) $('finish').onclick(); else location.href = '/'; };
+
 async function loadSettings() {
   $('foot').hidden = false;
   let s;
   try { s = await api('/api/settings'); } catch (e) { foot(e.message, 'bad'); return; }
   s.setup = s.setup || new URLSearchParams(location.search).has('setup');
   fillSettings(s);
-  if (s.setup) {
-    $('nav').hidden = true; $('welcome').hidden = !s.first_time; $('settingsHead').hidden = s.first_time;
-    if (!s.first_time) { $('finish').hidden = false; $('testDigest').hidden = false; foot('Your settings are kept from before. Change anything you like, or click Finish.', ''); }
-    else foot('Start with the Gemini key.', '');
-  } else if (s.first_time) { $('welcome').hidden = false; $('settingsHead').hidden = true; }
+  if (s.setup || s.first_time) { $('nav').hidden = true; $('quit').hidden = s.setup; }
+  if (s.first_time) { wizard = true; $('welcome').hidden = false; $('settingsHead').hidden = true; showStep(); }
+  else if (s.setup) { $('finish').hidden = false; $('testDigest').hidden = false; foot('Your settings are kept from before. Change anything you like, or click Finish.', ''); }
 }
 
 document.querySelectorAll('#nav a').forEach(a => { if (a.dataset.v === view) a.setAttribute('aria-current', 'page'); });

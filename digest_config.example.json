@@ -8,6 +8,7 @@
   "max_videos": 20,
   "analysts": [],
   "markets_only": true,
+  "notify": true,
 
   "email_to": ["your.sir@example.com"],
   "smtp_user": "your.address@gmail.com",

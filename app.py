@@ -1,10 +1,12 @@
 """Market Digest: the app on this computer for the settings, the daily run's status and the chat.
 
-Start it with Market Digest on the desktop (run_app.bat on Windows, run_app.command on a Mac), or: python app.py.
+Start it with Market Digest on the desktop, or: python app.py.
 It opens http://127.0.0.1:8765 in your browser and only listens on this computer.
     python app.py --setup            the installer's settings page; Finish closes it
     python app.py --schedule         set the daily run again from the saved settings (used by updates)
-    python app.py --notify-failure   show a desktop notice that the daily run failed (run_digest calls it)
+    python app.py --daily            the scheduled run: digest.py, tried again 3 times if it fails, logged to digest.log
+    python app.py --stop             ask a running Market Digest to quit (the installer does this before an update)
+    python app.py --notify T TEXT    show a desktop notice
 Keys and passwords never go back to the page: it only learns whether one is saved, and its last 4 characters.
 Standard library only.
 """
@@ -21,8 +23,11 @@ import string
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
+import urllib.request
 import webbrowser
+import zipfile
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
@@ -42,7 +47,25 @@ LABEL = "com.nugenix.market-digest"   # the launchd job on a Mac
 TASK = "Market video digest"          # the Task Scheduler task on Windows
 SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key")
 DEFAULTS = {"channels": ["https://www.youtube.com/@TheStreet"], "email_to": [], "smtp_user": "", "json_dir": "", "watchlist_csv": "",
-            "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20, "analysts": [], "markets_only": True}
+            "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20, "analysts": [], "markets_only": True,
+            "notify": True}
+REPO = "Uma-mahesh69/market-video-digest"
+
+
+def program_files(manifest):
+    """The program's own files, from the text of MANIFEST (one name a line): what the installers copy and an update
+    replaces. Settings, saved videos, digests and chats are never in it. Only plain file names are accepted."""
+    names = [line.strip() for line in manifest.splitlines() if line.strip() and not line.startswith("#")]
+    bad = [n for n in names if not re.fullmatch(r"[\w.\-]+", n) or n.startswith(".")]
+    if bad or "app.py" not in names or "VERSION" not in names:
+        raise ValueError(f"MANIFEST is not a list of program files ({(bad or ['app.py or VERSION is missing'])[0]})")
+    return tuple(dict.fromkeys(names))
+# Offered on the settings page so nobody has to hunt for a channel address or spell a name.
+POPULAR_CHANNELS = [("CNBC Television", "https://www.youtube.com/@CNBCtelevision"), ("Bloomberg Television", "https://www.youtube.com/@markets"),
+                    ("Yahoo Finance", "https://www.youtube.com/@YahooFinance"), ("TheStreet", "https://www.youtube.com/@TheStreet"),
+                    ("Fox Business", "https://www.youtube.com/@FoxBusiness"), ("Schwab Network", "https://www.youtube.com/@SchwabNetwork")]
+POPULAR_ANALYSTS = ["Dan Ives", "Tom Lee / Thomas Lee", "Mike Wilson", "Ed Yardeni", "Liz Ann Sonders", "Jeremy Siegel",
+                    "Mohamed El-Erian", "Cathie Wood", "Gene Munster", "Sam Stovall", "Savita Subramanian", "Jim Cramer"]
 TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 EMAIL = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 CHANNEL = re.compile(r"^(https?://)?(www\.|m\.)?youtube\.com/(@[\w.\-]+|channel/UC[\w-]{22}|c/[\w.\-]+|user/[\w.\-]+)/?(videos|featured|streams)?/?$|^@[\w.\-]+$", re.I)
@@ -71,6 +94,7 @@ def public(cfg):
     """The settings for the page. Secrets become {"saved", "hint"}: the page never sees a key or password."""
     out = {k: cfg.get(k, v) for k, v in DEFAULTS.items()}
     out["daily_time"] = daily_time(cfg)
+    out["open_when_ready"] = open_when_ready(cfg)
     if isinstance(out["email_to"], str):
         out["email_to"] = [out["email_to"]]
     for k in SECRETS:
@@ -80,6 +104,11 @@ def public(cfg):
     out["first_time"] = not real(cfg.get("gemini_api_key"))
     out["broken"] = bool(cfg.get("_broken"))
     return out
+
+
+def open_when_ready(cfg):
+    """Open each new digest in the browser. Unless chosen, on when there is no email: the digest still reaches you."""
+    return bool(cfg.get("open_when_ready", not cfg.get("email_to")))
 
 
 def split_list(value):
@@ -146,8 +175,9 @@ def merged(form, saved):
         cfg["analysts"] = list(dict.fromkeys(re.sub(r"\s+", " ", str(a)).strip() for a in items if str(a).strip()))
     if [a for a in cfg.get("analysts") or [] if len(a.split("/")[0].strip()) < 3 or len(a) > 120]:
         errors["analysts"] = "Write each analyst's full name, like Dan Ives (other spellings after a slash: Tom Lee / Thomas Lee)."
-    if "markets_only" in form:
-        cfg["markets_only"] = bool(form["markets_only"])
+    for k in ("markets_only", "notify", "open_when_ready"):
+        if k in form:
+            cfg[k] = bool(form[k])
     if "watchlist_csv" in form:
         cfg["watchlist_csv"] = str(form["watchlist_csv"] or "").strip()
     if cfg.get("watchlist_csv") and not re.match(r"^https?://", cfg["watchlist_csv"]):
@@ -204,6 +234,43 @@ def platform():
     return "mac" if sys.platform == "darwin" else "windows" if os.name == "nt" else "other"
 
 
+def console_python():
+    """This Python with normal output streams: python.exe even when the app itself runs under pythonw.exe (no window)."""
+    exe = Path(sys.executable)
+    if os.name == "nt" and exe.name.lower() == "pythonw.exe" and exe.with_name("python.exe").exists():
+        return str(exe.with_name("python.exe"))
+    return str(exe)
+
+
+def windowless_python():
+    """pythonw.exe on Windows, so nothing flashes on screen; the normal Python elsewhere."""
+    w = Path(console_python()).with_name("pythonw.exe")
+    return str(w) if os.name == "nt" and w.exists() else console_python()
+
+
+def child_env():
+    return {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1",
+            "PATH": str(dg.HERE / "bin") + os.pathsep + os.environ.get("PATH", "")}   # the yt-dlp the installer put in bin
+
+
+def daily_run(attempts=4, wait=1800):
+    """The scheduled run. digest.py's output is added to digest.log. A failed run (no internet yet, YouTube or email
+    down) is tried again every 30 minutes, 3 times; then a desktop notice says so. Returns the exit code."""
+    for attempt in range(1, attempts + 1):
+        with open(dg.HERE / "digest.log", "a", encoding="utf-8") as log:
+            code = subprocess.run([console_python(), "-u", str(dg.HERE / "digest.py")], cwd=dg.HERE, env=child_env(),
+                                  stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                  creationflags=0x08000000 if os.name == "nt" else 0).returncode
+            if code == 0:
+                return 0
+            if attempt < attempts:
+                log.write(f"{datetime.now():%H:%M:%S} The run failed; trying again in {wait // 60} minutes.\n")
+        if attempt < attempts:
+            time.sleep(wait)
+    notify("Market digest did not run", "Open Market Digest on the desktop to see why.")
+    return 1
+
+
 def plist_path():
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
@@ -212,9 +279,6 @@ def schedule(on, at):
     """Turn the daily run on at HH:MM, or off. Returns a sentence for the page. Raises RuntimeError."""
     hour, minute = (int(x) for x in at.split(":"))
     if sys.platform == "darwin":
-        script = dg.HERE / "run_digest.sh"
-        if on and not script.exists():
-            raise RuntimeError("run_digest.sh is missing. Run install-mac.command once, then save again.")
         uid = os.getuid()
         run_hidden(["launchctl", "bootout", f"gui/{uid}/{LABEL}"])
         if not on:
@@ -222,26 +286,25 @@ def schedule(on, at):
             return "The daily digest is off."
         plist_path().parent.mkdir(parents=True, exist_ok=True)
         with open(plist_path(), "wb") as f:
-            plistlib.dump({"Label": LABEL, "ProgramArguments": ["/bin/bash", str(script)], "WorkingDirectory": str(dg.HERE),
+            plistlib.dump({"Label": LABEL, "ProgramArguments": [console_python(), str(dg.HERE / "app.py"), "--daily"], "WorkingDirectory": str(dg.HERE),
                            "StartCalendarInterval": {"Hour": hour, "Minute": minute}}, f)
         r = run_hidden(["launchctl", "bootstrap", f"gui/{uid}", str(plist_path())])
         if r.returncode and run_hidden(["launchctl", "load", str(plist_path())]).returncode:
             raise RuntimeError(f"macOS did not accept the daily schedule: {(r.stderr or r.stdout).strip()[:200]}")
         return f"Scheduled every day at {at} (if the Mac is asleep then, it runs when it wakes)."
     if os.name == "nt":
-        bat = dg.HERE / "run_digest.bat"
-        if on and not bat.exists():
-            raise RuntimeError("run_digest.bat is missing. Run install.bat once, then save again.")
-        env = {**os.environ, "MD_TASK": TASK, "MD_BAT": str(bat), "MD_DIR": str(dg.HERE), "MD_TIME": at}
+        env = {**os.environ, "MD_TASK": TASK, "MD_EXE": windowless_python(), "MD_ARGS": f'"{dg.HERE / "app.py"}" --daily',
+               "MD_DIR": str(dg.HERE), "MD_TIME": at}
         if on:
             # StartWhenAvailable: a time missed while the PC was off runs as soon as it is back on.
-            # run_digest.bat retries a failed run itself (3 waits of 30 minutes), so the time limit leaves room for them.
-            ps = ("$a = New-ScheduledTaskAction -Execute $env:MD_BAT -WorkingDirectory $env:MD_DIR; "
+            # The run retries itself (3 waits of 30 minutes; Task Scheduler's own "restart on failure" ignores exit codes),
+            # so the time limit leaves room for that. pythonw: no window appears.
+            ps = ("$a = New-ScheduledTaskAction -Execute $env:MD_EXE -Argument $env:MD_ARGS -WorkingDirectory $env:MD_DIR; "
                   "$t = New-ScheduledTaskTrigger -Daily -At $env:MD_TIME; "
                   "$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
                   "-ExecutionTimeLimit (New-TimeSpan -Hours 3); "
                   "Register-ScheduledTask -TaskName $env:MD_TASK -Action $a -Trigger $t -Settings $s "
-                  "-Description 'Emails the market video digest. Set up by Market Digest.' -Force | Out-Null")
+                  "-Description 'Makes the daily market video digest. Set up by Market Digest.' -Force | Out-Null")
         else:
             ps = "Unregister-ScheduledTask -TaskName $env:MD_TASK -Confirm:$false -ErrorAction SilentlyContinue"
         r = run_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], env=env)
@@ -526,12 +589,12 @@ class Job:
                 raise ValueError("A digest is already being made. Wait for it to finish.")
             cls.kind, cls.started = kind, datetime.now().isoformat(timespec="seconds")
             cls.log = dg.HERE / ("digest.log" if kind == "now" else "preview.log")
-            env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+            env = child_env()
             with open(cls.log, "a" if kind == "now" else "w", encoding="utf-8") as out:
                 out.seek(0, os.SEEK_END)
                 cls.offset = out.tell()
                 # its own session (Mac) or hidden console (Windows): closing the Market Digest window does not stop it
-                cls.proc = subprocess.Popen([sys.executable, "-u", str(dg.HERE / "digest.py"), *args], cwd=dg.HERE, env=env,
+                cls.proc = subprocess.Popen([console_python(), "-u", str(dg.HERE / "digest.py"), *args], cwd=dg.HERE, env=env,
                                             stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                                             creationflags=0x08000000 if os.name == "nt" else 0, start_new_session=os.name != "nt")
 
@@ -550,6 +613,145 @@ class Job:
 
 
 # ---------------------------------------------------------------- what the home page shows
+
+# ---------------------------------------------------------------- updates
+
+def version():
+    try:
+        return (dg.HERE / "VERSION").read_text(encoding="utf-8").strip() or "0"
+    except OSError:
+        return "0"
+
+
+def version_key(v):
+    return tuple(int(x) for x in re.findall(r"\d+", str(v))[:3])
+
+
+class Update:
+    """The newest released version, looked up in the background so no page waits for the internet."""
+    latest = None
+    checked = 0
+    lock = threading.Lock()
+
+    @classmethod
+    def fetch_latest(cls):
+        req = urllib.request.Request(f"https://raw.githubusercontent.com/{REPO}/master/VERSION", headers=dg.UA)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.read().decode("utf-8", "replace").strip()[:20]
+
+    @classmethod
+    def refresh(cls):
+        try:
+            cls.latest = cls.fetch_latest()
+        except Exception:
+            pass
+
+    @classmethod
+    def info(cls):
+        with cls.lock:
+            if time.time() - cls.checked > 6 * 3600:
+                cls.checked = time.time()
+                threading.Thread(target=cls.refresh, daemon=True).start()
+        mine = version()
+        newer = bool(cls.latest and version_key(cls.latest) > version_key(mine))
+        return {"version": mine, "latest": cls.latest if newer else None}
+
+
+def download_release():
+    req = urllib.request.Request(f"https://codeload.github.com/{REPO}/zip/refs/heads/master", headers=dg.UA)
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return r.read()
+
+
+def apply_update(download=None):
+    """Replace the program files with the newest release. Returns the new version. Raises RuntimeError and changes
+    nothing if the download is incomplete or a file in it is broken."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO((download or download_release)()))
+    except Exception as err:
+        raise RuntimeError(f"The update could not be downloaded ({err}). Check the internet connection and try again.")
+    with archive:
+        names = {n.split("/", 1)[1]: n for n in archive.namelist() if "/" in n}
+        try:   # the release says which files it is made of, so a version that adds a file still updates fully
+            wanted = program_files(archive.read(names["MANIFEST"]).decode("utf-8"))
+        except (KeyError, ValueError) as err:
+            raise RuntimeError(f"The update is incomplete ({err}), so nothing was changed.")
+        missing = [f for f in wanted if f not in names]
+        if missing:
+            raise RuntimeError(f"The update is incomplete ({missing[0]} is missing), so nothing was changed.")
+        files = {f: archive.read(names[f]) for f in wanted}
+    new = files["VERSION"].decode("utf-8", "replace").strip()
+    if version_key(new) <= version_key(version()):
+        raise RuntimeError("You already have the newest version.")
+    for name, data in files.items():   # a broken file must never replace a working one
+        try:
+            if name.endswith(".py"):
+                compile(data, name, "exec")
+            elif name.endswith(".json"):
+                json.loads(data)
+        except (SyntaxError, ValueError) as err:
+            raise RuntimeError(f"The update has a broken file ({name}: {err}), so nothing was changed.")
+    for name, data in files.items():
+        (dg.HERE / (name + ".new")).write_bytes(data)
+    for name in files:
+        (dg.HERE / (name + ".new")).replace(dg.HERE / name)
+    return new
+
+
+# ---------------------------------------------------------------- Claude (optional): your digest as tools in the Claude app
+
+def claude_config_paths():
+    """Where the Claude desktop app keeps its settings on this computer (the folder exists once Claude has been opened)."""
+    home = Path.home()
+    if sys.platform == "darwin":
+        return [home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"]
+    if os.name == "nt":
+        roaming = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+        local = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        store = sorted((local / "Packages").glob("*Claude*/LocalCache/Roaming/Claude")) if (local / "Packages").exists() else []
+        return [d / "claude_desktop_config.json" for d in store] + [roaming / "Claude" / "claude_desktop_config.json"]
+    return [home / ".config" / "Claude" / "claude_desktop_config.json"]
+
+
+def claude_entry():
+    return {"command": console_python(), "args": [str(dg.HERE / "mcp_server.py")]}
+
+
+def claude_status():
+    paths = [p for p in claude_config_paths() if p.parent.exists()]
+    connected = False
+    for p in paths:
+        try:
+            connected = connected or json.loads(p.read_text(encoding="utf-8")).get("mcpServers", {}).get("market-digest") == claude_entry()
+        except (OSError, ValueError, AttributeError):
+            pass
+    return {"installed": bool(paths), "connected": connected}
+
+
+def claude_connect(on=True):
+    """Add (or remove) Market Digest in the Claude desktop app's list of local tools. Claude must be restarted after."""
+    paths = [p for p in claude_config_paths() if p.parent.exists()]
+    if not paths:
+        raise ValueError("The Claude desktop app was not found on this computer. Install it from claude.ai/download, open it once, then try again.")
+    for p in paths:
+        try:
+            doc = json.loads(p.read_text(encoding="utf-8") or "{}") if p.exists() else {}
+            if not isinstance(doc, dict):
+                raise ValueError
+        except ValueError:
+            raise ValueError(f"Claude's settings file could not be read, so it was not changed ({p}).")
+        if p.exists() and not p.with_suffix(".before-market-digest.json").exists():
+            p.with_suffix(".before-market-digest.json").write_bytes(p.read_bytes())   # a copy of the file as it was
+        servers = doc.setdefault("mcpServers", {})
+        if on:
+            servers["market-digest"] = claude_entry()
+        else:
+            servers.pop("market-digest", None)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+        tmp.replace(p)
+    return claude_status()
+
 
 def json_folder(cfg):
     return Path(cfg.get("json_dir") or dg.JSON_DIR)
@@ -591,6 +793,8 @@ def status():
         "videos_saved": len(list(dg.CACHE_DIR.glob("*.json"))) if dg.CACHE_DIR.exists() else 0,
         "job": Job.snapshot(),
         "platform": platform(),
+        "notify": cfg.get("notify", True), "open_when_ready": open_when_ready(cfg),
+        "update": Update.info(), "claude": claude_status(),
     }
 
 
@@ -662,6 +866,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.page("chat.html")
         if u.path == "/api/settings":
             return self.send(200, {**public(read_config()), "setup": self.setup_mode, "drive_folders": drive_folders(),
+                                   "popular_channels": [{"name": n, "url": u} for n, u in POPULAR_CHANNELS],
+                                   "popular_analysts": POPULAR_ANALYSTS, "claude": claude_status(), "version": version(),
                                    "analyst_suggestions": analyst_suggestions(),
                                    "platform": platform(), "program_folder": str(dg.HERE)})
         if u.path == "/api/status":
@@ -728,9 +934,22 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Save your settings first.")
             Job.start(req.get("kind", "preview"))
             return self.send(200, Job.snapshot())
-        if path == "/api/finish":
+        if path in ("/api/finish", "/api/quit"):
             self.send(200, {"ok": True})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return None
+        if path == "/api/claude":
+            return self.send(200, claude_connect(on=req.get("action") != "disconnect"))
+        if path == "/api/update":
+            if Job.snapshot()["running"]:
+                raise ValueError("A digest is being made. Update when it has finished.")
+            try:
+                new = apply_update()
+            except RuntimeError as err:
+                raise ValueError(str(err))
+            self.send(200, {"ok": True, "version": new})
+            # not a daemon thread (request threads are, and their children inherit it): it must outlive the server loop
+            threading.Thread(target=restart, args=(self.server,), daemon=False).start()
             return None
         if path == "/api/ask":
             try:
@@ -753,10 +972,42 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(404, {"error": "not found"})
 
 
-def serve(setup=False, page="/", open_browser=True):
+def restart(server):
+    """Start the (updated) app again in place of this one. The open page reconnects by itself."""
+    time.sleep(0.5)   # let the answer to the page go out first
+    server.shutdown()
+    server.server_close()
+    subprocess.Popen([sys.executable, str(dg.HERE / "app.py"), "--no-browser", "--wait-for-port"], cwd=dg.HERE,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     creationflags=0x08000000 if os.name == "nt" else 0, start_new_session=os.name != "nt")
+    os._exit(0)
+
+
+def stop_running():
+    """Ask a Market Digest that is already open to quit. True if one answered."""
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}/api/quit", data=b"{}", headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=5).read()
+        time.sleep(1)
+        return True
+    except Exception:
+        return False
+
+
+def bind(wait=False):
+    for attempt in range(8 if wait else 1):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        except OSError:
+            if attempt < (7 if wait else 0):
+                time.sleep(0.7)
+    raise OSError("port in use")
+
+
+def serve(setup=False, page="/", open_browser=True, wait_for_port=False):
     os.environ["PATH"] = str(dg.HERE / "bin") + os.pathsep + os.environ.get("PATH", "")   # the yt-dlp the installer put in bin
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        server = bind(wait_for_port)
     except OSError:
         if not setup:   # the app is already open in another window
             print(f"Market Digest is already running. Opening http://127.0.0.1:{PORT}{page}")
@@ -766,7 +1017,7 @@ def serve(setup=False, page="/", open_browser=True):
     Handler.setup_mode, Handler.port = setup, server.server_address[1]
     url = f"http://127.0.0.1:{Handler.port}{page}"
     print(f"Market Digest: {url}  (only this computer can open it)")
-    print("Click Finish on the page when you are done." if setup else "Keep this window open while you use it; close it to stop.")
+    print("Click Finish on the page when you are done." if setup else "To stop it, click Quit at the top of the page.")
     if open_browser:
         webbrowser.open(url)
     try:
@@ -782,13 +1033,25 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Market Digest: settings, status and chat in your browser.")
     ap.add_argument("--setup", action="store_true", help="the installer's settings page; Finish closes it")
     ap.add_argument("--schedule", action="store_true", help="set the daily run again from the saved settings, then stop")
+    ap.add_argument("--daily", action="store_true", help="the scheduled run: make the digest, trying again if it fails, then stop")
+    ap.add_argument("--stop", action="store_true", help="ask a running Market Digest to quit, then stop")
+    ap.add_argument("--notify", nargs=2, metavar=("TITLE", "TEXT"), help="show a desktop notice, then stop")
     ap.add_argument("--notify-failure", action="store_true", help="show a desktop notice that the daily run failed, then stop")
+    ap.add_argument("--wait-for-port", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--page", default="/", help="the page to open: /, /settings or /chat")
     ap.add_argument("--no-browser", action="store_true", help="do not open the browser")
     args = ap.parse_args(argv)
     if args.notify_failure:
         notify("Market digest did not run", "Open Market Digest on the desktop to see why.")
         return
+    if args.notify:
+        notify(*args.notify)
+        return
+    if args.stop:
+        print("Closed the Market Digest that was open." if stop_running() else "Market Digest was not open.")
+        return
+    if args.daily:
+        sys.exit(daily_run())
     if args.schedule:
         cfg = read_config()
         if not real(cfg.get("gemini_api_key")):
@@ -803,7 +1066,15 @@ def main(argv=None):
         return
     if not dg.YTMD.exists():
         sys.exit(f"Put app.py in the same folder as the ytmd script (looked for {dg.YTMD}).")
-    serve(setup=args.setup, page="/settings?setup=1" if args.setup else args.page, open_browser=not args.no_browser)
+    if args.wait_for_port:   # just updated: point the daily schedule at this version's own command
+        cfg = read_config()
+        try:
+            if real(cfg.get("gemini_api_key")):
+                schedule(cfg.get("schedule_on", True), daily_time(cfg))
+        except Exception:
+            pass
+    serve(setup=args.setup, page="/settings?setup=1" if args.setup else args.page, open_browser=not args.no_browser,
+          wait_for_port=args.wait_for_port)
 
 
 if __name__ == "__main__":

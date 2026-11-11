@@ -16,6 +16,8 @@ It runs on your own Windows PC or Mac, uses only free services, and keeps your k
 
 Optional extras, each set up once (USER_GUIDE.md, sections 3 and 5a):
 
+- **Claude**: one click in Settings gives the Claude desktop app tools that read your digest on this computer, so you
+  can ask "what did my analysts say about Nvidia this week?" or have it build a dashboard from your own data.
 - **Only the analysts you follow**: list the people whose views matter (Dan Ives, Tom Lee, ...) and only videos where
   they speak go into the digest. Other uploads are left out before Gemini reads them, so more channels cost nothing.
 
@@ -35,11 +37,12 @@ password** (https://myaccount.google.com/apppasswords). The settings page links 
 2. Double-click the installer in that folder: **`install.bat`** on Windows, **`install-mac.command`** on a Mac.
    - Windows says "Windows protected your PC"? Click **More info > Run anyway**.
    - macOS says it cannot check the file? Right-click it > **Open** > **Open**.
-3. **The settings page opens in your browser.** Paste your key, add your channels and (optionally) your email, test
-   each with its **Test** button, click **Save**, then **Make a test digest**, then **Finish**.
+3. **The setup page opens in your browser: three short steps.** Paste your Gemini key, click the channels and analysts
+   you want, pick a time. Then **Save and finish** and **Make my first digest now**.
 
-That's it. The digest arrives by email every day at the time you chose, and **Market Digest** is on your desktop:
-it shows whether the last digest worked, lets you change any setting, and has the chat.
+That's it. Each morning's digest opens in your browser with a notice on screen (email is optional), and
+**Market Digest** is on your desktop: it shows whether the last digest worked, holds the settings, has the chat, and
+updates itself in one click when a new version is out.
 
 ## Everyday use
 
@@ -48,7 +51,7 @@ it shows whether the last digest worked, lets you change any setting, and has th
 | Read today's digest | Open the email, or **Market Digest** > Recent digests. |
 | Know whether it ran, and why not | **Market Digest** (desktop). The home page shows the last run, in plain words. |
 | Change channels, email, keys or time | **Market Digest** > Settings. Each setting has a Test button. |
-| Ask about the videos | **Market Digest** > Chat. Keep its small window open while you use it. |
+| Ask about the videos | **Market Digest** > Chat. Or connect the Claude desktop app (Settings > Ask Claude) and ask Claude. |
 | Get a digest right now | **Market Digest** > Make today's digest now |
 | Check everything works | The **Test** buttons in Settings (or `python digest.py --check` in the program folder) |
 | Feed the Econova hub | Each run also saves `video-digest_YYYY-MM-DD.json` in `json_dir` (set it to a Google Drive for desktop folder to share it). See [ARCHITECTURE.md](docs/ARCHITECTURE.md) §3. |
@@ -56,7 +59,8 @@ it shows whether the last digest worked, lets you change any setting, and has th
 | Add past days to the JSON folder | `python email_backfill.py digests\digest-*.html` (USER_GUIDE.md, 5a) |
 | See the dashboard | Open it in Claude (the link is in the Drive folder's START HERE doc). Every number has an (i) that explains it. |
 | Add Wall Street's view | Get a key at https://mcp.tipranks.com/ (Keys) and paste it in Settings > TipRanks |
-| Update to the newest version | `git pull` (or a new zip), then double-click the installer again and click **Finish** (settings are kept) |
+| Update to the newest version | **Market Digest** > Home > **Update now** (shown when a new version is out; settings are kept) |
+| Close it | **Quit** at the top right of the page. The daily digest still runs. |
 
 ## Documents
 

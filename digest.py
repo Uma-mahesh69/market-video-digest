@@ -154,6 +154,31 @@ def record_run(ok, message, **info):
         pass
 
 
+def announce(cfg, count, out):
+    """Tell the person a new digest is ready: a desktop notice, and the digest opened in the browser. Both are
+    settings; opening is on unless chosen otherwise when no email is set up, so the digest still reaches them."""
+    if cfg.get("notify", True):
+        try:   # app.py holds the notice code for both systems; a failed notice must never fail the run
+            subprocess.run([sys.executable, str(HERE / "app.py"), "--notify", "Your market digest is ready",
+                            f"{count} new video{'s' if count != 1 else ''}. Open Market Digest to read it."],
+                           timeout=60, capture_output=True, creationflags=0x08000000 if os.name == "nt" else 0)
+        except Exception:
+            pass
+    if cfg.get("open_when_ready", not cfg.get("email_to")):
+        show(out)
+
+
+def show(out):
+    """Open a saved digest in the default browser."""
+    try:
+        if hasattr(os, "startfile"):   # Windows
+            os.startfile(out)
+        else:
+            webbrowser.open(out.resolve().as_uri())
+    except Exception as err:
+        log(f"Could not open {out}: {err}")
+
+
 def wait_for_internet(minutes=15):
     """A run that starts as the PC wakes can come before Wi-Fi connects, and would then find and send nothing."""
     deadline = time.time() + minutes * 60
@@ -1073,10 +1098,9 @@ def main():
     record_run(ok, message, test=test_run, videos=len(done), skipped=len(skipped), left_out=len(filtered), digest_file=out.name,
                emailed_to=(cfg.get("email_to") if emailed else []), unchecked=[ch for ch, _ in unchecked])
     if args.open:
-        if hasattr(os, "startfile"):   # Windows
-            os.startfile(out)
-        else:                          # Mac and others: the default browser
-            webbrowser.open(out.resolve().as_uri())
+        show(out)
+    elif ok and done and not test_run and emailed is not None:
+        announce(cfg, len(done), out)
     if emailed is None:
         sys.exit(1)   # tells the scheduler (Task Scheduler, or run_digest.sh on a Mac) the run failed, so it retries
 

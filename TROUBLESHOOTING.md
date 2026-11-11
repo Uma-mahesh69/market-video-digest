@@ -44,7 +44,21 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 
 ### "Market Digest stopped responding" or the page does not load
 - **Cause:** the small Market Digest window was closed, which stops the page.
-- **Fix:** double-click **Market Digest** on the desktop again. Keep its window open (you can minimise it).
+- **Fix:** double-click **Market Digest** on the desktop again. It runs in the background until you click **Quit**
+  or the computer restarts. On a Mac, if the desktop icon does nothing, double-click `run_app.command` in
+  `~/market-digest` (it shows any error in a Terminal window).
+
+### "Update now" says the update could not be downloaded, or is incomplete
+- **Cause:** no internet at that moment, or GitHub did not answer. Nothing was changed: a broken or partial update is
+  never installed.
+- **Fix:** try again later. Or update by hand: download the newest files and double-click the installer.
+
+### Claude does not show the Market Digest tools
+- **Cause:** the Claude desktop app reads its list of local tools only when it starts.
+- **Fix:** quit Claude completely (on Windows also from the icon near the clock; on a Mac Cmd+Q), then open it again.
+  In Market Digest > Settings the Claude card should say **Connected**. "The Claude desktop app was not found" means
+  it is not installed, or has never been opened, on this computer: get it from claude.ai/download and open it once.
+  The tools are for the desktop app; claude.ai in a browser cannot reach files on your computer.
 
 ### The home page says "this computer has no schedule for it"
 - **Cause:** the daily task (Windows) or launchd job (Mac) was removed, or the program folder moved.
@@ -108,8 +122,8 @@ without asking. Check `digest.log` after the first scheduled run.
 - **Cause:** the log said "tries again in 30 minutes", but Task Scheduler's "restart on failure" ignores the
   program's exit code, so nothing ran until the next day. On 31 Oct, Gmail refused the email (451) after that day's
   JSON was saved; the queued videos then went into the 1 Nov file as well.
-- **Fix:** `run_digest.bat` now retries itself every 30 minutes, 3 times, and the JSON is saved only after the email
-  goes out. Run `install.bat -Unattended` once to get the new launcher (settings are kept).
+- **Fix:** the daily run now retries itself every 30 minutes, 3 times, and the JSON is saved only after the digest
+  goes out. Update once (Home > Update now, or run the installer again) to get this; settings are kept.
 
 ### Nothing arrived, and `digest.log` says `getaddrinfo failed` (Verified)
 - **Cause:** the PC had just been switched on. Windows started the catch-up run before Wi-Fi was connected, so the

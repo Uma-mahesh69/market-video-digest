@@ -7,7 +7,6 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $src = $PSScriptRoot
-$files = "app.py", "app.html", "digest.py", "digest_export.py", "digest_schema.json", "tickers.json", "market_data.py", "market_schema.json", "tipranks.py", "chat.py", "chat.html", "ytmd", "README.md", "digest_config.example.json"
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "STOPPED: $text" -ForegroundColor Red; exit 1 }
@@ -25,6 +24,9 @@ function Find-Python {
     return $null
 }
 
+# MANIFEST lists the program's files, one a line (the same list the app's own updater uses).
+if (-not (Test-Path (Join-Path $src "MANIFEST"))) { Fail "MANIFEST is missing next to install.bat. Unzip the whole folder first, then run install.bat from it." }
+$files = @(Get-Content (Join-Path $src "MANIFEST") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 foreach ($f in $files) { if (-not (Test-Path (Join-Path $src $f))) { Fail "$f is missing next to install.bat. Unzip the whole folder first, then run install.bat from it." } }
 
 Step "1. Python"
@@ -42,6 +44,10 @@ if (-not $py) {
 Write-Host "Using $py"
 
 Step "2. Program files -> $InstallDir"
+# An update: close a Market Digest that is open, so it does not keep running the old version.
+if (Test-Path (Join-Path $InstallDir "app.py")) {
+    try { Start-Process -FilePath $py -ArgumentList "`"$(Join-Path $InstallDir 'app.py')`"", "--stop" -Wait -WindowStyle Hidden } catch { }
+}
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir "bin") | Out-Null
 if ((Resolve-Path $src).Path.TrimEnd("\") -ne (Resolve-Path $InstallDir).Path.TrimEnd("\")) {
     foreach ($f in $files) { Copy-Item (Join-Path $src $f) $InstallDir -Force }
@@ -62,32 +68,11 @@ if (Get-Command yt-dlp -ErrorAction SilentlyContinue) {
 }
 $env:PATH = (Join-Path $InstallDir "bin") + ";" + $env:PATH
 
-# The launchers use this computer's own Python, and the yt-dlp in bin\.
-# Task Scheduler's "restart on failure" ignores a program's exit code, so the launcher retries a failed run itself,
-# as run_digest.sh does on a Mac.
-$runDigest = @(
-    "@echo off",
-    "rem Runs the daily digest and keeps a log next to this file. Started every day by Task Scheduler.",
-    "rem A failed run (no internet yet, YouTube or email down) is tried again every 30 minutes, 3 times.",
-    "cd /d `"%~dp0`"",
-    "set `"PATH=%~dp0bin;%PATH%`"",
-    "set attempt=1",
-    ":run",
-    "`"$py`" digest.py >> digest.log 2>&1 && exit /b 0",
-    "if %attempt% geq 4 goto failed",
-    "set /a attempt+=1",
-    "echo %time:~0,8% The run failed; trying again in 30 minutes.>> digest.log",
-    "`"$py`" -c `"import time; time.sleep(1800)`"",
-    "goto run",
-    ":failed",
-    "`"$py`" app.py --notify-failure",
-    "exit /b 1",
-    ""
-) -join "`r`n"
+# The launchers use this computer's own Python, and the yt-dlp in bin\. The daily run needs no launcher: Task Scheduler
+# starts "pythonw app.py --daily" itself (set up by the settings page), so no window appears.
 $runApp = "@echo off`r`nrem Opens Market Digest (status, settings and chat) in your browser. Keep this window open while you use it.`r`ntitle Market Digest`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" app.py`r`npause`r`n"
 # Older "Digest chat" shortcuts keep working: they open the same app, on its Chat page.
 $runChat = "@echo off`r`ntitle Market Digest`r`ncd /d `"%~dp0`"`r`nset `"PATH=%~dp0bin;%PATH%`"`r`n`"$py`" chat.py`r`npause`r`n"
-[IO.File]::WriteAllText((Join-Path $InstallDir "run_digest.bat"), $runDigest)
 [IO.File]::WriteAllText((Join-Path $InstallDir "run_app.bat"), $runApp)
 [IO.File]::WriteAllText((Join-Path $InstallDir "run_chat.bat"), $runChat)
 
@@ -98,7 +83,7 @@ try {
 
     if (-not $Unattended) {
         Step "4. Settings (in your browser)"
-        Write-Host "The settings page is opening in your browser. Paste your keys there, test them, click Save, then Finish."
+        Write-Host "The setup page is opening in your browser. Follow its three short steps, then click Finish."
         Write-Host "(If no page opens, copy the address below into your browser.)"
         & $py app.py --setup
         if ($LASTEXITCODE -ne 0) { Fail "The settings page stopped. Run install.bat again." }
@@ -113,8 +98,12 @@ try {
         $desktop = [Environment]::GetFolderPath("Desktop")
         Remove-Item (Join-Path $desktop "Digest chat.lnk") -ErrorAction SilentlyContinue   # replaced by Market Digest, which has the chat too
         $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop "Market Digest.lnk"))
-        $lnk.TargetPath = Join-Path $InstallDir "run_app.bat"
+        # pythonw starts it without a black window; the page has a Quit button. Without pythonw, the .bat is used.
+        $pyw = Join-Path (Split-Path $py) "pythonw.exe"
+        if (Test-Path $pyw) { $lnk.TargetPath = $pyw; $lnk.Arguments = "`"$(Join-Path $InstallDir 'app.py')`"" }
+        else { $lnk.TargetPath = Join-Path $InstallDir "run_app.bat" }
         $lnk.WorkingDirectory = $InstallDir
+        $lnk.Description = "Market Digest: your daily market video digest"
         $lnk.Save()
         Write-Host "Added 'Market Digest' to the desktop: it shows whether the digest ran, your settings, and the chat."
     }
@@ -123,4 +112,4 @@ try {
 Write-Host ""
 Write-Host "Done. You can close this window." -ForegroundColor Green
 Write-Host "To check on the digest, change a setting or chat about the videos: double-click 'Market Digest' on the desktop."
-Write-Host "Program folder: $InstallDir (run install.bat again to update; your settings are kept)."
+Write-Host "Program folder: $InstallDir. Updates: Market Digest tells you when one is ready and installs it in one click."

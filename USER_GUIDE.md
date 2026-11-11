@@ -61,36 +61,35 @@ A window shows the steps. You only act at step 4:
 | 1. Python | Finds Python (on Windows it installs Python 3.13 if needed; this can take a few minutes). |
 | 2. Program files | Copies the program to `C:\Users\<you>\market-digest` (Windows) or `~/market-digest` (Mac). |
 | 3. yt-dlp | Downloads the official caption reader if it is missing. |
-| 4. Settings | **The settings page opens in your browser.** Fill it in, test, click **Save**, then **Finish**. |
+| 4. Settings | **The setup page opens in your browser: three short steps** (below). |
 | 5. Daily schedule | Sets the daily run at the time you chose. |
 | 6. Desktop | Adds **Market Digest** to the desktop. |
 
-**The settings page** has one box per setting, each with a short explanation and a **Test** button that answers in
-plain words (for example "The key works" or "Gmail did not accept this address and app password"):
+**The three setup steps:**
 
-- **Gemini key** (needed): paste it with Ctrl+V (Cmd+V on a Mac). **Show** reveals what you pasted.
-- **YouTube channels** (needed): one per box; **+ Add a channel** for more. A link like
-  `https://www.youtube.com/@TheStreet` or a handle like `@TheStreet`. **Test the channels** shows each channel's newest video.
-- **Analysts to follow** (optional): only videos where one of these people speaks go into the digest. Videos
-  without any of them are left out by a free check of the captions, before Gemini reads them, so adding more
-  channels costs no extra Gemini quota. The page suggests names already seen in your saved videos. Leave the
-  list empty to include every video. **Leave out videos that are not about markets or stocks** (on by default)
-  drops the rest, for example a politics interview with no stocks or market levels in it.
-- **Email** (optional): who receives the digest, the Gmail address that sends it, and its app password.
-  **Send a test email** proves it arrives. Leave the first box empty to skip email.
-- **Daily time**: when the digest is made.
-- **Shared folder**, **Watchlist** and **TipRanks**: optional extras, explained in section 5a. **Choose…** opens your
-  computer's own folder window; if Google Drive for desktop is installed, a button offers its folder.
+1. **Your Gemini key.** Paste it (Ctrl+V, or Cmd+V on a Mac) and click **Next**. It is checked with Google; if it is
+   wrong, the page says so in plain words.
+2. **Who to follow.** Click the **popular channels** you want (CNBC Television, Bloomberg Television, Yahoo Finance,
+   TheStreet, Fox Business, Schwab Network), or add any channel's address. Optionally click the **analysts** you care
+   about: then only videos where they speak go into the digest, and the others are left out before Gemini reads them,
+   so more channels cost nothing extra. **Next** checks each channel on YouTube.
+3. **When and how you get it.** Pick the daily time. By default a notice appears on your screen and the digest opens
+   in your browser when it is ready, so **no email setup is needed**. Tick **Also email it to me** if you want it by
+   email too (that needs a Gmail app password; the page links to where you make one).
 
-After **Save**, click **Make a test digest**: a digest of the last 3 days opens in your browser (not emailed). Then
-click **Finish**. The installer window says **Done**; you can close it.
+Click **Save and finish**, then **Make my first digest now**: a digest of the last 3 days opens in your browser.
+Then click **Finish**. The installer window says **Done**; you can close it.
+
+Everything else (a shared folder, a watchlist sheet, TipRanks, connecting Claude) is optional and lives in
+**Settings** afterwards, each with a **Test** button that answers in plain words.
 
 What is different on a Mac:
 
 - The daily run is a **launchd** job (`~/Library/LaunchAgents/com.nugenix.market-digest.plist`) instead of a Task
   Scheduler task. It runs while you are logged in. If the Mac is asleep at that time, it runs when it wakes; if
   it is shut down, the next run covers everything since the last digest.
-- **Market Digest** on the desktop opens a Terminal window, which must stay open while you use the page.
+- **Market Digest** on the desktop is a small app. It starts in the background (no Terminal window) and opens the
+  page. If it ever does not start, double-click `run_app.command` in `~/market-digest` instead.
 - If macOS asks whether Terminal may access your Desktop or Google Drive, click **Allow**.
 
 On both, a failed run is retried every 30 minutes, 3 times. If all fail, a desktop notice says so, and the
@@ -98,7 +97,8 @@ Market Digest home page shows why.
 
 ## 4. Your settings
 
-To change anything later, double-click **Market Digest** on the desktop and click **Settings**. Saved keys and
+To change anything later, double-click **Market Digest** on the desktop and click **Settings**. The less common
+settings are folded under **Extras** at the bottom. Saved keys and
 passwords are never shown again: the page only says they are saved (with a key's last 4 characters). Leave a box
 empty to keep what is saved; paste a new one to replace it.
 
@@ -114,7 +114,9 @@ send it to anyone.** You can also edit it in a text editor; these are the settin
 | `max_videos` | The most videos in one digest (newest first). | 20 |
 | `analysts` | Only videos with these people (full names; other spellings after a slash: `"Tom Lee / Thomas Lee"`). Empty = every video. Left-out videos are listed at the bottom of the email in small print. | empty |
 | `markets_only` | Leave out videos with no stocks, market levels, sectors or predictions in them. | true |
-| `email_to` | Who receives the digest. | |
+| `notify` | Show a notice on screen when a new digest is ready. | true |
+| `open_when_ready` | Open each new digest in the browser. | on while email is off |
+| `email_to` | Who receives the digest by email. Empty = no email. | |
 | `smtp_user`, `smtp_password` | The Gmail account that sends it, and its app password. | |
 | `smtp_host`, `smtp_port` | The mail server. Leave as is for Gmail. | smtp.gmail.com, 465 |
 | `daily_time`, `schedule_on` | When the daily run happens, and whether it is on. Change these on the settings page, which also updates the system's schedule. | 07:30, on |
@@ -248,8 +250,9 @@ logged; the digest itself is never held up.
 
 ## 6. Everyday use: Market Digest (status, settings and chat)
 
-Double-click **Market Digest** on the desktop. A small window opens (keep it open while you use the page), then the
-page opens in your browser at `http://127.0.0.1:8765`. Only this computer can open it. It has three parts:
+Double-click **Market Digest** on the desktop. The page opens in your browser at `http://127.0.0.1:8765`; no other
+window appears. Only this computer can open it. **Quit** at the top right closes Market Digest (the daily digest
+still runs at its time); double-clicking the desktop icon opens it again. It has three parts:
 
 **Home** answers "did it work?":
 - **Every day at 07:30. Next: tomorrow at 07:30.** A green dot means the daily run is set; amber means it is turned
@@ -261,7 +264,10 @@ page opens in your browser at `http://127.0.0.1:8765`. Only this computer can op
 - **Recent digests** opens any of the last 8 digests. **Where things go** lists who gets the email, where the data
   files are saved, and how many TipRanks look-ups this month used. **Show the log** shows what each run did.
 
-**Settings** is the page from installation (section 3), with your saved settings filled in.
+When a newer version is out, a blue bar on Home says so: **Update now** installs it in a few seconds and keeps
+your settings, videos and chats.
+
+**Settings** has everything from the setup, filled in, each with a Test button.
 
 **Chat** answers questions about your videos:
 1. At the top, choose which videos to ask about: **Last 3 / 7 / 30 days**, **All saved videos**, or **one video**
@@ -280,6 +286,30 @@ Good questions to start with:
 - *Which stocks came up most this week, and was each channel bullish or bearish on them?*
 - *Where do the channels disagree?*
 - *Explain the points about Treasury yields in plain terms.*
+
+## 6a. Ask Claude about your digest (optional)
+
+If you use the **Claude desktop app**, Market Digest can give Claude a set of tools that read your saved videos on
+this computer. You then ask Claude in plain words, and it answers from *your* digest, with links to the moment in
+each video:
+
+- *"What did the analysts I follow say about Nvidia this week?"*
+- *"Give me a morning briefing."* (also in Claude's **+** menu as **morning-briefing**, with **stock-view** and
+  **weekly-dashboard**)
+- *"Build me a dashboard of this week's calls."*
+- *"Add Bloomberg Television to my channels and follow Mike Wilson."* (Claude asks before changing anything.)
+
+To turn it on: **Market Digest > Settings > Ask Claude about your digest > Connect to Claude**, then quit the Claude
+app completely and open it again. **Disconnect** removes it the same way.
+
+What to know:
+- The tools run on your computer and read only the Market Digest folder. Your keys and passwords are never given
+  to Claude.
+- What Claude reads to answer a question (video notes, analyst calls) is sent to Claude as part of that
+  conversation, like anything else you type to it.
+- It works with the Claude desktop app (Windows or Mac), on any Claude plan that allows local tools. In Claude Code,
+  use `claude mcp add market-digest -- python mcp_server.py` from the program folder.
+- Claude's answers are information, not investment advice.
 
 ## 7. Useful commands
 
@@ -311,18 +341,18 @@ for example `python3 digest.py --check`. To start the scheduled run now:
 
 - **Change channels, email, keys or time:** Market Digest > **Settings**, then **Save**. Saving also updates the
   daily schedule. To pause the digest, untick **Make the digest every day** and save.
-- **Update to a new version:** get the new files (a new zip, or `git pull` in the cloned folder) and double-click the
-  installer again. The settings page opens with your settings filled in: click **Finish**. Your settings, saved
-  digests and chats are kept. Close any open Market Digest window first. (`install.bat -Unattended` updates without
-  opening the page, keeping the settings and the time.)
+- **Update to a new version:** open Market Digest. When a newer version is out, a blue bar on Home says so; click
+  **Update now**. It takes a few seconds and keeps your settings, saved digests and chats. (By hand: get the new
+  files and double-click the installer again; the page opens with your settings filled in, click **Finish**.
+  `install.bat -Unattended` does the same without opening the page.)
 - **Remove it from Windows:**
   1. In Command Prompt: `schtasks /delete /tn "Market video digest" /f`
   2. Delete the folder `C:\Users\<you>\market-digest`.
-  3. Delete the **Market Digest** shortcut from the desktop.
+  3. Delete the **Market Digest** shortcut from the desktop. If you connected Claude, click **Disconnect** in Settings first.
   4. Optional: delete `C:\Users\<you>\ytmd` (the saved transcripts).
 - **Remove it from a Mac:** in Terminal run
   `launchctl bootout gui/$(id -u)/com.nugenix.market-digest; rm ~/Library/LaunchAgents/com.nugenix.market-digest.plist`,
-  then delete the folders `~/market-digest` and (optional) `~/ytmd`, and `Market Digest.command` from the desktop.
+  then delete the folders `~/market-digest` and (optional) `~/ytmd`, and `Market Digest` from the desktop.
 
 ## 9. If something goes wrong
 
@@ -337,5 +367,5 @@ The most common:
 | "Google says this key is not valid" | Copy the key again from Google AI Studio and paste the whole key. |
 | "Gmail did not accept this address and app password" | Use a Gmail **app password** (16 letters), not your normal password. |
 | No email today | The home page says why. "No new videos" means the channels posted nothing new. |
-| "Market Digest stopped responding" | Its window was closed. Double-click **Market Digest** again. |
+| "Market Digest stopped responding" | It was closed (Quit, or the computer restarted). Double-click **Market Digest** again. |
 | The chat says web search was not available | Normal on a free Gemini key. Web search needs billing. |
