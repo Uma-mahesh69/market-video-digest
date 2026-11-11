@@ -984,14 +984,27 @@ def restart(server):
 
 
 def stop_running():
-    """Ask a Market Digest that is already open to quit. True if one answered."""
-    req = urllib.request.Request(f"http://127.0.0.1:{PORT}/api/quit", data=b"{}", headers={"Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=5).read()
-        time.sleep(1)
+    """Ask a Market Digest that is already open to quit, whatever its version. True if one answered.
+    Versions before 1.2 have no /api/quit; their /api/finish closes them the same way."""
+    for path in ("/api/quit", "/api/finish"):
+        req = urllib.request.Request(f"http://127.0.0.1:{PORT}{path}", data=b"{}",
+                                     headers={"Content-Type": "application/json", "Host": f"127.0.0.1:{PORT}"})
+        try:
+            urllib.request.urlopen(req, timeout=5).read()
+        except urllib.error.HTTPError as err:
+            if err.code == 404:   # an older version: try the next way
+                continue
+            return False
+        except Exception:
+            return False
+        for _ in range(20):   # wait until the port is free, so the new version can take it
+            time.sleep(0.25)
+            try:
+                socket.create_connection(("127.0.0.1", PORT), timeout=0.5).close()
+            except OSError:
+                return True
         return True
-    except Exception:
-        return False
+    return False
 
 
 def bind(wait=False):

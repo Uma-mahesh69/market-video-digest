@@ -45,9 +45,8 @@ Write-Host "Using $py"
 
 Step "2. Program files -> $InstallDir"
 # An update: close a Market Digest that is open, so it does not keep running the old version.
-if (Test-Path (Join-Path $InstallDir "app.py")) {
-    try { Start-Process -FilePath $py -ArgumentList "`"$(Join-Path $InstallDir 'app.py')`"", "--stop" -Wait -WindowStyle Hidden } catch { }
-}
+# The new app.py asks, because it knows how to close older versions too.
+try { Start-Process -FilePath $py -ArgumentList "`"$(Join-Path $src 'app.py')`"", "--stop" -WorkingDirectory $src -Wait -WindowStyle Hidden } catch { }
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir "bin") | Out-Null
 if ((Resolve-Path $src).Path.TrimEnd("\") -ne (Resolve-Path $InstallDir).Path.TrimEnd("\")) {
     foreach ($f in $files) { Copy-Item (Join-Path $src $f) $InstallDir -Force }

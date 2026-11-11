@@ -46,7 +46,8 @@ fi
 
 step "2. Program files -> $INSTALL_DIR"
 # An update: close a Market Digest that is open, so it does not keep running the old version.
-[ -f "$INSTALL_DIR/app.py" ] && "$PY" "$INSTALL_DIR/app.py" --stop >/dev/null 2>&1
+# The new app.py asks, because it knows how to close older versions too.
+(cd "$SRC" && "$PY" app.py --stop >/dev/null 2>&1)
 mkdir -p "$INSTALL_DIR/bin" || fail "Could not create $INSTALL_DIR."
 if [ "$(cd "$INSTALL_DIR" && pwd)" != "$SRC" ]; then
     for f in "${FILES[@]}"; do cp -f "$SRC/$f" "$INSTALL_DIR/" || fail "Could not copy $f."; done

@@ -364,6 +364,7 @@ function when(iso) {
 async function loadHome() {
   let st;
   try { st = await api('/api/status'); } catch (e) { $('homeLead').textContent = e.message; return; }
+  if (!st.update) return stale();
   if (!st.configured) { location.href = '/settings'; return; }
   const sc = st.schedule;
   $('homeLead').textContent = `${st.channels} channel${st.channels === 1 ? '' : 's'} followed, ${st.videos_saved} videos saved so far.`;
@@ -622,12 +623,19 @@ $('save').onclick = async () => {
     foot(e.message, 'bad');
     if (e.fields) {
       let first = null;
+      const unplaced = [];
       for (const [k, msg] of Object.entries(e.fields)) {
-        const el = $('e-' + k); if (el) el.textContent = msg;
+        const el = $('e-' + k);
+        if (el) el.textContent = msg; else unplaced.push(msg);
+        if (el && el.closest('#extras')) $('extras').open = true;   // the problem may be inside a folded section
+        if (el && el.closest('#emailBox')) { $('email_on').checked = true; smtpVisibility(); }
         const inp = k === 'channels' ? $('chans').querySelector('input') : k === 'analysts' ? $('analysts').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
       }
       if (wizard && first) { const card = first.closest('[data-step]'); if (card) { step = Number(card.dataset.step); showStep(); } }
       if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus({ preventScroll: true }); }
+      // Always say what is wrong in the bar too, so a problem is never reported without its reason.
+      const all = Object.values(e.fields);
+      foot((all.length === 1 ? 'Please fix: ' : `Please fix ${all.length} things (marked in red). First: `) + (unplaced[0] || all[0]), 'bad');
     }
   }
   $('save').disabled = false;
@@ -687,10 +695,21 @@ $('back').onclick = () => { step -= 1; warned = 0; showStep(); };
 $('firstDigest').onclick = () => { $('firstDigest').disabled = true; $('setupJob').hidden = false; run('preview', $('setupJob'), $('setupJobText'), $('setupJobLog')); };
 $('wizFinish').onclick = () => { if (S.setup) $('finish').onclick(); else location.href = '/'; };
 
+// An older Market Digest that is still running answers this newer page: say so instead of failing oddly.
+function stale() {
+  dirty = false;
+  document.querySelector('main').innerHTML = '<section class="done"><h1>An older Market Digest is still running</h1>'
+    + '<p class="lead">It was started before the update, so it cannot use this page.</p>'
+    + '<p>Close it: on Windows, close the black window titled <b>Market Digest</b> (or restart the computer); on a Mac, quit Terminal. '
+    + 'Then double-click <b>Market Digest</b> on the desktop, or run the installer again.</p></section>';
+  $('foot').hidden = true;
+}
+
 async function loadSettings() {
   $('foot').hidden = false;
   let s;
   try { s = await api('/api/settings'); } catch (e) { foot(e.message, 'bad'); return; }
+  if (!s.version) return stale();
   s.setup = s.setup || new URLSearchParams(location.search).has('setup');
   fillSettings(s);
   if (s.setup || s.first_time) { $('nav').hidden = true; $('quit').hidden = s.setup; }
