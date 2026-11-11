@@ -35,6 +35,7 @@ from pathlib import Path
 
 from digest_export import export_digest, file_name, load_tickers, number, resolve_ticker, speakers as note_speakers
 from market_data import market_brief, read_watchlist, save_market
+import prices
 import tipranks
 
 HERE = Path(__file__).resolve().parent
@@ -152,6 +153,31 @@ def record_run(ok, message, **info):
         tmp.replace(LAST_RUN)
     except Exception:
         pass
+
+
+def announce(cfg, count, out, what="Your market digest is ready"):
+    """Tell the person a new digest is ready: a desktop notice, and the digest opened in the browser. Both are
+    settings; opening is on unless chosen otherwise when no email is set up, so the digest still reaches them."""
+    if cfg.get("notify", True):
+        try:   # app.py holds the notice code for both systems; a failed notice must never fail the run
+            subprocess.run([sys.executable, str(HERE / "app.py"), "--notify", what,
+                            f"{count} video{'s' if count != 1 else ''}. Open Market Digest to read it."],
+                           timeout=60, capture_output=True, creationflags=0x08000000 if os.name == "nt" else 0)
+        except Exception:
+            pass
+    if cfg.get("open_when_ready", not cfg.get("email_to")):
+        show(out)
+
+
+def show(out):
+    """Open a saved digest in the default browser."""
+    try:
+        if hasattr(os, "startfile"):   # Windows
+            os.startfile(out)
+        else:
+            webbrowser.open(out.resolve().as_uri())
+    except Exception as err:
+        log(f"Could not open {out}: {err}")
 
 
 def wait_for_internet(minutes=15):
@@ -484,14 +510,31 @@ def day_summary(cfg, done):
     return s
 
 
+def refresh_prices(cfg, done):
+    """Fetch today's prices for the watchlist, holdings and the stocks called lately (for the dashboard and the
+    scoring of calls). Never stops the digest."""
+    try:
+        import insights
+        called = [str(s.get("ticker") or "") for d in done for s in d["notes"].get("stocks") or []]
+        prices.refresh([*insights.tickers_to_price(cfg), *called], log=log)
+    except Exception as err:
+        log(f"Prices not updated: {err}")
+
+
 def watchlist(cfg, day, done):
-    """(prices, market) from the watchlist sheet, or (None, None) when none is set up. A sheet that cannot be read
-    gives a market of {"error": ...}, shown as a note in the email; it never stops the digest."""
-    if not cfg.get("watchlist_csv"):
+    """(prices, market) from the watchlist in the settings (prices fetched by this computer) or from a watchlist
+    sheet, or (None, None) when there is none. A sheet that cannot be read gives a market of {"error": ...}, shown
+    as a note in the email; it never stops the digest."""
+    if not cfg.get("watchlist_csv") and not cfg.get("watchlist"):
         return None, None
     try:
-        prices = read_watchlist(cfg["watchlist_csv"])
-        return prices, market_brief(day, prices, done, CACHE_DIR)
+        if cfg.get("watchlist_csv"):
+            sheet = read_watchlist(cfg["watchlist_csv"])
+        else:
+            sheet = prices.as_watchlist(cfg["watchlist"])
+            if not any(w["price"] is not None for w in sheet["watchlist"]):
+                raise RuntimeError("no prices could be fetched for it today")
+        return sheet, market_brief(day, sheet, done, CACHE_DIR)
     except Exception as err:
         log(f"Watchlist prices not read: {err}")
         return None, {"error": str(err)}
@@ -691,10 +734,44 @@ def plain_text(done, skipped, overview, market=None):
     return "\n".join(lines)
 
 
+def service():
+    """The Market Digest email service (service.json, shipped with the app): {"url", "token"}, or None if it is not set up."""
+    try:
+        doc = json.loads((HERE / "service.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    url = str(doc.get("email_service") or "").strip()
+    return {"url": url, "token": str(doc.get("email_service_token") or "")} if url.startswith("https://") else None
+
+
+class ServiceError(RuntimeError):
+    pass
+
+
+def call_service(action, **fields):
+    """One request to the email service. Returns its answer; raises ServiceError with a sentence for the person."""
+    svc = service()
+    if not svc:
+        raise ServiceError("The Market Digest email service is not available in this version.")
+    body = json.dumps({"action": action, "token": svc["token"], **fields}).encode("utf-8")
+    req = urllib.request.Request(svc["url"], data=body, headers={"Content-Type": "text/plain;charset=utf-8", **UA})
+    try:   # Apps Script answers a POST with a redirect to the result, which urllib follows as a GET
+        with urllib.request.urlopen(req, timeout=90) as r:
+            answer = json.loads(r.read().decode("utf-8", "replace") or "{}")
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as err:
+        raise ServiceError(f"Could not reach the Market Digest email service ({err.__class__.__name__}). Check the internet connection.")
+    if not answer.get("ok"):
+        raise ServiceError(answer.get("error") or "The email service said no.")
+    return answer
+
+
 def send(cfg, subject, html_body, text_body):
     to = cfg.get("email_to") or []
     if isinstance(to, str):
         to = [to]
+    if to and cfg.get("email_key") and service():   # the Market Digest email service: only a confirmed address
+        call_service("send", email=to[0], key=cfg["email_key"], subject=subject, html=html_body, text=text_body)
+        return True
     if not (to and cfg.get("smtp_user") and cfg.get("smtp_password")):
         log("Email not set up in digest_config.json, so the digest was only saved to a file.")
         return False
@@ -746,10 +823,10 @@ def check(cfg, state):
     if cfg.get("watchlist_csv"):
         print("Watchlist sheet: ", end="", flush=True)
         try:
-            prices = read_watchlist(cfg["watchlist_csv"])
-            priced = sum(1 for w in prices["watchlist"] if w["price"] is not None)
-            sp = prices["benchmarks"].get("sp500")
-            print(f"{len(prices['watchlist'])} stocks, {priced} with prices" + (f", S&P 500 at {sp['value']:,.0f}" if sp else ""))
+            sheet = read_watchlist(cfg["watchlist_csv"])
+            priced = sum(1 for w in sheet["watchlist"] if w["price"] is not None)
+            sp = sheet["benchmarks"].get("sp500")
+            print(f"{len(sheet['watchlist'])} stocks, {priced} with prices" + (f", S&P 500 at {sp['value']:,.0f}" if sp else ""))
         except Exception as err:
             print(f"FAILED: {err}")
             ok = False
@@ -994,7 +1071,9 @@ def main():
     # 4. One digest
     overview = make_overview(cfg, done)
     today = datetime.now()
-    prices, market = watchlist(cfg, today, done)
+    if not args.video:
+        refresh_prices(cfg, done)
+    sheet, market = watchlist(cfg, today, done)
     page = render(today, done, skipped, overview, unchecked, market, filtered)
     OUT_DIR.mkdir(exist_ok=True)
     out = OUT_DIR / f"digest-{today:%Y-%m-%d-%H%M}.html"
@@ -1037,7 +1116,7 @@ def main():
         try:
             if args.dry_run or args.video:
                 export_digest(today, done, overview, OUT_DIR, log)
-                if prices:
+                if sheet:
                     save_market(market, OUT_DIR, log)
             else:
                 day = whole_day(cfg, state, today, done, overview)
@@ -1046,10 +1125,10 @@ def main():
                 else:
                     folder = Path(cfg.get("json_dir") or JSON_DIR)
                     export_digest(today, *day, folder, log)
-                    if prices:   # the market file covers the same videos as the day's digest file
-                        save_market(market if day[0] is done else market_brief(today, prices, day[0], CACHE_DIR), folder, log)
+                    if sheet:   # the market file covers the same videos as the day's digest file
+                        save_market(market if day[0] is done else market_brief(today, sheet, day[0], CACHE_DIR), folder, log)
                     # Wall Street's view of the same stocks: one TipRanks call a day at most, inside the free tier
-                    tipranks.snapshot(cfg, state, today, tipranks_tickers(prices, day[0]), folder, log)
+                    tipranks.snapshot(cfg, state, today, tipranks_tickers(sheet, day[0]), folder, log)
                 save_state(state)
         except Exception as err:   # a JSON problem must not turn a sent digest into a failed run
             log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
@@ -1073,10 +1152,9 @@ def main():
     record_run(ok, message, test=test_run, videos=len(done), skipped=len(skipped), left_out=len(filtered), digest_file=out.name,
                emailed_to=(cfg.get("email_to") if emailed else []), unchecked=[ch for ch, _ in unchecked])
     if args.open:
-        if hasattr(os, "startfile"):   # Windows
-            os.startfile(out)
-        else:                          # Mac and others: the default browser
-            webbrowser.open(out.resolve().as_uri())
+        show(out)
+    elif ok and done and not test_run and emailed is not None:
+        announce(cfg, len(done), out)
     if emailed is None:
         sys.exit(1)   # tells the scheduler (Task Scheduler, or run_digest.sh on a Mac) the run failed, so it retries
 

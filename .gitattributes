@@ -2,3 +2,5 @@
 # or bash fails with "$'\r': command not found".
 *.command text eol=lf
 *.sh text eol=lf
+MANIFEST text eol=lf
+VERSION text eol=lf

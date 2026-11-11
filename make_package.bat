@@ -1,6 +1,7 @@
 @echo off
-rem Builds market-digest-setup.zip to send to someone else. It never includes your settings, keys or saved data.
+rem Builds market-digest-setup.zip to send to someone else. It never includes your settings, keys or saved data:
+rem it holds only the installers, the guides and the program files listed in MANIFEST.
 cd /d "%~dp0"
-powershell -NoProfile -Command "Compress-Archive -Force -Path install.bat,install.ps1,install-mac.command,app.py,app.html,watchlist_template.csv,price_sheet.py,digest.py,digest_export.py,digest_schema.json,tickers.json,market_data.py,market_schema.json,tipranks.py,chat.py,chat.html,ytmd,README.md,USER_GUIDE.md,TROUBLESHOOTING.md,digest_config.example.json -DestinationPath market-digest-setup.zip"
+powershell -NoProfile -Command "$files = @('install.bat','install.ps1','install-mac.command','USER_GUIDE.md','TROUBLESHOOTING.md','watchlist_template.csv','price_sheet.py') + @(Get-Content MANIFEST | ForEach-Object { $_.Trim() } | Where-Object { $_ }); Compress-Archive -Force -Path $files -DestinationPath market-digest-setup.zip"
 echo Made %~dp0market-digest-setup.zip
 pause

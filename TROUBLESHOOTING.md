@@ -44,7 +44,43 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 
 ### "Market Digest stopped responding" or the page does not load
 - **Cause:** the small Market Digest window was closed, which stops the page.
-- **Fix:** double-click **Market Digest** on the desktop again. Keep its window open (you can minimise it).
+- **Fix:** double-click **Market Digest** on the desktop again. It runs in the background until you click **Quit**
+  or the computer restarts. On a Mac, if the desktop icon does nothing, double-click `run_app.command` in
+  `~/market-digest` (it shows any error in a Terminal window).
+
+### "Update now" says the update could not be downloaded, or is incomplete
+- **Cause:** no internet at that moment, or GitHub did not answer. Nothing was changed: a broken or partial update is
+  never installed.
+- **Fix:** try again later. Or update by hand: download the newest files and double-click the installer.
+
+### The email code does not arrive
+- **Cause:** it can take a minute, and it can land in Spam or Promotions. Each address can ask for 3 codes a day.
+- **Fix:** wait a minute and look in Spam (search for "Market Digest code"). Check the address is typed right. If
+  "The email service is busy today" appears, try again tomorrow, or use **Send from my own Gmail account instead**.
+
+### "The email service has used today's Gmail quota"
+- **Cause:** the service sends from one Gmail account, which may send 100 emails a day through Apps Script.
+- **Fix:** nothing is lost: the digest is in Market Digest (Home > Recent digests) and opened on screen. To be sure
+  of email every day, use **Send from my own Gmail account instead** in Settings.
+
+### The dashboard says prices have not been fetched, or a stock has no price
+- **Cause:** prices come from Yahoo Finance (Stooq when Yahoo does not answer) with each digest. A firewall or
+  company network can block them; a ticker can be mistyped or not listed there.
+- **Fix:** Settings > Your stocks > **Check prices**. If it says Yahoo and Stooq did not answer, the digest still
+  works; prices fill in when they answer. For a stock outside the US, use its Yahoo ticker (for example
+  `005930.KS`, `SAP.DE`).
+
+### No weekly or monthly digest
+- **Cause:** it is made after the Saturday (or 1st-of-month) daily run; a period with fewer than 2 videos is skipped;
+  right after installing, the first one is the next full week or month.
+- **Fix:** check Settings > How you get the digest; `python period.py --week --dry-run` makes one now to look at.
+
+### Claude does not show the Market Digest tools
+- **Cause:** the Claude desktop app reads its list of local tools only when it starts.
+- **Fix:** quit Claude completely (on Windows also from the icon near the clock; on a Mac Cmd+Q), then open it again.
+  In Market Digest > Settings the Claude card should say **Connected**. "The Claude desktop app was not found" means
+  it is not installed, or has never been opened, on this computer: get it from claude.ai/download and open it once.
+  The tools are for the desktop app; claude.ai in a browser cannot reach files on your computer.
 
 ### The home page says "this computer has no schedule for it"
 - **Cause:** the daily task (Windows) or launchd job (Mac) was removed, or the program folder moved.
@@ -108,8 +144,8 @@ without asking. Check `digest.log` after the first scheduled run.
 - **Cause:** the log said "tries again in 30 minutes", but Task Scheduler's "restart on failure" ignores the
   program's exit code, so nothing ran until the next day. On 31 Oct, Gmail refused the email (451) after that day's
   JSON was saved; the queued videos then went into the 1 Nov file as well.
-- **Fix:** `run_digest.bat` now retries itself every 30 minutes, 3 times, and the JSON is saved only after the email
-  goes out. Run `install.bat -Unattended` once to get the new launcher (settings are kept).
+- **Fix:** the daily run now retries itself every 30 minutes, 3 times, and the JSON is saved only after the digest
+  goes out. Update once (Home > Update now, or run the installer again) to get this; settings are kept.
 
 ### Nothing arrived, and `digest.log` says `getaddrinfo failed` (Verified)
 - **Cause:** the PC had just been switched on. Windows started the catch-up run before Wi-Fi was connected, so the

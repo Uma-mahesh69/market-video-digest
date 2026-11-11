@@ -7,10 +7,16 @@ set -uo pipefail
 
 INSTALL_DIR="${MARKET_DIGEST_DIR:-$HOME/market-digest}"
 SRC="$(cd "$(dirname "$0")" && pwd)"
-FILES=(app.py app.html digest.py digest_export.py digest_schema.json tickers.json market_data.py market_schema.json tipranks.py chat.py chat.html ytmd README.md digest_config.example.json)
 
 step() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[31mSTOPPED: %s\033[0m\n' "$1"; exit 1; }
+# MANIFEST lists the program's files, one a line (the same list the app's own updater uses).
+[ -f "$SRC/MANIFEST" ] || fail "MANIFEST is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
+FILES=()
+while IFS= read -r f || [ -n "$f" ]; do
+    f="${f%$'\r'}"   # a zip made on Windows can carry Windows line endings
+    [ -n "$f" ] && FILES+=("$f")
+done < "$SRC/MANIFEST"
 for f in "${FILES[@]}"; do
     [ -e "$SRC/$f" ] || fail "$f is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
 done
@@ -39,6 +45,9 @@ if "$PY" -c "import urllib.request; urllib.request.urlopen('https://www.youtube.
 fi
 
 step "2. Program files -> $INSTALL_DIR"
+# An update: close a Market Digest that is open, so it does not keep running the old version.
+# The new app.py asks, because it knows how to close older versions too.
+(cd "$SRC" && "$PY" app.py --stop >/dev/null 2>&1)
 mkdir -p "$INSTALL_DIR/bin" || fail "Could not create $INSTALL_DIR."
 if [ "$(cd "$INSTALL_DIR" && pwd)" != "$SRC" ]; then
     for f in "${FILES[@]}"; do cp -f "$SRC/$f" "$INSTALL_DIR/" || fail "Could not copy $f."; done
@@ -59,20 +68,8 @@ else
 fi
 export PATH="$INSTALL_DIR/bin:$PATH"
 
-# The launchers use this Mac's own Python, and the yt-dlp in bin/.
-cat > "$INSTALL_DIR/run_digest.sh" <<EOF
-#!/bin/bash
-# Runs the daily digest and keeps a log next to this file. Started every day by launchd (set up by Market Digest).
-# A failed run (no internet yet, email down) is tried again every 30 minutes, 3 times; then a notice says so.
-cd "\$(dirname "\$0")"
-export PATH="\$PWD/bin:\$PATH"
-for attempt in 1 2 3 4; do
-    "$PY" digest.py >> digest.log 2>&1 && exit 0
-    [ "\$attempt" = 4 ] || { echo "\$(date '+%H:%M:%S') The run failed; trying again in 30 minutes." >> digest.log; sleep 1800; }
-done
-"$PY" app.py --notify-failure
-exit 1
-EOF
+# The launchers use this Mac's own Python, and the yt-dlp in bin/. The daily run needs no launcher: launchd starts
+# "python app.py --daily" itself (set up by the settings page).
 cat > "$INSTALL_DIR/run_app.command" <<EOF
 #!/bin/bash
 # Opens Market Digest (status, settings and chat) in your browser. Keep this window open while you use it.
@@ -87,7 +84,7 @@ cd "$INSTALL_DIR"
 export PATH="$INSTALL_DIR/bin:\$PATH"
 "$PY" chat.py
 EOF
-chmod +x "$INSTALL_DIR/run_digest.sh" "$INSTALL_DIR/run_app.command" "$INSTALL_DIR/run_chat.command"
+chmod +x "$INSTALL_DIR/run_app.command" "$INSTALL_DIR/run_chat.command"
 
 cd "$INSTALL_DIR" || fail "Could not open $INSTALL_DIR."
 if ! "$PY" ytmd doctor >/dev/null 2>&1; then
@@ -96,7 +93,7 @@ if ! "$PY" ytmd doctor >/dev/null 2>&1; then
 fi
 
 step "4. Settings (in your browser)"
-echo "The settings page is opening in your browser. Paste your keys there, test them, click Save, then Finish."
+echo "The setup page is opening in your browser. Follow its three short steps, then click Finish."
 echo "(If no page opens, copy the address below into your browser.)"
 "$PY" app.py --setup || fail "The settings page stopped. Run this installer again."
 
@@ -104,9 +101,33 @@ step "5. Daily schedule"
 "$PY" app.py --schedule || fail "No settings were saved, or the schedule could not be set. Run this installer again and click Save on the page."
 
 step "6. Market Digest on the desktop"
-rm -f "$HOME/Desktop/Digest chat.command"   # replaced by Market Digest, which has the chat too
-if cp -f "$INSTALL_DIR/run_app.command" "$HOME/Desktop/Market Digest.command" 2>/dev/null; then
-    chmod +x "$HOME/Desktop/Market Digest.command"
+# A small app that starts Market Digest in the background (no Terminal window) and opens its page.
+# Double-clicking it again just opens the page. To close Market Digest, click Quit at the top of the page.
+rm -f "$HOME/Desktop/Digest chat.command" "$HOME/Desktop/Market Digest.command"   # shortcuts made by older versions
+APP="$HOME/Desktop/Market Digest.app"
+rm -rf "$APP"
+if mkdir -p "$APP/Contents/MacOS" 2>/dev/null; then
+    cat > "$APP/Contents/MacOS/MarketDigest" <<EOF
+#!/bin/bash
+cd "$INSTALL_DIR" || exit 1
+export PATH="$INSTALL_DIR/bin:\$PATH"
+nohup "$PY" app.py >/dev/null 2>&1 &
+EOF
+    chmod +x "$APP/Contents/MacOS/MarketDigest"
+    cat > "$APP/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Market Digest</string>
+    <key>CFBundleIdentifier</key><string>com.nugenix.market-digest.app</string>
+    <key>CFBundleExecutable</key><string>MarketDigest</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>$(cat "$INSTALL_DIR/VERSION" 2>/dev/null || echo 1)</string>
+    <key>LSUIElement</key><true/>
+</dict>
+</plist>
+EOF
     echo "Added 'Market Digest' to the desktop: it shows whether the digest ran, your settings, and the chat."
 else
     echo "Could not add it to the desktop (macOS may have asked Terminal for access). Use $INSTALL_DIR/run_app.command instead."
@@ -114,4 +135,4 @@ fi
 
 printf '\n\033[32mDone. You can close this window.\033[0m\n'
 echo "To check on the digest, change a setting or chat about the videos: double-click 'Market Digest' on the desktop."
-echo "Program folder: $INSTALL_DIR (run this installer again to update; your settings are kept)."
+echo "Program folder: $INSTALL_DIR. Updates: Market Digest tells you when one is ready and installs it in one click."

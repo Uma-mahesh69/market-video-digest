@@ -32,7 +32,7 @@ class DailyRun(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.saved = {k: getattr(digest, k) for k in ("CACHE_DIR", "OUT_DIR", "JSON_DIR", "STATE", "CONFIG", "YTMD", "wait_for_internet",
-                                                     "latest_uploads", "transcript", "gemini", "send", "LAST_RUN", "ytmd")}
+                                                     "latest_uploads", "transcript", "gemini", "send", "LAST_RUN", "ytmd", "announce", "refresh_prices")}
         digest.CACHE_DIR, digest.OUT_DIR, digest.JSON_DIR = self.tmp / "cache", self.tmp / "digests", self.tmp / "json"
         digest.STATE, digest.CONFIG, digest.YTMD = self.tmp / "state.json", self.tmp / "cfg.json", self.tmp / "ytmd"
         digest.LAST_RUN = self.tmp / "last_run.json"
@@ -45,6 +45,9 @@ class DailyRun(unittest.TestCase):
         self.calls = {"extract": 0, "day": 0}
         digest.gemini = self.fake_gemini
         digest.send = lambda *a: True
+        digest.refresh_prices = lambda cfg, done: None   # no network in tests
+        self.announced = []
+        digest.announce = lambda cfg, count, out: self.announced.append(count)
 
     def tearDown(self):
         for k, v in self.saved.items():
@@ -90,6 +93,7 @@ class DailyRun(unittest.TestCase):
 
     def test_last_run_is_recorded_for_the_app(self):
         self.run_digest()
+        self.assertEqual(self.announced, [2])   # a notice that the digest is ready
         last = json.loads(digest.LAST_RUN.read_text(encoding="utf-8"))
         self.assertTrue(last["ok"])
         self.assertEqual(last["message"], "2 new videos, emailed.")
@@ -173,6 +177,7 @@ class DailyRun(unittest.TestCase):
 
     def test_dry_run_never_touches_the_real_file(self):
         self.run_digest("--dry-run")
+        self.assertEqual(self.announced, [])   # a test digest is not announced
         self.assertFalse((self.tmp / "json").exists())
         self.assertEqual(self.day_file("digests")["video_count"], 2)
 
