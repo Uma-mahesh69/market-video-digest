@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 import app
 import chat
+import insights
 import digest as dg
 from digest_export import load_tickers, resolve_ticker
 
@@ -30,6 +31,7 @@ market levels, predictions and risks. These tools read those saved notes.
 
 How to use them well:
 - Start with digest_overview to see what is followed, how many videos are saved and whether the daily run is working.
+- For "how did the calls do", "who is right", "my holdings" or a period summary, use market_overview.
 - For "what did X say" or "what is the view on a stock", use stock_calls or list_videos, then get_video for detail.
 - Every item has a "link" that opens the video at the moment it was said. Cite those links.
 - Report each view as that analyst's or channel's view, with the date. Captions are automatic and can mishear names
@@ -180,6 +182,16 @@ def daily_digest(date=""):
     return out
 
 
+def market_overview(days=30):
+    out = insights.overview(days=max(1, min(int(days), 365)), cfg=app.read_config())
+    out["stocks"] = out["stocks"][:20]
+    out["analysts"] = out["analysts"][:15]
+    out.pop("mood_by_day", None)
+    out["note"] = ("Computed by code from the saved notes and daily closing prices. A call is right when the stock then did better "
+                   "(bullish) or worse (bearish) than the S&P 500. weight_pct is the share of the person's holdings; share counts are not given.")
+    return out
+
+
 def update_following(add_channels=(), remove_channels=(), add_analysts=(), remove_analysts=()):
     saved = app.read_config()
     if not app.real(saved.get("gemini_api_key")):
@@ -229,6 +241,9 @@ TOOLS = {t["spec"]["name"]: t for t in [
          {"query": {"type": "string"}, "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 30}}, ["query"]),
     tool(daily_digest, "One day's digest as data: the overview, themes, where analysts disagree, and, if set up, the watchlist's prices and Wall Street's consensus from TipRanks. The latest day unless a date is given.",
          {"date": {"type": "string", "description": "YYYY-MM-DD. Empty for the latest."}}),
+    tool(market_overview, "The dashboard's numbers for the last N days: the most-discussed stocks with bullish and bearish call counts and price moves since, "
+         "how the calls did against the S&P 500, each analyst's record, the person's holdings by weight, what is coming up, and the signals worth reading first.",
+         {"days": {"type": "integer", "default": 30, "minimum": 1, "maximum": 365}}),
     tool(update_following, "Change which YouTube channels and which analysts the daily digest covers. Confirm the change with the person first.",
          {"add_channels": {**NAMES, "description": "Channel links or @handles to add"}, "remove_channels": NAMES,
           "add_analysts": {**NAMES, "description": "Full names, e.g. Dan Ives. Other spellings after a slash: Tom Lee / Thomas Lee"}, "remove_analysts": NAMES}),
@@ -246,9 +261,9 @@ PROMPTS = {
                    "case, who makes each and when, with links. If daily_digest has TipRanks data for it, add Wall Street's consensus and price target. "
                    "No recommendation."),
     "weekly-dashboard": ("A one-page dashboard of the week", [],
-                         "Build me a one-page dashboard of this week from the Market Digest tools: stock_calls (7 days) as a table of the most-called "
-                         "stocks with bullish and bearish counts, list_videos (7 days) for who spoke, and daily_digest for themes and disagreements. "
-                         "Make it an interactive page I can keep open, with every row linking to the video moment."),
+                         "Build me a one-page dashboard of this week from the Market Digest tools: market_overview (7 days) for the most-called stocks, "
+                         "the analysts' records against the S&P 500 and my holdings, and daily_digest for themes and disagreements. Make it an "
+                         "interactive page I can keep open, with every row linking to the video moment."),
 }
 
 

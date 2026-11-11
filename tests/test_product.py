@@ -38,9 +38,12 @@ class DailyRun(Folder):
         calls = []
 
         def fake(cmd, **kw):
-            calls.append(cmd)
             kw["stdout"].write("ran\n")
-            return mock.Mock(returncode=codes[len(calls) - 1])
+            if cmd[-1] == "--due":   # the weekly and monthly digests, after a good daily run
+                calls.append("period")
+                return mock.Mock(returncode=0)
+            calls.append(cmd)
+            return mock.Mock(returncode=codes[len([c for c in calls if c != "period"]) - 1])
         with mock.patch.object(app.subprocess, "run", fake), mock.patch.object(app.time, "sleep") as sleep, \
                 mock.patch.object(app, "notify") as notify:
             code = app.daily_run()
@@ -48,14 +51,15 @@ class DailyRun(Folder):
 
     def test_a_good_run_runs_once(self):
         code, calls, sleep, notify = self.run_with([0])
-        self.assertEqual((code, len(calls)), (0, 1))
+        self.assertEqual((code, len(calls)), (0, 2))
         self.assertTrue(calls[0][-1].endswith("digest.py"))
+        self.assertEqual(calls[1], "period")   # then the weekly and monthly digests, if due
         sleep.assert_not_called()
         notify.assert_not_called()
 
     def test_a_failed_run_is_tried_again_and_logged(self):
         code, calls, sleep, notify = self.run_with([1, 1, 0])
-        self.assertEqual((code, len(calls)), (0, 3))
+        self.assertEqual((code, len(calls)), (0, 4))
         self.assertEqual(sleep.call_count, 2)
         self.assertEqual((self.tmp / "digest.log").read_text().count("trying again in 30 minutes"), 2)
         notify.assert_not_called()
@@ -63,6 +67,7 @@ class DailyRun(Folder):
     def test_after_the_last_try_a_notice_says_so(self):
         code, calls, sleep, notify = self.run_with([1, 1, 1, 1])
         self.assertEqual((code, len(calls)), (1, 4))
+        self.assertNotIn("period", calls)   # no weekly digest after a failed day
         notify.assert_called_once()
 
 
@@ -184,7 +189,7 @@ class ClaudeTools(Folder):
         self.assertIn("not investment advice", hello["instructions"])
         self.assertIsNone(mcp_server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
         tools = mcp_server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
-        self.assertEqual(len(tools), 8)
+        self.assertEqual(len(tools), 9)
         for t in tools:
             self.assertEqual(t["inputSchema"]["type"], "object")
         self.assertEqual(len(mcp_server.handle({"jsonrpc": "2.0", "id": 3, "method": "prompts/list"})["result"]["prompts"]), 3)
@@ -236,3 +241,116 @@ class Delivery(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EmailService(Folder):
+    """The app against a stand-in for the Apps Script email service, which answers a POST with a redirect to the result."""
+
+    def setUp(self):
+        super().setUp()
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        test = self
+        self.requests, self.answers = [], {}
+
+        class Fake(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                test.requests.append(req)
+                answer = {"ok": True}
+                if req["action"] == "confirm":
+                    answer = {"ok": True, "key": "k" * 64} if req.get("code") == "123456" else {"ok": False, "error": "That code is not right."}
+                test.answers[str(len(test.requests))] = answer
+                self.send_response(302)
+                self.send_header("Location", f"/echo?id={len(test.requests)}")
+                self.end_headers()
+
+            def do_GET(self):
+                body = json.dumps(test.answers[self.path.split("=")[-1]]).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+
+        self.service = ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+        threading.Thread(target=self.service.serve_forever, daemon=True).start()
+        self.patch = mock.patch.object(digest, "service", lambda: {"url": f"http://127.0.0.1:{self.service.server_address[1]}/exec", "token": "t"})
+        self.patch.start()
+        digest.CONFIG.write_text(json.dumps({"gemini_api_key": KEY, "channels": ["@TheStreet"]}))
+
+    def tearDown(self):
+        self.patch.stop()
+        self.service.shutdown()
+        self.service.server_close()
+        super().tearDown()
+
+    def test_confirm_then_send_through_the_service(self):
+        with self.assertRaises(digest.ServiceError):
+            digest.call_service("confirm", email="a@example.com", code="000000")
+        answer = digest.call_service("confirm", email="a@example.com", code="123456")   # after the redirect, like Apps Script
+        cfg = {"gemini_api_key": KEY, "email_to": ["a@example.com"], "email_key": answer["key"]}
+        self.assertTrue(digest.send(cfg, "Digest", "<p>hi</p>", "hi"))
+        self.assertEqual({k: self.requests[-1][k] for k in ("action", "email", "key", "token")},
+                         {"action": "send", "email": "a@example.com", "key": "k" * 64, "token": "t"})
+
+    def test_the_settings_need_no_gmail_password_once_confirmed(self):
+        saved = {"gemini_api_key": KEY, "channels": ["@TheStreet"], "email_to": ["a@example.com"], "email_key": "k" * 64}
+        cfg, errors = app.merged({"email_to": "a@example.com"}, saved)
+        self.assertEqual(errors, {})
+        self.assertNotIn("k" * 64, json.dumps(app.public(cfg)))   # the key never reaches the page
+        self.assertEqual(app.public(cfg)["email_confirmed"], "a@example.com")
+        cfg, errors = app.merged({"email_to": "b@example.com"}, saved)   # a different address must be confirmed again
+        self.assertEqual(cfg["email_key"], "")
+        self.assertIn("smtp_password", errors)
+
+
+class Stocks(Folder):
+    def test_watchlist_and_holdings_from_the_settings_page(self):
+        cfg, errors = app.merged({"gemini_api_key": KEY, "channels": ["@TheStreet"],
+                                  "stocks": [{"ticker": " nvda ", "shares": "10"}, {"ticker": "AAPL", "shares": ""}, {"ticker": "brk-b", "shares": "1,500"}]}, {})
+        self.assertEqual(errors, {})
+        self.assertEqual(cfg["watchlist"], ["NVDA", "AAPL", "BRK-B"])
+        self.assertEqual(cfg["holdings"], {"NVDA": 10.0, "BRK-B": 1500.0})
+        _, errors = app.merged({"gemini_api_key": KEY, "channels": ["@TheStreet"], "stocks": [{"ticker": "NVDA", "shares": "ten"}]}, {})
+        self.assertIn("stocks", errors)
+        _, errors = app.merged({"gemini_api_key": KEY, "channels": ["@TheStreet"], "stocks": [{"ticker": "Nvidia Corp", "shares": ""}]}, {})
+        self.assertIn("stocks", errors)
+
+
+class Scoring(unittest.TestCase):
+    """How a call is judged, and when the weekly and monthly digests are due."""
+
+    def setUp(self):
+        days = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"]
+        self.cache = {"^GSPC": {"closes": [[d, 100 + i] for i, d in enumerate(days)]},          # S&P 500: +4%
+                      "UP": {"closes": [[d, 50 + 5 * i] for i, d in enumerate(days)]},          # +40%
+                      "DOWN": {"closes": [[d, 50 - 5 * i] for i, d in enumerate(days)]}}        # -40%
+
+    def call(self, ticker, view, day="2026-11-01"):
+        return {"ticker": ticker, "view": view, "day": day}
+
+    def test_a_call_is_right_when_it_beats_the_sp500_its_way(self):
+        import insights
+        self.assertTrue(insights.score(self.call("UP", "bullish"), self.cache)["right"])
+        self.assertFalse(insights.score(self.call("DOWN", "bullish"), self.cache)["right"])
+        self.assertTrue(insights.score(self.call("DOWN", "bearish"), self.cache)["right"])
+        s = insights.score(self.call("UP", "bullish"), self.cache)
+        self.assertEqual((s["stock_pct"], s["sp500_pct"], s["edge"], s["since"]), (40.0, 4.0, 36.0, "2026-11-02"))
+
+    def test_too_soon_or_neutral_is_not_scored(self):
+        import insights
+        self.assertIsNone(insights.score(self.call("UP", "bullish", day="2026-11-05"), self.cache))   # 1 trading day since
+        self.assertIsNone(insights.score(self.call("UP", "neutral"), self.cache))
+        self.assertIsNone(insights.score(self.call("NOPRICE", "bullish"), self.cache))
+
+    def test_weekly_and_monthly_periods(self):
+        import period
+        from datetime import date
+        self.assertEqual(period.bounds("week", date(2026, 11, 7)), (date(2026, 10, 31), date(2026, 11, 7), "2026-11-07"))   # a Saturday
+        self.assertEqual(period.bounds("week", date(2026, 11, 11))[2], "2026-11-07")   # the Wednesday after: the same week
+        self.assertEqual(period.bounds("month", date(2026, 11, 11)), (date(2026, 10, 1), date(2026, 11, 1), "2026-10"))
+        self.assertEqual(period.due({}, {"last_week": "2026-11-07", "last_month": "2026-10"}, date(2026, 11, 11)), [])
+        self.assertEqual(period.due({"monthly": False}, {}, date(2026, 11, 14)), ["week"])

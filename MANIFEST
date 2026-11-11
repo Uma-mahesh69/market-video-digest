@@ -15,3 +15,8 @@ chat.html
 ytmd
 README.md
 digest_config.example.json
+prices.py
+insights.py
+period.py
+dashboard.html
+service.json

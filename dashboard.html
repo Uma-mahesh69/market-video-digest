@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard · Market Digest</title>
+<style>
+:root{--paper:#F4F6F9;--surface:#FFFFFF;--ink:#16202E;--muted:#5C6878;--line:#DCE2EA;--blue:#2447C5;--blue-soft:#E8EDFB;
+  --red:#B42318;--red-soft:#FDECEA;--green:#1A7F37;--green-soft:#E6F4EA;--amber:#8A5A00;--amber-soft:#FFF4D6;--grey:#AEB7C4;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Charter,"Iowan Old Style","Palatino Linotype",Georgia,serif}
+@media (prefers-color-scheme:dark){:root{--paper:#111822;--surface:#18212E;--ink:#E6EBF2;--muted:#94A1B3;--line:#2A3646;--blue:#9DB2FF;--blue-soft:#222E4A;
+  --red:#FF8A80;--red-soft:#3A1F22;--green:#7EE2A0;--green-soft:#173326;--amber:#F5C76B;--amber-soft:#3A2F17;--grey:#56637A;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+a{color:var(--blue)}
+button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
+button:disabled{opacity:.55;cursor:default}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+[hidden]{display:none!important}
+.bar{position:sticky;top:0;z-index:5;display:flex;gap:18px;align-items:center;padding:10px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{font:600 18px/1.2 var(--serif);color:var(--ink);text-decoration:none}
+nav{display:flex;gap:4px}
+nav a{padding:6px 12px;border-radius:6px;text-decoration:none;color:var(--muted)}
+nav a:hover{background:var(--blue-soft)}
+nav a[aria-current=page]{background:var(--blue-soft);color:var(--blue);font-weight:600}
+main{max-width:1080px;margin:0 auto;padding:22px 20px 60px}
+h1{font:600 26px/1.25 var(--serif);margin:0}
+h2{font:600 18px/1.3 var(--serif);margin:0 0 2px}
+.head{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px}
+.head .sp{flex:1}
+.lead{color:var(--muted);margin:2px 0 18px;font-size:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 16px}
+.what{color:var(--muted);font-size:13px;margin:0 0 12px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tile .k{font-size:13px;color:var(--muted)}
+.tile .v{font:600 28px/1.2 var(--serif);margin:4px 0 2px}
+.tile .s{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid2 .card{margin:0 0 16px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:12px;font-weight:600;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.up{color:var(--green)}.down{color:var(--red)}.mut{color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
+.tick{font-weight:600}
+.pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:0 8px;white-space:nowrap}
+.pill.bullish{background:var(--green-soft);color:var(--green)}.pill.bearish{background:var(--red-soft);color:var(--red)}
+.pill.split,.pill.neutral,.pill.mixed,.pill.no{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--paper);min-width:70px;margin-top:4px}
+.stack span{display:block}
+.signals{list-style:none;margin:0;padding:0}
+.signals li{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.signals li:last-child{border-bottom:0}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:6px;background:var(--grey)}
+.dot.good{background:var(--green)}.dot.bad{background:var(--red)}.dot.warn{background:#D29922}.dot.info{background:var(--blue)}
+.empty{color:var(--muted);font-size:14px;margin:0}
+.star{color:#D29922}
+.scroll{overflow-x:auto}
+svg text{font:11px var(--sans);fill:var(--muted)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.note{background:var(--amber-soft);color:var(--amber);border-radius:8px;padding:10px 12px;font-size:14px;margin:0 0 16px}
+@media (max-width:820px){.tiles{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.bar{padding:10px 16px;gap:10px}main{padding:16px}}
+@media (max-width:640px){.bar{flex-wrap:wrap;row-gap:6px;padding:8px 12px}.bar nav{order:3;width:100%;overflow-x:auto}.bar nav a{padding:5px 9px}.bar .ver{display:none}}
+</style></head>
+<body>
+<header class="bar">
+  <a class="brand" href="/">Market Digest</a>
+  <nav><a href="/">Home</a><a href="/dashboard" aria-current="page">Dashboard</a><a href="/chat">Chat</a><a href="/settings">Settings</a></nav>
+</header>
+<main>
+  <div class="head">
+    <div><h1>Dashboard</h1></div>
+    <span class="sp"></span>
+    <div role="group" aria-label="Period" id="periods">
+      <button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button>
+    </div>
+  </div>
+  <p class="lead" id="lead">Loading…</p>
+  <p class="note" id="noPrices" hidden></p>
+
+  <div id="empty" class="card" hidden>
+    <h2>Nothing here yet</h2>
+    <p class="empty">The dashboard fills in from your digests. Make one on the <a href="/">Home page</a> ("Make today's digest now"), then come back.</p>
+  </div>
+
+  <div id="body" hidden>
+  <div class="tiles">
+    <div class="tile"><div class="k">Videos read</div><div class="v" id="tVideos"></div><div class="s" id="tVideosS"></div></div>
+    <div class="tile"><div class="k">Mood</div><div class="v" id="tMood"></div><div class="s" id="tMoodS"></div></div>
+    <div class="tile"><div class="k">Bullish calls that beat the S&amp;P 500</div><div class="v" id="tBull"></div><div class="s" id="tBullS"></div></div>
+    <div class="tile"><div class="k">Bearish calls that lagged it</div><div class="v" id="tBear"></div><div class="s" id="tBearS"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>What matters now</h2>
+    <p class="what">The few things worth reading first, picked by code from the calls and prices. Green: things are going the way the analysts said. Red: about stocks you hold. Amber: a disagreement or a call going the wrong way.</p>
+    <ul class="signals" id="signals"></ul>
+  </div>
+
+  <div class="card" id="holdCard" hidden>
+    <h2>Your holdings</h2>
+    <p class="what">Weight is each stock's share of what your holdings are worth now. Share counts stay on this computer (Settings &gt; Your stocks).</p>
+    <div class="scroll"><table><thead><tr><th>Stock</th><th class="num">Weight</th><th class="num">Price</th><th class="num">Today</th><th class="num">1 month</th><th class="num">From 1-year high</th><th class="num">Calls (bull / bear)</th></tr></thead><tbody id="holdings"></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Stocks the analysts talked about</h2>
+    <p class="what">Each stock's calls in this period. The bar is green for bullish calls, red for bearish and grey for neutral or mixed. "Since first call" is the price move since the first video in this period that mentioned it. ★ is on your watchlist.</p>
+    <div class="scroll"><table><thead><tr><th>Stock</th><th>Calls</th><th>Lean</th><th>Latest call</th><th class="num">Price</th><th class="num">Since first call</th><th id="streetHead" hidden>Wall Street</th></tr></thead><tbody id="stocks"></tbody></table></div>
+    <p class="small" id="moreStocks"></p>
+  </div>
+
+  <div class="card">
+    <h2>Mood, day by day</h2>
+    <p class="what">Bullish calls above the line, bearish calls below. A tall green day means the channels were upbeat; red means cautious.</p>
+    <div id="mood"></div>
+    <div class="legend"><span><i style="background:var(--green)"></i>Bullish calls</span><span><i style="background:var(--red)"></i>Bearish calls</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Analysts</h2>
+    <p class="what">Who made calls, and how they turned out. A call counts as right when the stock then did better than the S&amp;P 500 (bullish) or worse (bearish), measured from the next close after the video to the latest close, once 3 trading days have passed. "Average edge" is how many percentage points their calls beat the S&amp;P 500 by, on average. ★ is an analyst you follow.</p>
+    <div class="scroll"><table><thead><tr><th>Analyst</th><th class="num">Calls</th><th class="num">Bull / bear</th><th class="num">Right</th><th class="num">Average edge</th><th>Stocks</th></tr></thead><tbody id="analysts"></tbody></table></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Best and worst calls</h2>
+      <p class="what">The calls that beat, or missed, the S&amp;P 500 by the most so far.</p>
+      <div id="extremes"></div>
+    </div>
+    <div class="card">
+      <h2>Coming up</h2>
+      <p class="what">Earnings, data and meetings the videos mentioned.</p>
+      <div id="upcoming"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Latest videos</h2>
+    <div id="videos"></div>
+  </div>
+  <p class="small" id="foot"></p>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const pct = (x, sign = true) => x == null ? '—' : `${sign && x > 0 ? '+' : ''}${x}%`;
+const tone = x => x == null ? '' : x > 0 ? 'up' : x < 0 ? 'down' : '';
+const short = d => d ? new Date(d + 'T12:00:00').toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
+let days = Number(localStorage.getItem('mdDays') || 30) || 30;
+
+function link(text, href, cls) { const a = el('a', cls, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+function cell(tr, content, cls) { const td = el('td', cls); if (content instanceof Node) td.append(content); else td.textContent = content == null ? '—' : content; tr.append(td); return td; }
+function stack(r) {
+  const s = el('div', 'stack'), total = r.calls || 1;
+  for (const [n, color] of [[r.bullish, 'var(--green)'], [r.neutral + r.mixed, 'var(--grey)'], [r.bearish, 'var(--red)']]) {
+    if (!n) continue; const i = el('span'); i.style.width = (100 * n / total) + '%'; i.style.background = color; s.append(i);
+  }
+  return s;
+}
+
+async function load() {
+  document.querySelectorAll('#periods button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days)));
+  let d;
+  try { const r = await fetch('/api/dashboard?days=' + days); d = await r.json(); if (!r.ok) throw new Error(d.error); }
+  catch (e) { $('lead').textContent = 'Market Digest stopped. Start it again with Market Digest on the desktop.'; return; }
+  $('lead').textContent = `${short(d.start)} to ${short(d.end)}: ${d.videos} videos from ${d.channels} channel${d.channels === 1 ? '' : 's'}, ${d.calls} stock calls.`;
+  $('empty').hidden = d.videos > 0; $('body').hidden = d.videos === 0;
+  $('noPrices').hidden = !!d.prices_as_of;
+  $('noPrices').textContent = 'Prices have not been fetched yet, so calls cannot be scored. They are fetched with each digest; the next one fills this in.';
+  if (!d.videos) return;
+
+  $('tVideos').textContent = d.videos; $('tVideosS').textContent = `${d.channels} channel${d.channels === 1 ? '' : 's'}, ${d.calls} calls`;
+  $('tMood').textContent = d.mood_pct == null ? '—' : d.mood_pct + '% bullish';
+  $('tMoodS').textContent = `${d.views.bullish} bullish, ${d.views.bearish} bearish, ${d.views.neutral + d.views.mixed} neutral or mixed`;
+  for (const [id, v] of [['Bull', d.scorecard.bullish], ['Bear', d.scorecard.bearish]]) {
+    $('t' + id).textContent = v.hit_pct == null ? '—' : v.hit_pct + '%';
+    $('t' + id + 'S').textContent = v.scored ? `${v.right} of ${v.scored} scored calls · average edge ${v.edge > 0 ? '+' : ''}${v.edge} pts` : 'Scored once prices and 3 trading days are in';
+  }
+
+  const sig = $('signals'); sig.textContent = '';
+  if (!d.signals.length) sig.append(el('li', 'empty', 'Nothing stands out in this period.'));
+  for (const s of d.signals) {
+    const li = el('li'), body = el('span', null, s.text + ' ');
+    if (s.link) body.append(link('watch', s.link));
+    li.append(el('span', 'dot ' + s.tone), body); sig.append(li);
+  }
+
+  $('holdCard').hidden = !d.holdings.length;
+  const hb = $('holdings'); hb.textContent = '';
+  for (const h of d.holdings) {
+    const tr = el('tr');
+    cell(tr, h.ticker, 'tick'); cell(tr, h.weight_pct + '%', 'num'); cell(tr, h.price == null ? '—' : h.price.toLocaleString(), 'num');
+    cell(tr, pct(h.change_pct_day), 'num ' + tone(h.change_pct_day)); cell(tr, pct(h.change_pct_month), 'num ' + tone(h.change_pct_month));
+    cell(tr, pct(h.from_high_pct), 'num'); cell(tr, `${h.bullish} / ${h.bearish}`, 'num');
+    hb.append(tr);
+  }
+
+  const sb = $('stocks'); sb.textContent = '';
+  const anyStreet = d.stocks.some(r => r.street);
+  $('streetHead').hidden = !anyStreet;
+  for (const r of d.stocks.slice(0, 25)) {
+    const tr = el('tr');
+    const name = el('div'); name.append(el('span', 'tick', r.ticker)); if (r.watchlist) name.append(el('span', 'star', ' ★'));
+    if (r.weight_pct) name.append(el('span', 'small', ` · you hold ${r.weight_pct}%`));
+    if (r.name) name.append(el('div', 'small', r.name));
+    cell(tr, name);
+    const c = el('div', null, `${r.calls}`); c.append(el('span', 'small', ` (${r.bullish}↑ ${r.bearish}↓)`)); c.append(stack(r)); cell(tr, c);
+    cell(tr, el('span', 'pill ' + (r.lean === 'no clear view' ? 'no' : r.lean), r.lean));
+    const l = el('div'); l.append(el('span', 'pill ' + r.latest.view, r.latest.view), ' ');
+    l.append(link(`${r.latest.analyst || r.latest.channel}, ${short(r.latest.day)}`, r.latest.link));
+    if (r.latest.reason) l.append(el('div', 'small', r.latest.reason));
+    cell(tr, l);
+    cell(tr, r.price == null ? '—' : r.price.toLocaleString(), 'num');
+    cell(tr, pct(r.move_since_pct), 'num ' + tone(r.move_since_pct));
+    if (anyStreet) cell(tr, r.street ? `${r.street.consensus || ''}${r.street.upside_pct != null ? ` · target ${pct(r.street.upside_pct)}` : ''}` : '—', 'small');
+    sb.append(tr);
+  }
+  $('moreStocks').textContent = d.stocks.length > 25 ? `And ${d.stocks.length - 25} more stocks with fewer calls.` : '';
+
+  drawMood(d.mood_by_day);
+
+  const ab = $('analysts'); ab.textContent = '';
+  if (!d.analysts.length) { const tr = el('tr'); cell(tr, 'No named analysts in this period.').colSpan = 6; ab.append(tr); }
+  for (const a of d.analysts.slice(0, 20)) {
+    const tr = el('tr'), n = el('span', 'tick', a.analyst); if (a.followed) n.append(el('span', 'star', ' ★'));
+    cell(tr, n); cell(tr, a.calls, 'num'); cell(tr, `${a.bullish} / ${a.bearish}`, 'num');
+    cell(tr, a.scored ? `${a.right} of ${a.scored} (${a.hit_pct}%)` : 'not yet', 'num');
+    cell(tr, a.edge == null ? '—' : `${a.edge > 0 ? '+' : ''}${a.edge} pts`, 'num ' + tone(a.edge));
+    cell(tr, a.stocks.join(', '), 'small');
+    ab.append(tr);
+  }
+
+  const ex = $('extremes'); ex.textContent = '';
+  const xs = [...d.extremes.best.map(x => ['Best', x]), ...d.extremes.worst.map(x => ['Worst', x])];
+  if (!xs.length) ex.append(el('p', 'empty', 'Calls are scored once prices and 3 trading days are in.'));
+  for (const [kind, x] of xs) {
+    const p = el('p'); p.style.margin = '0 0 8px';
+    p.append(el('span', 'pill ' + (kind === 'Best' ? 'bullish' : 'bearish'), kind), ' ', el('span', 'tick', x.ticker), ` ${x.view} by `);
+    p.append(link(`${x.analyst || x.channel}, ${short(x.day)}`, x.link));
+    p.append(el('span', 'small', ` · stock ${pct(x.stock_pct)}, S&P 500 ${pct(x.sp500_pct)} · edge ${x.edge > 0 ? '+' : ''}${x.edge} pts`));
+    ex.append(p);
+  }
+
+  const up = $('upcoming'); up.textContent = '';
+  if (!d.upcoming.length) up.append(el('p', 'empty', 'Nothing with a date was mentioned.'));
+  for (const e of d.upcoming) {
+    const p = el('p'); p.style.margin = '0 0 8px';
+    p.append(el('b', null, e.date ? short(e.date) : (e.when || 'Soon')), ' ', link(e.event, e.link), el('span', 'small', ` · ${e.channel}`));
+    up.append(p);
+  }
+
+  const vb = $('videos'); vb.textContent = '';
+  for (const v of d.recent_videos) {
+    const p = el('p'); p.style.margin = '0 0 10px';
+    p.append(link(v.title, v.link), el('span', 'small', ` · ${v.channel}, ${short(v.day)}${v.speakers.length ? ' · ' + v.speakers.join(', ') : ''}`));
+    if (v.summary) p.append(el('div', 'small', v.summary));
+    vb.append(p);
+  }
+  $('foot').textContent = (d.prices_as_of ? `Prices as of ${short(d.prices_as_of)}. ` : '') + d.price_source + ' This page reports what analysts said and what prices did. It is not investment advice.';
+}
+
+function drawMood(series) {
+  const box = $('mood'); box.textContent = '';
+  const w = Math.max(box.clientWidth || 600, 300), h = 160, mid = h / 2, n = series.length;
+  const max = Math.max(1, ...series.map(s => Math.max(s.bullish, s.bearish)));
+  const bw = Math.max(2, (w - 30) / n - 2);
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h + 18}`); svg.setAttribute('width', '100%'); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Bullish and bearish calls per day');
+  const line = document.createElementNS(ns, 'line'); line.setAttribute('x1', 0); line.setAttribute('x2', w); line.setAttribute('y1', mid); line.setAttribute('y2', mid);
+  line.setAttribute('stroke', 'var(--line)'); svg.append(line);
+  series.forEach((s, i) => {
+    const x = 15 + i * ((w - 30) / n);
+    for (const [v, up] of [[s.bullish, true], [s.bearish, false]]) {
+      if (!v) continue;
+      const r = document.createElementNS(ns, 'rect'), bh = (mid - 6) * v / max;
+      r.setAttribute('x', x); r.setAttribute('width', bw); r.setAttribute('y', up ? mid - bh : mid); r.setAttribute('height', bh); r.setAttribute('rx', 1.5);
+      r.setAttribute('fill', up ? 'var(--green)' : 'var(--red)');
+      const t = document.createElementNS(ns, 'title'); t.textContent = `${short(s.day)}: ${s.bullish} bullish, ${s.bearish} bearish`; r.append(t);
+      svg.append(r);
+    }
+    if (n <= 14 || i % Math.ceil(n / 10) === 0) {
+      const t = document.createElementNS(ns, 'text'); t.setAttribute('x', x + bw / 2); t.setAttribute('y', h + 14); t.setAttribute('text-anchor', 'middle');
+      t.textContent = short(s.day); svg.append(t);
+    }
+  });
+  box.append(svg);
+}
+
+document.querySelectorAll('#periods button').forEach(b => b.onclick = () => { days = Number(b.dataset.days); try { localStorage.setItem('mdDays', days); } catch (e) {} load(); });
+load();
+</script>
+</body></html>

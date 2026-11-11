@@ -39,16 +39,18 @@ from urllib.parse import parse_qs, urlparse
 
 import chat
 import digest as dg
+import insights
+import prices
 import tipranks
 from market_data import read_watchlist
 
 PORT = 8765
 LABEL = "com.nugenix.market-digest"   # the launchd job on a Mac
 TASK = "Market video digest"          # the Task Scheduler task on Windows
-SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key")
+SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key", "email_key")   # never sent to the page
 DEFAULTS = {"channels": ["https://www.youtube.com/@TheStreet"], "email_to": [], "smtp_user": "", "json_dir": "", "watchlist_csv": "",
             "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20, "analysts": [], "markets_only": True,
-            "notify": True}
+            "notify": True, "watchlist": [], "holdings": {}, "weekly": True, "monthly": True}
 REPO = "Uma-mahesh69/market-video-digest"
 
 
@@ -69,7 +71,7 @@ POPULAR_ANALYSTS = ["Dan Ives", "Tom Lee / Thomas Lee", "Mike Wilson", "Ed Yarde
 TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 EMAIL = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 CHANNEL = re.compile(r"^(https?://)?(www\.|m\.)?youtube\.com/(@[\w.\-]+|channel/UC[\w-]{22}|c/[\w.\-]+|user/[\w.\-]+)/?(videos|featured|streams)?/?$|^@[\w.\-]+$", re.I)
-DIGEST_FILE = re.compile(r"^digest-[\d-]+\.html$")
+DIGEST_FILE = re.compile(r"^(digest|weekly|monthly)-[\d-]+\.html$")
 
 
 # ---------------------------------------------------------------- settings
@@ -102,6 +104,9 @@ def public(cfg):
         # a key shows its last 4 characters, so you can tell which one is saved; the password shows nothing
         out[k] = {"saved": bool(v), "hint": ("ends in " + v[-4:]) if len(v) >= 12 and k != "smtp_password" else ("saved" if v else "")}
     out["first_time"] = not real(cfg.get("gemini_api_key"))
+    out["email_service"] = bool(dg.service())
+    out["email_confirmed"] = (out["email_to"] or [""])[0] if real(cfg.get("email_key")) else ""
+    out["holdings"] = {k: v for k, v in (cfg.get("holdings") or {}).items()}
     out["broken"] = bool(cfg.get("_broken"))
     return out
 
@@ -147,14 +152,17 @@ def merged(form, saved):
                               "like https://www.youtube.com/@TheStreet, or type its handle, like @TheStreet.")
 
     if "email_to" in form:
+        before = [t.lower() for t in (saved.get("email_to") or [])] if isinstance(saved.get("email_to"), list) else []
         cfg["email_to"] = split_list(form["email_to"])
+        if real(cfg.get("email_key")) and [t.lower() for t in cfg["email_to"]][:1] != before[:1]:
+            cfg["email_key"] = ""   # a different address: it has to be confirmed again
     if "smtp_user" in form:
         cfg["smtp_user"] = str(form["smtp_user"] or "").strip()
     to = cfg.get("email_to") or []
     to = [to] if isinstance(to, str) else to
     if [t for t in to if not EMAIL.match(t)]:
         errors["email_to"] = f"“{next(t for t in to if not EMAIL.match(t))}” is not an email address."
-    if to:
+    if to and not real(cfg.get("email_key")):   # sent from your own Gmail
         if not cfg.get("smtp_user"):
             cfg["smtp_user"] = to[0]
         if not EMAIL.match(cfg["smtp_user"]):
@@ -162,7 +170,8 @@ def merged(form, saved):
         pw = real(cfg.get("smtp_password"))
         gmail = "gmail" in str(cfg.get("smtp_host") or "smtp.gmail.com")
         if not pw:
-            errors["smtp_password"] = "Paste a Gmail app password, or leave the addresses empty to skip email."
+            errors["smtp_password"] = ("Confirm your address with the code we email you, or paste a Gmail app password to send from your own Gmail."
+                                       if dg.service() else "Paste a Gmail app password, or leave the addresses empty to skip email.")
         elif gmail and len(pw) != 16:
             errors["smtp_password"] = (f"A Gmail app password is 16 letters (Google shows it as 4 groups of 4); this one has {len(pw)}. "
                                        "Your normal Gmail password does not work here.")
@@ -170,12 +179,35 @@ def merged(form, saved):
     if "json_dir" in form:
         folder = str(form["json_dir"] or "").strip().strip("'\"").replace("\\ ", " ")
         cfg["json_dir"] = os.path.expanduser(folder) if folder else ""
+    if "stocks" in form:   # [{"ticker": "NVDA", "shares": "10"}, ...]: the watchlist, and what you own
+        watch, held, bad = [], {}, []
+        for row in form["stocks"] or []:
+            raw = str((row or {}).get("ticker") or "").strip()
+            t = "" if re.search(r"\s", raw) else prices.clean(raw)   # "Nvidia Corp" is a name, not a ticker
+            if not t:
+                if raw:
+                    bad.append(raw)
+                continue
+            if t not in watch:
+                watch.append(t)
+            sh = str((row or {}).get("shares") or "").replace(",", "").strip()
+            if sh:
+                try:
+                    if float(sh) < 0:
+                        raise ValueError
+                    if float(sh) > 0:
+                        held[t] = float(sh)
+                except ValueError:
+                    errors["stocks"] = f"\u201c{sh}\u201d is not a number of shares (for {t}). Leave it empty if you do not own it."
+        if bad:
+            errors["stocks"] = f"\u201c{bad[0][:20]}\u201d is not a ticker. Use the symbol, like NVDA, AAPL or BRK-B."
+        cfg["watchlist"], cfg["holdings"] = watch, held
     if "analysts" in form:
         items = form["analysts"] if isinstance(form["analysts"], list) else str(form["analysts"]).splitlines()
         cfg["analysts"] = list(dict.fromkeys(re.sub(r"\s+", " ", str(a)).strip() for a in items if str(a).strip()))
     if [a for a in cfg.get("analysts") or [] if len(a.split("/")[0].strip()) < 3 or len(a) > 120]:
         errors["analysts"] = "Write each analyst's full name, like Dan Ives (other spellings after a slash: Tom Lee / Thomas Lee)."
-    for k in ("markets_only", "notify", "open_when_ready"):
+    for k in ("markets_only", "notify", "open_when_ready", "weekly", "monthly"):
         if k in form:
             cfg[k] = bool(form[k])
     if "watchlist_csv" in form:
@@ -262,6 +294,9 @@ def daily_run(attempts=4, wait=1800):
                                   stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                                   creationflags=0x08000000 if os.name == "nt" else 0).returncode
             if code == 0:
+                subprocess.run([console_python(), "-u", str(dg.HERE / "period.py"), "--due"], cwd=dg.HERE, env=child_env(),
+                               stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                               creationflags=0x08000000 if os.name == "nt" else 0)
                 return 0
             if attempt < attempts:
                 log.write(f"{datetime.now():%H:%M:%S} The run failed; trying again in {wait // 60} minutes.\n")
@@ -446,6 +481,15 @@ def test_email(cfg, send=False):
     to = cfg.get("email_to") or []
     if not to:
         return result(True, "Email is off: digests are saved on this computer and shown on the home page.", warn=True)
+    if real(cfg.get("email_key")) and dg.service():
+        if not send:
+            return result(True, f"{to[0]} is confirmed. Digests are sent to it by the Market Digest email service.")
+        try:
+            dg.send(cfg, "Market digest: test email", "<p>This test shows your market digest can reach you.</p>",
+                    "This test shows your market digest can reach you.")
+        except dg.ServiceError as err:
+            return result(False, str(err))
+        return result(True, f"Sent a test email to {to[0]}. Check the inbox (and Spam).")
     msg = None
     if send:
         msg = EmailMessage()
@@ -514,8 +558,21 @@ def test_tipranks(cfg, live=False):
     return result(False, why.replace("TipRanks: FAILED: ", "TipRanks said: "))
 
 
+def test_prices(cfg):
+    stocks = (cfg.get("watchlist") or [])[:5] or ["AAPL"]
+    fetched, failed = prices.refresh(stocks, log=lambda m: None, pause=0)
+    sp = prices.quote(prices.SP500)
+    if not sp:
+        return result(False, "Prices could not be fetched (Yahoo Finance and Stooq did not answer). The digest still works; "
+                             "prices and the scoring of calls fill in when they answer.")
+    got = [t for t in stocks if prices.quote(t)]
+    missing = [t for t in stocks if t not in got]
+    return result(not missing, f"Prices work: S&P 500 at {sp['price']:,.0f} ({sp['as_of']})" + (f"; {', '.join(got)} found" if got else "") +
+                  (f". Not found: {', '.join(missing)}: check the ticker." if missing else "."), warn=bool(missing))
+
+
 TESTS = {"gemini": test_gemini, "channels": test_channels, "email": test_email, "send_email": lambda c: test_email(c, send=True),
-         "folder": test_folder, "watchlist": test_watchlist, "tipranks": test_tipranks, "tipranks_live": lambda c: test_tipranks(c, live=True)}
+         "folder": test_folder, "prices": test_prices, "watchlist": test_watchlist, "tipranks": test_tipranks, "tipranks_live": lambda c: test_tipranks(c, live=True)}
 
 
 def drive_folders():
@@ -764,6 +821,20 @@ def made_at(path):
     return when.isoformat(timespec="minutes")
 
 
+def digest_label(path):
+    """What a weekly or monthly digest covers, from its name: "Week to 6 Nov", "October 2026"; None for a daily one."""
+    m = re.match(r"weekly-(\d{4}-\d{2}-\d{2})", path.name)
+    if m:
+        d = datetime.strptime(m.group(1), "%Y-%m-%d")
+        return f"Week to {d.day} {d:%b}"
+    m = re.match(r"monthly-(\d{4}-\d{2})", path.name)
+    return datetime.strptime(m.group(1), "%Y-%m").strftime("%B %Y") if m else None
+
+
+def digest_kind(path):
+    return "weekly" if path.name.startswith("weekly-") else "monthly" if path.name.startswith("monthly-") else "daily"
+
+
 def status():
     cfg = read_config()
     at = daily_time(cfg)
@@ -772,7 +843,8 @@ def status():
         last = json.loads(dg.LAST_RUN.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         last = None
-    digests = sorted(dg.OUT_DIR.glob("digest-*.html"), reverse=True)[:8] if dg.OUT_DIR.exists() else []
+    digests = sorted((f for f in dg.OUT_DIR.glob("*.html") if DIGEST_FILE.match(f.name)), key=lambda f: f.stat().st_mtime,
+                     reverse=True)[:10] if dg.OUT_DIR.exists() else []
     tests = {last["digest_file"]} if last and last.get("test") and last.get("digest_file") else set()
     try:
         latest_json = max((p.name for p in json_folder(cfg).glob("video-digest_*.json")), default="")
@@ -783,12 +855,14 @@ def status():
         "configured": bool(real(cfg.get("gemini_api_key"))),
         "schedule": {"on": on, "time": at, "active": is_scheduled(), "next": next_run(at) if on and TIME.match(at) else ""},
         "last_run": last,
-        "digests": [{"name": p.name, "when": made_at(p), "test": p.name in tests} for p in digests],
+        "digests": [{"name": p.name, "when": made_at(p), "test": p.name in tests, "kind": digest_kind(p), "label": digest_label(p)} for p in digests],
         "email_to": [to] if isinstance(to, str) else to,
         "channels": len(cfg.get("channels") or []),
         "analysts": cfg.get("analysts") or [], "markets_only": cfg.get("markets_only", True),
         "json_dir": str(json_folder(cfg)), "latest_json": latest_json, "json_shared": bool(cfg.get("json_dir")),
-        "watchlist": bool(cfg.get("watchlist_csv")),
+        "watchlist": bool(cfg.get("watchlist_csv") or cfg.get("watchlist")), "stocks": len(cfg.get("watchlist") or []),
+        "holdings": len(cfg.get("holdings") or {}), "weekly": cfg.get("weekly", True), "monthly": cfg.get("monthly", True),
+        "email_service": bool(real(cfg.get("email_key"))),
         "tipranks": {"on": bool(real(cfg.get("tipranks_api_key"))), "calls": tipranks_usage()},
         "videos_saved": len(list(dg.CACHE_DIR.glob("*.json"))) if dg.CACHE_DIR.exists() else 0,
         "job": Job.snapshot(),
@@ -862,6 +936,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.page("chat.html")
         if u.path in ("/", "/settings"):
             return self.page("app.html")
+        if u.path == "/dashboard":
+            return self.page("dashboard.html")
+        if u.path == "/api/dashboard":
+            try:
+                days = max(1, min(int(q.get("days", ["30"])[0]), 365))
+            except ValueError:
+                days = 30
+            return self.send(200, insights.overview(days=days, cfg=read_config()))
         if u.path == "/chat":
             return self.page("chat.html")
         if u.path == "/api/settings":
@@ -938,6 +1020,34 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, {"ok": True})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return None
+        if path == "/api/email/code":
+            email = str(req.get("email") or "").strip().lower()
+            if not EMAIL.match(email):
+                raise ValueError("Type your email address first.")
+            try:
+                dg.call_service("code", email=email)
+            except dg.ServiceError as err:
+                raise ValueError(str(err))
+            return self.send(200, {"ok": True, "message": f"We sent a 6-digit code to {email}. It can take a minute; check Spam too."})
+        if path == "/api/email/confirm":
+            email = str(req.get("email") or "").strip().lower()
+            try:
+                answer = dg.call_service("confirm", email=email, code=str(req.get("code") or "").strip())
+            except dg.ServiceError as err:
+                raise ValueError(str(err))
+            cfg = read_config()
+            cfg.update(email_to=[email], email_key=answer["key"])
+            write_config(cfg)
+            return self.send(200, {"ok": True, "email": email, "message": f"Confirmed. Your digests will be emailed to {email}."})
+        if path == "/api/email/off":
+            cfg = read_config()
+            cfg.update(email_to=[], email_key="")
+            write_config(cfg)
+            return self.send(200, {"ok": True})
+        if path == "/api/prices":
+            cfg = read_config()
+            threading.Thread(target=prices.refresh, args=(insights.tickers_to_price(cfg),), kwargs={"log": lambda m: None}, daemon=True).start()
+            return self.send(200, {"ok": True})
         if path == "/api/claude":
             return self.send(200, claude_connect(on=req.get("action") != "disconnect"))
         if path == "/api/update":

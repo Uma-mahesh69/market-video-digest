@@ -9,7 +9,11 @@ shown in grey boxes. Copy them exactly.
 3. Installing
 4. Your settings
 5. Everyday use: the email
+   - 5a. Extras: a prices sheet, the Econova hub and TipRanks
 6. Everyday use: Market Digest (status, settings and chat)
+   - 6a. The dashboard
+   - 6b. Weekly and monthly digests
+   - 6c. Ask Claude about your digest
 7. Useful commands
 8. Changing, updating and removing it
 9. If something goes wrong
@@ -18,7 +22,8 @@ shown in grey boxes. Copy them exactly.
 
 ## 1. What you get
 
-- **A daily email digest** of new videos from the YouTube channels you follow. It contains:
+- **A daily digest** of new videos from the YouTube channels you follow (on screen, in your browser, and by email if
+  you like). It contains:
   - **Overview**: what today's videos say about the markets, in a few sentences.
   - **Themes today** and **Where channels disagree** (when more than one video is new).
   - **Stocks mentioned**: each stock, whether each channel is bullish, bearish, neutral or mixed, and why.
@@ -30,6 +35,9 @@ shown in grey boxes. Copy them exactly.
 - **Market Digest** on your desktop: a page in your browser that shows whether today's digest ran, lets you change
   any setting with a Test button beside it, and has a **chat** for questions such as "Which stocks came up most this
   week?". Answers cite the video and moment, like **TheStreet 12:34**.
+- **A dashboard** of what the digests add up to: the stocks talked about, how the analysts' calls did against the
+  S&P 500, each analyst's record, your holdings, what is coming up (section 6a).
+- **Weekly and monthly digests** on Saturdays and on the 1st (section 6b).
 
 ## 2. Before you install
 
@@ -72,10 +80,13 @@ A window shows the steps. You only act at step 4:
 2. **Who to follow.** Click the **popular channels** you want (CNBC Television, Bloomberg Television, Yahoo Finance,
    TheStreet, Fox Business, Schwab Network), or add any channel's address. Optionally click the **analysts** you care
    about: then only videos where they speak go into the digest, and the others are left out before Gemini reads them,
-   so more channels cost nothing extra. **Next** checks each channel on YouTube.
+   so more channels cost nothing extra. Optionally type **your stocks** (tickers like NVDA), and how many shares you
+   own of each if you want your holdings on the dashboard. **Next** checks each channel on YouTube.
 3. **When and how you get it.** Pick the daily time. By default a notice appears on your screen and the digest opens
-   in your browser when it is ready, so **no email setup is needed**. Tick **Also email it to me** if you want it by
-   email too (that needs a Gmail app password; the page links to where you make one).
+   in your browser when it is ready, so **no email setup is needed**. To get it by email too, tick **Also email it to
+   me**, type your address, click **Email me a code** and type the 6-digit code from that email. That's all: the
+   Market Digest email service sends it. (**Send from my own Gmail account instead** is there if you prefer; it needs
+   a Gmail app password.) The **weekly** and **monthly** digests are on unless you untick them.
 
 Click **Save and finish**, then **Make my first digest now**: a digest of the last 3 days opens in your browser.
 Then click **Finish**. The installer window says **Done**; you can close it.
@@ -114,6 +125,10 @@ send it to anyone.** You can also edit it in a text editor; these are the settin
 | `max_videos` | The most videos in one digest (newest first). | 20 |
 | `analysts` | Only videos with these people (full names; other spellings after a slash: `"Tom Lee / Thomas Lee"`). Empty = every video. Left-out videos are listed at the bottom of the email in small print. | empty |
 | `markets_only` | Leave out videos with no stocks, market levels, sectors or predictions in them. | true |
+| `watchlist` | Your stocks, as tickers. Prices are fetched by this computer each day. | empty |
+| `holdings` | Shares you own, by ticker, for the weights on the dashboard. Never leaves this computer. | empty |
+| `weekly`, `monthly` | The weekly digest (Saturdays) and the monthly digest (the 1st). | true, true |
+| `email_key` | Set when you confirm your address with the email service. Never shown on the page. | |
 | `notify` | Show a notice on screen when a new digest is ready. | true |
 | `open_when_ready` | Open each new digest in the browser. | on while email is off |
 | `email_to` | Who receives the digest by email. Empty = no email. | |
@@ -143,7 +158,11 @@ After editing the file by hand, open Market Digest > Settings and use the **Test
 unsure of is marked **(check)**. Click the time next to any point to hear it said in the video. The digest
 reports each channel's opinion. It is not investment advice.
 
-## 5a. Your watchlist (prices from Google Finance)
+## 5a. Extras: a prices sheet, the Econova hub and TipRanks
+
+*Most people do not need this section.* Your watchlist and holdings go in **Settings > Your stocks**, and prices are
+fetched by the app. What follows is for advanced use: a Google Finance prices sheet instead, the shared JSON folder
+that feeds the Econova hub, and TipRanks.
 
 Optional. With a watchlist, every digest starts with a **Your watchlist** section: today's price and the week's move
 for each of your stocks, what the analysts said about them, and up to five short notes such as:
@@ -287,7 +306,36 @@ Good questions to start with:
 - *Where do the channels disagree?*
 - *Explain the points about Treasury yields in plain terms.*
 
-## 6a. Ask Claude about your digest (optional)
+## 6a. The dashboard
+
+**Market Digest > Dashboard** shows what your digests add up to, for the last 7, 30 or 90 days. It updates by
+itself after every digest. Every section starts with a line saying what it shows; in short:
+
+- **The four numbers at the top**: how many videos were read; the mood (the share of bullish calls among bullish and
+  bearish ones); and how often the **bullish calls beat the S&P 500** and the **bearish calls lagged it**.
+- **What matters now**: a few sentences picked by code: your holdings that analysts turned bearish on, stocks where
+  the videos and Wall Street disagree, calls that are working or not, the analyst with the best record.
+- **Your holdings** (if you typed share counts): each stock's weight, its price moves, and the calls on it.
+- **Stocks the analysts talked about**: each stock's calls (green bullish, red bearish, grey neutral or mixed), which
+  way they lean, the latest call with its reason and a link to the moment, and the price move since the first call.
+- **Mood, day by day**, **Analysts** (calls, how many were right, average edge over the S&P 500), **Best and worst
+  calls**, **Coming up** and **Latest videos**.
+
+How a call is scored: from the first close after the video to the latest close, once 3 trading days have passed. A
+bullish call is right if the stock did better than the S&P 500; a bearish call, if it did worse. Prices are daily
+closes from Yahoo Finance (or Stooq), fetched by your computer with each digest; they can be delayed. It reports what
+analysts said and what prices did; it is not investment advice.
+
+## 6b. Weekly and monthly digests
+
+On **Saturdays** (or the first time the computer runs after one) you get a digest of the week, Saturday to Friday;
+on the **1st of the month**, one of the month before. They arrive the same way as the daily one (notice, browser,
+email). Each has: a short opening written by Gemini from the numbers, how the calls did against the S&P 500, what
+matters, the stocks talked about most, the analysts' records, the best and worst calls, the themes, and what is coming
+up. A period with fewer than 2 videos is skipped. Turn them off in Settings > How you get the digest. To make one now:
+`python period.py --week --dry-run` (or `--month`) in the program folder.
+
+## 6c. Ask Claude about your digest (optional)
 
 If you use the **Claude desktop app**, Market Digest can give Claude a set of tools that read your saved videos on
 this computer. You then ask Claude in plain words, and it answers from *your* digest, with links to the moment in
@@ -296,7 +344,8 @@ each video:
 - *"What did the analysts I follow say about Nvidia this week?"*
 - *"Give me a morning briefing."* (also in Claude's **+** menu as **morning-briefing**, with **stock-view** and
   **weekly-dashboard**)
-- *"Build me a dashboard of this week's calls."*
+- *"Build me a dashboard of this week's calls."* (or *"How did my analysts' calls do this month?"*, from the same numbers
+  as the Dashboard page)
 - *"Add Bloomberg Television to my channels and follow Mike Wilson."* (Claude asks before changing anything.)
 
 To turn it on: **Market Digest > Settings > Ask Claude about your digest > Connect to Claude**, then quit the Claude

@@ -94,12 +94,17 @@ details.extras[open] > summary{margin-bottom:8px}
 .banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--blue-soft);border-color:transparent}
 .banner p{flex:1;margin:0;min-width:200px}
 .indent{margin-left:28px}
+table.stocks{border-collapse:collapse;width:100%;max-width:520px}
+table.stocks th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:0 6px 4px 0}
+table.stocks td{padding:3px 6px 3px 0}
+table.stocks input{width:100%}
 @media (max-width:640px){.grid2{grid-template-columns:1fr}.bar{padding:10px 16px;gap:10px}main{padding:18px 16px 140px}.row{flex-wrap:wrap}}
+@media (max-width:640px){.bar{flex-wrap:wrap;row-gap:6px;padding:8px 12px}.bar nav{order:3;width:100%;overflow-x:auto}.bar nav a{padding:5px 9px}.bar .ver{display:none}}
 </style></head>
 <body>
 <header class="bar">
   <a class="brand" href="/">Market Digest</a>
-  <nav id="nav"><a href="/" data-v="home">Home</a><a href="/settings" data-v="settings">Settings</a><a href="/chat">Chat</a></nav>
+  <nav id="nav"><a href="/" data-v="home">Home</a><a href="/dashboard">Dashboard</a><a href="/chat">Chat</a><a href="/settings" data-v="settings">Settings</a></nav>
   <span class="sp"></span><span class="ver" id="ver"></span>
   <button type="button" class="link" id="quit" title="Close Market Digest. The daily digest still runs.">Quit</button>
 </header>
@@ -206,6 +211,17 @@ details.extras[open] > summary{margin-bottom:8px}
     <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
   </div>
 
+  <div class="card" data-step="2">
+    <h2>Your stocks <span class="tag opt">Optional</span></h2>
+    <p class="what">The stocks you watch get a price table in each digest and on the dashboard, next to what the analysts said about them.
+      Add how many shares you own to see each one's weight in your holdings. Prices are fetched by this computer; no sheet or account is needed,
+      and your share counts never leave this computer.</p>
+    <table class="stocks"><thead><tr><th>Ticker</th><th>Shares you own (optional)</th><th></th></tr></thead><tbody id="stockRows"></tbody></table>
+    <p class="err" id="e-stocks"></p>
+    <div class="tests"><button type="button" id="addStock">+ Add a stock</button><button type="button" data-test="prices">Check prices</button></div>
+    <p class="result" id="r-prices" aria-live="polite"></p>
+  </div>
+
   <div class="card" data-step="3">
     <h2>How you get the digest</h2>
     <p class="what">Every digest is kept in Market Digest, under Home &gt; Recent digests. Choose how you hear about a new one.</p>
@@ -213,6 +229,22 @@ details.extras[open] > summary{margin-bottom:8px}
     <label class="switch" style="margin-top:8px"><input type="checkbox" id="open_when_ready"> Open it in my browser when it is ready</label>
     <label class="switch" style="margin-top:8px"><input type="checkbox" id="email_on"> Also email it to me</label>
     <div id="emailBox" class="indent" hidden>
+    <div id="svcBox" hidden>
+      <div id="svcDone" hidden><p class="result ok" id="svcDoneText"></p>
+        <div class="tests"><button type="button" data-test="send_email">Send a test email</button><button type="button" class="link" id="svcChange">Use a different address</button></div></div>
+      <div id="svcAsk">
+        <label class="f" for="svc_email">Your email address</label>
+        <div class="row"><input type="email" id="svc_email" spellcheck="false" placeholder="you@example.com"><button type="button" id="svcCode">Email me a code</button></div>
+        <div id="svcCodeBox" hidden>
+          <label class="f" for="svc_code">The 6-digit code from that email</label>
+          <div class="row"><input type="text" id="svc_code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="max-width:160px"><button type="button" class="primary" id="svcConfirm">Confirm</button></div>
+        </div>
+        <p class="help">The digest is sent by the Market Digest email service. The code proves the address is yours, so no one else can send mail to it.</p>
+      </div>
+      <p class="result" id="r-svc" aria-live="polite"></p>
+      <p class="help"><button type="button" class="link" id="useGmail">Send from my own Gmail account instead</button></p>
+    </div>
+    <div id="gmailBox">
     <p class="help">Email needs a Gmail account to send from, with an app password (two minutes to set up; the link is below). Skip this if the notice is enough.</p>
     <label class="f" for="email_to">Send the digest to</label>
     <input type="text" id="email_to" placeholder="you@example.com (several: separate with commas)" spellcheck="false">
@@ -230,7 +262,12 @@ details.extras[open] > summary{margin-bottom:8px}
       <div class="tests"><button type="button" data-test="email">Test the login</button><button type="button" data-test="send_email">Send a test email</button></div>
       <p class="result" id="r-email" aria-live="polite"></p>
     </div>
+    <p class="help" id="useSvcP" hidden><button type="button" class="link" id="useSvc">Use the Market Digest email service instead (only your address needed)</button></p>
     </div>
+    </div>
+    <p class="help" style="margin:16px 0 4px"><b>Summaries</b> of what the analysts said and how their calls did, on top of the daily digest:</p>
+    <label class="switch"><input type="checkbox" id="weekly"> A weekly digest every Saturday</label>
+    <label class="switch" style="margin-top:8px"><input type="checkbox" id="monthly"> A monthly digest on the 1st</label>
   </div>
 
   <div class="card" data-step="3">
@@ -389,8 +426,9 @@ async function loadHome() {
   if (!st.digests.length) { const li = document.createElement('li'); li.textContent = 'None yet.'; li.style.color = 'var(--muted)'; ul.append(li); }
   for (const d of st.digests) {
     const li = document.createElement('li'), a = document.createElement('a');
-    a.href = '/digests/' + d.name; a.target = '_blank'; a.textContent = when(d.when).replace(/^./, c => c.toUpperCase());
+    a.href = '/digests/' + d.name; a.target = '_blank'; a.textContent = d.label || when(d.when).replace(/^./, c => c.toUpperCase());
     li.append(a);
+    if (d.kind !== 'daily') { const k = document.createElement('span'); k.className = 'tag opt'; k.textContent = d.kind; li.append(k); }
     if (d.test) { const s = document.createElement('span'); s.className = 'sub'; s.style.color = 'var(--muted)'; s.textContent = 'test, not emailed'; li.append(s); }
     ul.append(li);
   }
@@ -402,7 +440,8 @@ async function loadHome() {
     ['Data files', (st.json_shared ? st.json_dir : 'The program folder (not shared)') + (st.latest_json ? ` · newest: ${st.latest_json}` : '')],
     ['Videos included', (st.analysts.length ? `Only with ${st.analysts.map(a => a.split('/')[0].trim()).join(', ')}` : 'Every video from your channels')
       + (st.markets_only ? '; markets and stocks only' : '')],
-    ['Watchlist', st.watchlist ? 'On' : 'Off'],
+    ['Summaries', [st.weekly ? 'weekly (Saturdays)' : '', st.monthly ? 'monthly (the 1st)' : ''].filter(Boolean).join(' and ') || 'Off'],
+    ['Your stocks', st.stocks ? `${st.stocks} watched${st.holdings ? `, ${st.holdings} with shares` : ''} · see the Dashboard` : (st.watchlist ? 'From your watchlist sheet' : 'None yet (Settings > Your stocks)')],
     ['TipRanks', st.tipranks.on ? `On · ${st.tipranks.calls} look-ups used this month` : 'Off'],
     ['Claude', st.claude.connected ? 'Connected: ask Claude about your digest' : 'Not connected (Settings > Ask Claude)'],
     ['Chat', 'Ask about the videos on the Chat page'],
@@ -532,6 +571,13 @@ function fillSettings(s) {
   renderSuggestions(); renderPopular();
   $('notify').checked = s.notify; $('open_when_ready').checked = s.open_when_ready;
   $('email_on').checked = s.email_to.length > 0;
+  $('weekly').checked = s.weekly; $('monthly').checked = s.monthly;
+  $('stockRows').textContent = '';
+  for (const t of s.watchlist) $('stockRows').append(stockRow(t, s.holdings[t]));
+  if (!s.watchlist.length) $('stockRows').append(stockRow('', ''));
+  emailMode = s.email_service && !(s.email_to.length && s.smtp_password.saved && !s.email_confirmed) ? 'service' : 'gmail';
+  $('svc_email').value = s.email_confirmed || (s.email_to[0] || '');
+  showEmailMode();
   $('extras').open = !!(s.json_dir || s.watchlist_csv || s.tipranks_api_key.saved);
   $('ver').textContent = s.version ? 'Version ' + s.version : '';
   showClaude(s.claude);
@@ -547,6 +593,26 @@ function fillSettings(s) {
   const chips = $('driveChips'); chips.textContent = '';
   for (const f of s.drive_folders) { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Use ' + f; b.onclick = () => { $('json_dir').value = f; changed(); }; chips.append(b); }
   smtpVisibility();
+}
+let emailMode = 'gmail';
+function showEmailMode() {
+  const svc = emailMode === 'service';
+  $('svcBox').hidden = !svc; $('gmailBox').hidden = svc;
+  $('useSvcP').hidden = svc || !S.email_service;
+  $('svcDone').hidden = !S.email_confirmed; $('svcAsk').hidden = !!S.email_confirmed;
+  $('svcDoneText').textContent = S.email_confirmed ? `✓ Your digests are emailed to ${S.email_confirmed}.` : '';
+}
+function stockRow(ticker, shares) {
+  const tr = document.createElement('tr'), t = document.createElement('input'), n = document.createElement('input'), rm = document.createElement('button');
+  t.type = 'text'; t.value = ticker || ''; t.placeholder = 'NVDA'; t.spellcheck = false; t.setAttribute('aria-label', 'Ticker'); t.style.textTransform = 'uppercase';
+  n.type = 'text'; n.inputMode = 'decimal'; n.value = shares == null ? '' : String(shares); n.placeholder = 'e.g. 10'; n.setAttribute('aria-label', 'Shares you own');
+  rm.type = 'button'; rm.textContent = 'Remove'; rm.onclick = () => { tr.remove(); if (!$('stockRows').children.length) $('stockRows').append(stockRow('', '')); changed(); };
+  for (const x of [t, n, rm]) { const td = document.createElement('td'); td.append(x); tr.append(td); }
+  return tr;
+}
+function stockValues() {
+  return [...$('stockRows').children].map(tr => { const [t, n] = tr.querySelectorAll('input'); return { ticker: t.value.trim(), shares: n.value.trim() }; })
+    .filter(r => r.ticker || r.shares);
 }
 function smtpVisibility() {
   $('emailBox').hidden = !$('email_on').checked;
@@ -567,7 +633,8 @@ function collect() {
     channels: [...$('chans').querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
     analysts: analystValues(), markets_only: $('markets_only').checked,
     notify: $('notify').checked, open_when_ready: $('open_when_ready').checked,
-    email_to: $('email_on').checked ? $('email_to').value : '', smtp_user: $('smtp_user').value.trim(),
+    email_to: !$('email_on').checked ? '' : emailMode === 'service' ? (S.email_confirmed || '') : $('email_to').value,
+    smtp_user: $('smtp_user').value.trim(), stocks: stockValues(), weekly: $('weekly').checked, monthly: $('monthly').checked,
     json_dir: $('json_dir').value, watchlist_csv: $('watchlist_csv').value,
     daily_time: $('daily_time').value, schedule_on: $('schedule_on').checked,
     lookback_hours: $('lookback_hours').value, max_videos: $('max_videos').value,
@@ -579,9 +646,9 @@ function clearErrors() { document.querySelectorAll('.err').forEach(e => e.textCo
 function changed() { dirty = true; warned = 0; if (!wizard) foot('You have changes that are not saved yet.', ''); }
 function foot(text, cls) { $('footMsg').textContent = text; $('footMsg').className = 'msg ' + (cls || ''); }
 
-const RESULT = { gemini: 'r-gemini', channels: 'r-channels', email: 'r-email', send_email: 'r-email', folder: 'r-folder', watchlist: 'r-watchlist', tipranks: 'r-tipranks', tipranks_live: 'r-tipranks' };
+const RESULT = { prices: 'r-prices', gemini: 'r-gemini', channels: 'r-channels', email: 'r-email', send_email: () => emailMode === 'service' ? 'r-svc' : 'r-email', folder: 'r-folder', watchlist: 'r-watchlist', tipranks: 'r-tipranks', tipranks_live: 'r-tipranks' };
 document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () => {
-  const name = btn.dataset.test, out = $(RESULT[name]);
+  const name = btn.dataset.test, target = RESULT[name], out = $(typeof target === 'function' ? target() : target);
   btn.disabled = true; show(out, 'busy', name === 'channels' ? 'Looking up each channel on YouTube…' : 'Testing…');
   try {
     const r = await api('/api/test/' + name, collect());
@@ -599,6 +666,26 @@ document.querySelectorAll('.show').forEach(b => b.onclick = () => {
 $('addAnalyst').onclick = () => { const r = analystRow(''); $('analysts').append(r); r.querySelector('input').focus(); changed(); };
 $('addChan').onclick = () => { const r = chanRow(''); $('chans').append(r); r.querySelector('input').focus(); changed(); };
 $('form').addEventListener('input', e => { if (e.target.id === 'email_to' || e.target.id === 'email_on') smtpVisibility(); changed(); });
+$('addStock').onclick = () => { const r = stockRow('', ''); $('stockRows').append(r); r.querySelector('input').focus(); changed(); };
+$('useGmail').onclick = () => { emailMode = 'gmail'; showEmailMode(); changed(); };
+$('useSvc').onclick = () => { emailMode = 'service'; showEmailMode(); changed(); };
+$('svcChange').onclick = () => { S.email_confirmed = ''; $('svcCodeBox').hidden = true; $('r-svc').textContent = ''; $('r-svc').className = 'result'; showEmailMode(); $('svc_email').focus(); };
+$('svcCode').onclick = async () => {
+  $('svcCode').disabled = true; show($('r-svc'), 'busy', 'Sending the code…');
+  try { const r = await api('/api/email/code', { email: $('svc_email').value }); show($('r-svc'), 'ok', r.message); $('svcCodeBox').hidden = false; $('svc_code').focus(); }
+  catch (e) { show($('r-svc'), 'bad', '✕ ' + e.message); }
+  $('svcCode').disabled = false;
+};
+$('svcConfirm').onclick = async () => {
+  $('svcConfirm').disabled = true;
+  try {
+    const r = await api('/api/email/confirm', { email: $('svc_email').value, code: $('svc_code').value });
+    S.email_confirmed = r.email; S.email_to = [r.email]; $('svc_code').value = ''; $('svcCodeBox').hidden = true;
+    $('r-svc').textContent = ''; $('r-svc').className = 'result'; showEmailMode();
+  } catch (e) { show($('r-svc'), 'bad', '✕ ' + e.message); }
+  $('svcConfirm').disabled = false;
+};
+$('svc_code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('svcConfirm').click(); } });
 $('claudeBtn').onclick = async () => {
   $('claudeBtn').disabled = true;
   try { showClaude(await api('/api/claude', { action: $('claudeBtn').dataset.action }), true); } catch (e) { show($('r-claude'), 'bad', e.message); }
@@ -629,7 +716,7 @@ $('save').onclick = async () => {
         if (el) el.textContent = msg; else unplaced.push(msg);
         if (el && el.closest('#extras')) $('extras').open = true;   // the problem may be inside a folded section
         if (el && el.closest('#emailBox')) { $('email_on').checked = true; smtpVisibility(); }
-        const inp = k === 'channels' ? $('chans').querySelector('input') : k === 'analysts' ? $('analysts').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
+        const inp = k === 'channels' ? $('chans').querySelector('input') : k === 'analysts' ? $('analysts').querySelector('input') : k === 'stocks' ? $('stockRows').querySelector('input') : $(k); if (inp) { inp.classList.add('bad'); first = first || inp; }
       }
       if (wizard && first) { const card = first.closest('[data-step]'); if (card) { step = Number(card.dataset.step); showStep(); } }
       if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus({ preventScroll: true }); }
