@@ -230,7 +230,9 @@ table.stocks input{width:100%}
 
   <div class="card" id="google">
     <h2>Google Finance <span class="tag opt">Recommended</span></h2>
-    <p class="what">Connect your Google account and Market Digest keeps your stocks in a Google Sheet in <b>your own</b> Drive, priced live by
+    <p class="what" id="gIntroSheet" hidden>Keep your stocks in a Google Sheet of your own, priced live by Google Finance. Market Digest reads it every
+      morning (or when you click "Read the sheet now"), and each stock's check-up on the Overview uses Google Finance's prices.</p>
+    <p class="what" id="gIntro">Connect your Google account and Market Digest keeps your stocks in a Google Sheet in <b>your own</b> Drive, priced live by
       Google Finance. Edit it in Google Sheets (on your phone too) or here: both stay the same. Market Digest can only see the files it creates;
       nothing else in your Drive. There is no Market Digest server: your computer talks to Google directly.</p>
     <div id="gOff">
@@ -244,7 +246,22 @@ table.stocks input{width:100%}
         <button type="button" id="gSync">Update from the sheet now</button><button type="button" class="link" id="gOffBtn">Disconnect</button></div>
     </div>
     <p class="result" id="r-google" aria-live="polite"></p>
-    <p class="help" id="gUnavailable" hidden>Google sign-in is not set up in this version. Your stocks still work: prices come from Yahoo Finance.</p>
+    <details id="gSheetBox" style="margin-top:12px">
+      <summary id="gSheetSum">Or use Google Finance without signing in: a sheet of your own</summary>
+      <ol style="margin:10px 0 0;padding-left:20px;font-size:14px">
+        <li><a id="gTemplate" target="_blank" rel="noopener">Make your own copy of the Market Digest sheet</a> (Google asks where to save it; it is yours).</li>
+        <li>In its <b>My stocks</b> tab, type your tickers in column A (like NVDA or NASDAQ:NVDA). Google Finance fills in the prices.
+          Do <b>not</b> type your shares there: type them above, where they stay on this computer.</li>
+        <li><b>File &gt; Share &gt; Publish to web</b>: choose <b>My stocks</b> and <b>Comma-separated values (.csv)</b>, click <b>Publish</b>, copy the link.</li>
+        <li>Paste it here, then click <b>Save</b> at the bottom.</li>
+      </ol>
+      <label class="f" for="watchlist_csv">Your sheet's published link (CSV)</label>
+      <input type="url" id="watchlist_csv" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=0&amp;single=true&amp;output=csv">
+      <p class="err" id="e-watchlist_csv"></p>
+      <div class="tests"><button type="button" data-test="watchlist">Test the sheet</button><button type="button" id="gSync2">Read the sheet now</button></div>
+      <p class="result" id="r-watchlist" aria-live="polite"></p>
+      <p class="help">A published sheet can be opened by anyone who has its link, which is why your shares stay in Market Digest instead.</p>
+    </details>
   </div>
 
   <div class="card" data-step="3">
@@ -316,17 +333,6 @@ table.stocks input{width:100%}
     <p class="err" id="e-json_dir"></p>
     <div class="tests"><button type="button" data-test="folder">Test the folder</button></div>
     <p class="result" id="r-folder" aria-live="polite"></p>
-  </div>
-
-  <div class="card">
-    <h2>Watchlist <span class="tag opt">Optional</span></h2>
-    <p class="what">A Google Sheet of the stocks you follow, with live prices, adds a price table to the digest. In the sheet, use
-      <i>File &gt; Share &gt; Publish to web</i>, choose <i>Comma-separated values (.csv)</i>, and paste that link. (USER_GUIDE.md, "Your watchlist", has a ready-made sheet.)</p>
-    <label class="f" for="watchlist_csv">Sheet link (CSV)</label>
-    <input type="url" id="watchlist_csv" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv">
-    <p class="err" id="e-watchlist_csv"></p>
-    <div class="tests"><button type="button" data-test="watchlist">Test the sheet</button></div>
-    <p class="result" id="r-watchlist" aria-live="polite"></p>
   </div>
 
   <div class="card">
@@ -605,7 +611,7 @@ function fillSettings(s) {
   emailMode = s.email_service && !(s.email_to.length && s.smtp_password.saved && !s.email_confirmed) ? 'service' : 'gmail';
   $('svc_email').value = s.email_confirmed || (s.email_to[0] || '');
   showEmailMode();
-  $('extras').open = !!(s.json_dir || s.watchlist_csv || s.tipranks_api_key.saved);
+  $('extras').open = !!(s.json_dir || s.tipranks_api_key.saved);
   $('ver').textContent = s.version ? 'Version ' + s.version : '';
   showClaude(s.claude);
   $('email_to').value = s.email_to.join(', ');
@@ -650,7 +656,12 @@ function fillStocks(rows) {
 }
 function showGoogle(g) {
   if (!g) return;
-  $('gUnavailable').hidden = g.available || g.connected;
+  // Signing in needs the app registered with Google; without it, the sheet-link route is the way, so it opens by itself.
+  $('gSheetBox').hidden = g.connected || !g.template && !g.sheet_link;
+  if (!g.available || g.sheet_link) $('gSheetBox').open = true;
+  $('gSheetSum').textContent = g.available ? 'Or use Google Finance without signing in: a sheet of your own' : 'Use Google Finance: a sheet of your own (2 minutes)';
+  if (g.template) $('gTemplate').href = g.template;
+  $('gIntro').hidden = !g.available && !g.connected; $('gIntroSheet').hidden = !$('gIntro').hidden;
   $('gOff').hidden = g.connected || !g.available; $('gOn').hidden = !g.connected;
   if (g.connected) {
     $('gOpen').href = g.url;
@@ -735,6 +746,14 @@ $('gSync').onclick = async () => {
         show($('r-google'), r.google.problem ? 'bad' : 'ok', (r.google.problem ? '✕ ' : '✓ ') + r.message); }
   catch (e) { show($('r-google'), 'bad', '✕ ' + e.message); }
   $('gSync').disabled = false;
+};
+$('gSync2').onclick = async () => {
+  if (dirty) { show($('r-watchlist'), 'warn', 'Click Save first, then read the sheet.'); return; }
+  $('gSync2').disabled = true; show($('r-watchlist'), 'busy', 'Reading your sheet…');
+  try { const r = await api('/api/google/sync', {}); fillStocks(r.stocks); dirty = false;
+        show($('r-watchlist'), r.google.problem ? 'bad' : 'ok', (r.google.problem ? '✕ ' + r.google.problem : '✓ Read your stocks and Google Finance\'s prices. See them on the Overview.')); }
+  catch (e) { show($('r-watchlist'), 'bad', '✕ ' + e.message); }
+  $('gSync2').disabled = false;
 };
 $('gOffBtn').onclick = async () => {
   if (!confirm('Disconnect Google? Your portfolio sheet stays in your Drive; Market Digest stops reading it.')) return;

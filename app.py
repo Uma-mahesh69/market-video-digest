@@ -169,7 +169,8 @@ def google_state(cfg):
     sheet = cfg.get("google_sheet") or {}
     return {"available": google_link.available(), "connected": bool(real(cfg.get("google_token")) and sheet.get("id")),
             "url": sheet.get("url", ""), "synced": cfg.get("google_synced", ""), "problem": cfg.get("google_problem", ""),
-            "reconnect": bool(cfg.get("google_reconnect"))}
+            "reconnect": bool(cfg.get("google_reconnect")), "template": google_link.template_url(),
+            "sheet_link": bool(cfg.get("watchlist_csv"))}
 
 
 def stock_rows(cfg):

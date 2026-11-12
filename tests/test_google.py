@@ -217,3 +217,27 @@ class Google(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PublishedSheet(unittest.TestCase):
+    """Without signing in: the person's copy of the template, published as CSV. The fixture is a real export of the
+    template with Google Finance's values (12 Nov 2026)."""
+
+    def test_the_sheet_feeds_the_watchlist_and_prices(self):
+        tmp = Path(tempfile.mkdtemp())
+        fixture = Path(__file__).parent / "fixtures" / "google_finance_template_2026-11-12.csv"
+        saved = {k: getattr(digest, k) for k in ("CONFIG",)}
+        digest.CONFIG = tmp / "cfg.json"
+        cfg = {"gemini_api_key": "AIzaSyA1234567890abcdefghijklmnopqrstuv", "channels": ["@x"], "watchlist_csv": str(fixture),
+               "watchlist": ["TSLA"], "holdings": {"NVDA": 10, "TSLA": 2}}
+        digest.CONFIG.write_text(json.dumps(cfg))
+        try:
+            with mock.patch.object(prices, "CACHE", tmp / "prices.json"), mock.patch.object(digest, "log", lambda m: None):
+                self.assertTrue(digest.sync_published(cfg))
+                q, sp = prices.quote("NVDA"), prices.quote("^GSPC")
+        finally:
+            digest.CONFIG = saved["CONFIG"]
+        self.assertEqual(cfg["watchlist"], ["NVDA", "AAPL", "MSFT", "TSLA"])   # the sheet's stocks, plus one owned but not in it
+        self.assertEqual(cfg["holdings"], {"NVDA": 10, "TSLA": 2})               # shares stay in the app
+        self.assertEqual((q["price"], q["pe"], q["source"]), (173.73, 21.96, "Google Finance"))
+        self.assertEqual((sp["price"], sp["high_52w"]), (7619.38, 7844.52))

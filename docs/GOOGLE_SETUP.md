@@ -5,6 +5,14 @@ which Market Digest on their computer reads and updates. There is no server: eac
 directly, signed in as that user. For this, Google needs to know the app: a free **Google Cloud project** with an
 **OAuth client** of type **Desktop app**. It takes about 15 minutes, once. Users never see any of it.
 
+## Until then: the template sheet
+
+Without the OAuth client, users can still use Google Finance: Settings shows **"a sheet of your own"**, which opens a
+copy of the template **Market Digest - Google Finance template** (its id is `google_template_id` in `service.json`),
+and reads the user's copy through its **Publish to web** CSV link. For the copy link to work for everyone, the template
+must be shared as **Anyone with the link: Viewer** (Share > General access). Share counts stay in the app, because a
+published sheet is public to anyone with its link.
+
 ## What users are asked to allow
 
 Only one permission: **"See, edit, create and delete only the specific Google Drive files you use with this app"**

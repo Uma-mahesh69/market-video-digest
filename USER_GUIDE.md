@@ -379,7 +379,7 @@ What to know:
 
 ## 6d. Your stocks and Google Finance
 
-You can give Market Digest your stocks in three ways (Settings > **Your stocks**):
+You can give Market Digest your stocks in four ways (Settings > **Your stocks** and **Google Finance**):
 
 1. **Connect Google (recommended).** Click **Connect Google** in Settings, sign in, and allow Market Digest to use
    "only the specific Google Drive files you use with this app". It creates **Market Digest - My portfolio** in your
@@ -388,8 +388,13 @@ You can give Market Digest your stocks in three ways (Settings > **Your stocks**
    change, value, gain, 52-week range and P/E. Edit it in Google Sheets (on your phone too) or in Market Digest:
    saving in Market Digest updates the sheet, and the sheet is read with every digest (or **Update from the sheet
    now**). Do not edit the **Prices** tab: Market Digest keeps it.
-2. **Type them in Settings**: ticker, shares, price paid. Prices then come from Yahoo Finance.
-3. **Import from a file**: in your current tracker (Google Sheets, Excel), download the tab with your stocks as .csv
+2. **A Google Finance sheet of your own, without signing in** (Settings > Google Finance > "a sheet of your own"):
+   click **Make your own copy of the Market Digest sheet**, type your tickers in its **My stocks** tab (not your
+   shares), then **File > Share > Publish to web**, choose **My stocks** and **Comma-separated values (.csv)**,
+   **Publish**, and paste the link into Market Digest and **Save**. Market Digest reads it each morning and uses
+   Google Finance's prices. Type your shares in Market Digest: a published sheet can be opened by anyone with its link.
+3. **Type them in Settings**: ticker, shares, price paid. Prices then come from Yahoo Finance.
+4. **Import from a file**: in your current tracker (Google Sheets, Excel), download the tab with your stocks as .csv
    or .xlsx (Google Sheets: File > Download) and choose it under **Import from a file**. It reads the Ticker or Symbol
    column, and Shares and Cost columns if there are any. Check the rows, then **Save**.
 

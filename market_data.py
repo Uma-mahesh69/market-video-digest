@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from digest_export import build_payload, load_tickers, norm, number, resolve_ticker, stamp, text, validate, view
+from google_link import our_symbol
 
 HERE = Path(__file__).resolve().parent
 SCHEMA_FILE = HERE / "market_schema.json"
@@ -95,13 +96,14 @@ def read_watchlist(source):
         role = text(r.get("role")).lower() or "watch"
         if role == "sp500" and values["price"] is not None:
             benchmarks["sp500"] = {"value": values["price"], "change_pct_day": values["change_pct_day"],
-                                   "change_pct_week": values["change_pct_week"]}
+                                   "change_pct_week": values["change_pct_week"], "high_52w": values["high_52w"], "low_52w": values["low_52w"]}
         elif role == "us10y" and values["price"] is not None:
             # Google Finance quotes the CBOE 10-year index (TNX) as the yield times 10: 49.72 means 4.972%.
             y = values["price"] / 10 if values["price"] > 20 else values["price"]
             benchmarks["us10y"] = {"value": round(y, 3), "unit": "%", "change_pct_day": values["change_pct_day"]}
         elif role == "watch":
-            watchlist.append({"ticker": symbol.split(":")[-1], "name": text(r.get("name")) or symbol.split(":")[-1],
+            ours = our_symbol(symbol)   # NASDAQ:MU -> MU, KRX:005930 -> 005930.KS
+            watchlist.append({"ticker": ours, "name": text(r.get("name")) or ours,
                               "currency": text(r.get("currency")) or None, **{k: values[k] for k in NUMBERS if k != "close_week_ago"}})
     if not watchlist:
         raise MarketDataError("the sheet has no rows with Role 'watch'")

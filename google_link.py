@@ -102,6 +102,15 @@ def available():
     return client() is not None
 
 
+def template_url():
+    """The "make a copy" link of the Google Finance template (for using a sheet without signing in), or ""."""
+    try:
+        tid = str(json.loads((HERE / "service.json").read_text(encoding="utf-8")).get("google_template_id") or "").strip()
+    except (OSError, ValueError):
+        return ""
+    return f"https://docs.google.com/spreadsheets/d/{tid}/copy" if re.fullmatch(r"[\w-]{20,}", tid) else ""
+
+
 # ---------------------------------------------------------------- signing in (OAuth for installed apps, with PKCE)
 
 _pending = {}   # state -> (verifier, redirect_uri, when)

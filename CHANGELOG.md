@@ -12,6 +12,7 @@ Installed copies update themselves: Market Digest shows **Update now** on its Ho
   price), what to watch (earnings, disagreements), and notes on your portfolio as a whole (too much in one stock).
 - The Overview is the first page; the old home page is now **Digests**. A glossary explains the terms.
 - Import your stocks from an existing tracker (CSV or Excel), with the price you paid, to see your gain.
+- Google Finance without signing in: copy the Market Digest template sheet, publish it, paste its link; your shares stay in the app.
 - The weekly digest starts with your stocks' check-up; Claude gets a `my_stocks` tool.
 
 ## 1.3.0

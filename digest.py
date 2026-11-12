@@ -532,7 +532,7 @@ def sync_google(cfg, extra=(), wait=True):
     """Read your stocks and Google Finance's prices from your portfolio sheet, if Google is connected. Updates cfg and
     digest_config.json. Returns True when it worked. Never raises."""
     if not (cfg.get("google_token") and cfg.get("google_sheet")):
-        return False
+        return sync_published(cfg)
     import google_link
     try:
         got = google_link.sync(cfg, extra_tickers=extra, wait=wait, log=log)
@@ -547,6 +547,35 @@ def sync_google(cfg, extra=(), wait=True):
     cfg.update(changes)
     update_config(**changes)
     prices.record_google(got["quotes"], log=log)
+    return True
+
+
+def sync_published(cfg):
+    """Without signing in to Google: read the person's own copy of the Google Finance template, published as CSV
+    (watchlist_csv). Its tickers become the watchlist (share counts stay in the app: a published sheet is public),
+    and Google Finance's prices are recorded. True when it worked. Never raises."""
+    if not cfg.get("watchlist_csv"):
+        return False
+    try:
+        sheet = read_watchlist(cfg["watchlist_csv"])
+    except Exception as err:
+        log(f"Google Finance sheet not read: {err}")
+        update_config(google_problem=f"Your Google Finance sheet could not be read: {err}.")
+        return False
+    quotes = {w["ticker"]: {k: w.get(k) for k in ("name", "price", "change_pct_day", "high_52w", "low_52w", "pe", "currency")}
+              for w in sheet["watchlist"]}
+    sp = sheet["benchmarks"].get("sp500")
+    if sp:
+        quotes[prices.SP500] = {"price": sp["value"], "change_pct_day": sp.get("change_pct_day"), "name": "S&P 500",
+                                "high_52w": sp.get("high_52w"), "low_52w": sp.get("low_52w")}
+    tickers = [w["ticker"] for w in sheet["watchlist"]]
+    held = list((cfg.get("holdings") or {}).keys())
+    changes = {"watchlist": list(dict.fromkeys(tickers + [t for t in held if t not in tickers])),
+               "google_synced": datetime.now().isoformat(timespec="minutes"), "google_problem": ""}
+    cfg.update(changes)
+    update_config(**changes)
+    prices.record_google(quotes, log=log)
+    log(f"Google Finance sheet: {len(tickers)} stocks read")
     return True
 
 
