@@ -60,7 +60,7 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
 
 ### "The email service has used today's Gmail quota"
 - **Cause:** the service sends from one Gmail account, which may send 100 emails a day through Apps Script.
-- **Fix:** nothing is lost: the digest is in Market Digest (Home > Recent digests) and opened on screen. To be sure
+- **Fix:** nothing is lost: the digest is in Market Digest (Digests > Recent digests) and opened on screen. To be sure
   of email every day, use **Send from my own Gmail account instead** in Settings.
 
 ### The dashboard says prices have not been fetched, or a stock has no price
@@ -75,6 +75,25 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
   right after installing, the first one is the next full week or month.
 - **Fix:** check Settings > How you get the digest; `python period.py --week --dry-run` makes one now to look at.
 
+### "Google sign-in is not set up in this version"
+- **Cause:** this copy of Market Digest was released before "Connect Google" was set up (docs/GOOGLE_SETUP.md).
+- **Fix:** type your stocks in Settings, or import them from a file; prices then come from Yahoo Finance. Update
+  when a new version is out.
+
+### Connect Google: "Google no longer accepts this sign-in" or "Connect Google again"
+- **Cause:** the permission was removed (Google Account > Security > Third-party access), or the password changed.
+- **Fix:** Settings > **Connect Google** again. The same portfolio sheet is used; nothing is lost.
+
+### "Your portfolio spreadsheet could not be opened"
+- **Cause:** the sheet was deleted or moved to the bin.
+- **Fix:** restore it from Google Drive's bin, or click **Connect Google** again and then ask for a new sheet (your
+  stocks in Settings are copied into it).
+
+### A stock shows no price, or #N/A in the sheet
+- **Cause:** Google Finance does not know the ticker as typed.
+- **Fix:** add the exchange, like `NASDAQ:NVDA`, `LON:VOD` or `KRX:005930`. Search the company on
+  google.com/finance to see its exact name there.
+
 ### Claude does not show the Market Digest tools
 - **Cause:** the Claude desktop app reads its list of local tools only when it starts.
 - **Fix:** quit Claude completely (on Windows also from the icon near the clock; on a Mac Cmd+Q), then open it again.
@@ -82,7 +101,7 @@ scheduled runs, also read `digest.log` in the same folder (open it with Notepad)
   it is not installed, or has never been opened, on this computer: get it from claude.ai/download and open it once.
   The tools are for the desktop app; claude.ai in a browser cannot reach files on your computer.
 
-### The home page says "this computer has no schedule for it"
+### The Digests page says "this computer has no schedule for it"
 - **Cause:** the daily task (Windows) or launchd job (Mac) was removed, or the program folder moved.
 - **Fix:** open **Settings** and click **Save**. Saving sets the schedule again.
 

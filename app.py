@@ -11,6 +11,7 @@ Keys and passwords never go back to the page: it only learns whether one is save
 Standard library only.
 """
 import argparse
+import base64
 import io
 import json
 import os
@@ -25,6 +26,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 import zipfile
@@ -39,6 +41,7 @@ from urllib.parse import parse_qs, urlparse
 
 import chat
 import digest as dg
+import google_link
 import insights
 import prices
 import tipranks
@@ -47,7 +50,7 @@ from market_data import read_watchlist
 PORT = 8765
 LABEL = "com.nugenix.market-digest"   # the launchd job on a Mac
 TASK = "Market video digest"          # the Task Scheduler task on Windows
-SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key", "email_key")   # never sent to the page
+SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key", "email_key", "google_token")   # never sent to the page
 DEFAULTS = {"channels": ["https://www.youtube.com/@TheStreet"], "email_to": [], "smtp_user": "", "json_dir": "", "watchlist_csv": "",
             "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20, "analysts": [], "markets_only": True,
             "notify": True, "watchlist": [], "holdings": {}, "weekly": True, "monthly": True}
@@ -75,6 +78,115 @@ DIGEST_FILE = re.compile(r"^(digest|weekly|monthly)-[\d-]+\.html$")
 
 
 # ---------------------------------------------------------------- settings
+
+# ---------------------------------------------------------------- importing an existing tracker (CSV or Excel)
+
+TICKER_COLS = ("ticker", "symbol", "stock", "code")
+SHARE_COLS = ("# shares", "shares", "quantity", "qty", "units", "holding", "shares owned", "no. of shares", "number of shares")
+NOT_STOCKS = {"TOTAL", "TOTALS", "SUBTOTAL", "SUM", "CASH", "GRAND-TOTAL", "PORTFOLIO", "N/A", "NA", "-"}
+COST_COLS = ("cost per share", "avg cost", "average cost", "avg price", "average price", "purchase price", "buy price", "price paid", "cost basis per share")
+
+
+def xlsx_tables(data):
+    """Every tab of an Excel file as rows of text, with the standard library only."""
+    import xml.etree.ElementTree as ET
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    z = zipfile.ZipFile(io.BytesIO(data))
+    shared = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", ns):
+            shared.append("".join(t.text or "" for t in si.iter("{%s}t" % ns["m"])))
+    tables = []
+    for name in sorted(n for n in z.namelist() if re.match(r"xl/worksheets/sheet\d+\.xml$", n)):
+        rows = []
+        for r in ET.fromstring(z.read(name)).iter("{%s}row" % ns["m"]):
+            row = {}
+            for c in r.findall("m:c", ns):
+                col = re.match(r"[A-Z]+", c.get("r", "A")).group(0)
+                idx = 0
+                for ch in col:
+                    idx = idx * 26 + ord(ch) - 64
+                v = c.find("m:v", ns)
+                text = "".join(t.text or "" for t in c.iter("{%s}t" % ns["m"])) if c.get("t") == "inlineStr" else (v.text if v is not None else "")
+                if c.get("t") == "s" and text:
+                    text = shared[int(text)]
+                row[idx - 1] = text or ""
+            rows.append([row.get(i, "") for i in range(max(row) + 1)] if row else [])
+        tables.append(rows)
+    return tables
+
+
+def find_stocks(rows):
+    """Rows of a tracker -> [{"ticker", "shares", "cost"}], from the first row with a ticker or symbol column."""
+    for i, row in enumerate(rows):
+        head = [str(c).strip().lower() for c in row]
+        tcol = next((j for j, h in enumerate(head) if h in TICKER_COLS), None)
+        if tcol is None:
+            continue
+        scol = next((j for j, h in enumerate(head) if h in SHARE_COLS), None)
+        ccol = next((j for j, h in enumerate(head) if h in COST_COLS), None)
+        out = []
+        for r in rows[i + 1:]:
+            raw = str(r[tcol] if tcol < len(r) else "").strip()
+            t = google_link.our_symbol(raw) if raw and not re.search(r"\s", raw) else ""
+            if not t or not prices.clean(t) or t in NOT_STOCKS:
+                continue
+            num = lambda col: (str(r[col]).replace(",", "").replace("$", "").strip() if col is not None and col < len(r) else "")
+            out.append({"ticker": prices.clean(t), "shares": num(scol), "cost": num(ccol)})
+        if out:
+            return out
+    return []
+
+
+def import_file(req):
+    """The stocks in a file the person dropped on the page: a CSV or Excel export of their tracker. Nothing is saved
+    here; the page shows the rows, and Save keeps them."""
+    import csv as _csv
+    name = str(req.get("name") or "").lower()
+    try:
+        data = base64.b64decode(str(req.get("data") or ""))
+    except ValueError:
+        raise ValueError("That file could not be read.")
+    if len(data) > 5_000_000:
+        raise ValueError("That file is too big for a stock list (over 5 MB).")
+    if name.endswith((".xlsx", ".xlsm")) or data[:2] == b"PK":
+        try:
+            tables = xlsx_tables(data)
+        except Exception:
+            raise ValueError("That Excel file could not be read. In Google Sheets use File > Download > Comma-separated values (.csv) instead.")
+    else:
+        text = data.decode("utf-8-sig", "replace")
+        tables = [list(_csv.reader(io.StringIO(text)))]
+    for rows in tables:
+        found = find_stocks(rows)
+        if found:
+            return {"stocks": found, "message": f"Found {len(found)} stock{'s' if len(found) != 1 else ''} in {req.get('name') or 'the file'}. Check them below, then click Save."}
+    raise ValueError("No column called Ticker or Symbol was found. Download your tracker's tab with the stocks (File > Download > .csv) and try again.")
+
+
+def google_state(cfg):
+    """What the page may know about the Google connection (never the sign-in itself)."""
+    sheet = cfg.get("google_sheet") or {}
+    return {"available": google_link.available(), "connected": bool(real(cfg.get("google_token")) and sheet.get("id")),
+            "url": sheet.get("url", ""), "synced": cfg.get("google_synced", ""), "problem": cfg.get("google_problem", ""),
+            "reconnect": bool(cfg.get("google_reconnect"))}
+
+
+def stock_rows(cfg):
+    held, costs = cfg.get("holdings") or {}, cfg.get("costs") or {}
+    return [{"ticker": t, "shares": held.get(t), "cost": costs.get(t)} for t in cfg.get("watchlist") or []]
+
+
+def google_sync(wait=True):
+    """Read the person's sheet now (after connecting, or when asked). Returns a sentence."""
+    cfg = read_config()
+    try:
+        import insights as ins
+        ok = dg.sync_google(cfg, extra=ins.tickers_to_price(cfg), wait=wait)
+    except Exception as err:
+        return f"Not read: {err}"
+    return "Read your stocks and Google Finance's prices." if ok else (read_config().get("google_problem") or "Not read.")
+
 
 def read_config():
     """The saved settings as they are in digest_config.json ({} when there are none yet)."""
@@ -107,6 +219,8 @@ def public(cfg):
     out["email_service"] = bool(dg.service())
     out["email_confirmed"] = (out["email_to"] or [""])[0] if real(cfg.get("email_key")) else ""
     out["holdings"] = {k: v for k, v in (cfg.get("holdings") or {}).items()}
+    out["costs"] = {k: v for k, v in (cfg.get("costs") or {}).items()}
+    out["google"] = google_state(cfg)
     out["broken"] = bool(cfg.get("_broken"))
     return out
 
@@ -180,7 +294,7 @@ def merged(form, saved):
         folder = str(form["json_dir"] or "").strip().strip("'\"").replace("\\ ", " ")
         cfg["json_dir"] = os.path.expanduser(folder) if folder else ""
     if "stocks" in form:   # [{"ticker": "NVDA", "shares": "10"}, ...]: the watchlist, and what you own
-        watch, held, bad = [], {}, []
+        watch, held, costs, bad = [], {}, {}, []
         for row in form["stocks"] or []:
             raw = str((row or {}).get("ticker") or "").strip()
             t = "" if re.search(r"\s", raw) else prices.clean(raw)   # "Nvidia Corp" is a name, not a ticker
@@ -199,9 +313,17 @@ def merged(form, saved):
                         held[t] = float(sh)
                 except ValueError:
                     errors["stocks"] = f"\u201c{sh}\u201d is not a number of shares (for {t}). Leave it empty if you do not own it."
+            paid = str((row or {}).get("cost") or "").replace(",", "").replace("$", "").strip()
+            if paid:
+                try:
+                    if float(paid) <= 0:
+                        raise ValueError
+                    costs[t] = float(paid)
+                except ValueError:
+                    errors["stocks"] = f"\u201c{paid}\u201d is not a price (what you paid per share for {t}). Leave it empty if you do not know."
         if bad:
             errors["stocks"] = f"\u201c{bad[0][:20]}\u201d is not a ticker. Use the symbol, like NVDA, AAPL or BRK-B."
-        cfg["watchlist"], cfg["holdings"] = watch, held
+        cfg["watchlist"], cfg["holdings"], cfg["costs"] = watch, held, costs
     if "analysts" in form:
         items = form["analysts"] if isinstance(form["analysts"], list) else str(form["analysts"]).splitlines()
         cfg["analysts"] = list(dict.fromkeys(re.sub(r"\s+", " ", str(a)).strip() for a in items if str(a).strip()))
@@ -934,16 +1056,28 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         if u.path == "/" and "video" in q:   # "Ask a question about this video" links in saved digests
             return self.page("chat.html")
-        if u.path in ("/", "/settings"):
-            return self.page("app.html")
-        if u.path == "/dashboard":
+        if u.path == "/":   # the overview: your stocks' check-up, then what the analysts said
             return self.page("dashboard.html")
+        if u.path in ("/digests", "/settings"):
+            return self.page("app.html")
+        if u.path == "/oauth/start":
+            try:
+                where = google_link.start(f"http://127.0.0.1:{self.port}/oauth/callback")
+            except google_link.GoogleError as err:
+                where = "/settings?google_error=" + urllib.parse.quote(str(err))
+            return self.send(302, b"", "text/plain", headers=[("Location", where)])
+        if u.path == "/oauth/callback":
+            return self.oauth_callback(q)
+        if u.path == "/dashboard":   # its old address
+            return self.send(302, b"", "text/plain", headers=[("Location", "/")])
         if u.path == "/api/dashboard":
             try:
                 days = max(1, min(int(q.get("days", ["30"])[0]), 365))
             except ValueError:
                 days = 30
-            return self.send(200, insights.overview(days=days, cfg=read_config()))
+            cfg = read_config()
+            return self.send(200, {**insights.overview(days=days, cfg=cfg), "configured": bool(real(cfg.get("gemini_api_key"))),
+                                   "google": google_state(cfg)})
         if u.path == "/chat":
             return self.page("chat.html")
         if u.path == "/api/settings":
@@ -975,6 +1109,27 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, found) if found else self.send(404, {"error": "That chat no longer exists."})
         self.send(404, {"error": "not found"})
 
+    def oauth_callback(self, q):
+        """Google sends the browser back here after the person agrees (or not)."""
+        back = "/settings?google="
+        try:
+            if q.get("error"):
+                raise google_link.GoogleError("You did not allow it, so nothing was connected." if q["error"][0] == "access_denied"
+                                              else f"Google said: {q['error'][0]}.")
+            token = google_link.finish(q.get("state", [""])[0], q.get("code", [""])[0])
+            cfg = read_config()
+            cfg["google_token"] = token
+            sheet = cfg.get("google_sheet") or {}
+            if not sheet.get("id"):   # first connection: make the portfolio sheet, with the stocks typed so far
+                cfg["google_sheet"] = google_link.create_sheet(token, stock_rows(cfg))
+            cfg.update(google_problem="", google_reconnect=False)
+            write_config(cfg)
+            threading.Thread(target=google_sync, daemon=True).start()
+            where = back + "connected"
+        except google_link.GoogleError as err:
+            where = "/settings?google_error=" + urllib.parse.quote(str(err))
+        return self.send(302, b"", "text/plain", headers=[("Location", where)])
+
     def do_POST(self):
         # A JSON body cannot be sent by another website without the browser asking first, which this server never allows.
         if not self.allowed() or self.headers.get("Content-Type", "").split(";")[0] != "application/json":
@@ -1003,6 +1158,12 @@ class Handler(BaseHTTPRequestHandler):
             if errors:
                 return self.send(400, {"error": "Some settings need fixing (marked in red).", "fields": errors})
             write_config(cfg)
+            if "stocks" in req and google_state(cfg)["connected"] and stock_rows(cfg) != stock_rows(saved):
+                try:
+                    google_link.put_stocks(cfg, stock_rows(cfg))
+                    threading.Thread(target=google_sync, kwargs={"wait": True}, daemon=True).start()
+                except google_link.GoogleError as err:
+                    write_config({**cfg, "google_problem": str(err)})
             try:
                 said = schedule(cfg["schedule_on"], cfg["daily_time"])
                 sched_ok = True
@@ -1048,6 +1209,28 @@ class Handler(BaseHTTPRequestHandler):
             cfg = read_config()
             threading.Thread(target=prices.refresh, args=(insights.tickers_to_price(cfg),), kwargs={"log": lambda m: None}, daemon=True).start()
             return self.send(200, {"ok": True})
+        if path == "/api/google/sync":
+            return self.send(200, {"message": google_sync(), "google": google_state(read_config()), "stocks": stock_rows(read_config())})
+        if path == "/api/google/disconnect":
+            cfg = read_config()
+            if real(cfg.get("google_token")):
+                google_link.revoke(cfg["google_token"])
+            cfg.update(google_token="", google_problem="", google_reconnect=False)   # the sheet stays in your Drive
+            write_config(cfg)
+            return self.send(200, {"google": google_state(cfg)})
+        if path == "/api/google/new-sheet":
+            cfg = read_config()
+            if not real(cfg.get("google_token")):
+                raise ValueError("Connect Google first.")
+            try:
+                cfg["google_sheet"] = google_link.create_sheet(cfg["google_token"], stock_rows(cfg))
+            except google_link.GoogleError as err:
+                raise ValueError(str(err))
+            cfg.update(google_problem="")
+            write_config(cfg)
+            return self.send(200, {"google": google_state(cfg)})
+        if path == "/api/import":
+            return self.send(200, import_file(req))
         if path == "/api/claude":
             return self.send(200, claude_connect(on=req.get("action") != "disconnect"))
         if path == "/api/update":

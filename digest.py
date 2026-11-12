@@ -510,12 +510,55 @@ def day_summary(cfg, done):
     return s
 
 
+def update_config(**changes):
+    """Change some settings in digest_config.json, keeping the rest."""
+    cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    cfg.update(changes)
+    tmp = CONFIG.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    if os.name != "nt":
+        os.chmod(tmp, 0o600)
+    tmp.replace(CONFIG)
+
+
+def stocks_settings(stocks):
+    """The settings that hold your stocks, from the rows of your Google Sheet."""
+    return {"watchlist": [s["ticker"] for s in stocks],
+            "holdings": {s["ticker"]: s["shares"] for s in stocks if s.get("shares")},
+            "costs": {s["ticker"]: s["cost"] for s in stocks if s.get("cost")}}
+
+
+def sync_google(cfg, extra=(), wait=True):
+    """Read your stocks and Google Finance's prices from your portfolio sheet, if Google is connected. Updates cfg and
+    digest_config.json. Returns True when it worked. Never raises."""
+    if not (cfg.get("google_token") and cfg.get("google_sheet")):
+        return False
+    import google_link
+    try:
+        got = google_link.sync(cfg, extra_tickers=extra, wait=wait, log=log)
+    except google_link.GoogleError as err:
+        log(f"Google Finance not read: {err}")
+        update_config(google_problem=str(err), google_reconnect=err.reconnect)
+        return False
+    except Exception as err:
+        log(f"Google Finance not read: {err.__class__.__name__}: {err}")
+        return False
+    changes = {**stocks_settings(got["stocks"]), "google_synced": got["synced"], "google_problem": "", "google_reconnect": False}
+    cfg.update(changes)
+    update_config(**changes)
+    prices.record_google(got["quotes"], log=log)
+    return True
+
+
 def refresh_prices(cfg, done):
-    """Fetch today's prices for the watchlist, holdings and the stocks called lately (for the dashboard and the
-    scoring of calls). Never stops the digest."""
+    """Today's prices for your stocks and the stocks called lately (for the dashboard and the scoring of calls): from
+    Google Finance through your portfolio sheet when Google is connected, and the daily history from Yahoo Finance or
+    Stooq. Never stops the digest."""
     try:
         import insights
         called = [str(s.get("ticker") or "") for d in done for s in d["notes"].get("stocks") or []]
+        wanted = [*insights.tickers_to_price(cfg), *called]
+        sync_google(cfg, extra=wanted)
         prices.refresh([*insights.tickers_to_price(cfg), *called], log=log)
     except Exception as err:
         log(f"Prices not updated: {err}")

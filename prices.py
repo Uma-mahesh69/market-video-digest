@@ -1,8 +1,13 @@
-"""Stock prices for your watchlist, your holdings and the stocks the analysts called, fetched by this computer.
+"""Stock prices for your stocks and the stocks the analysts called, kept on this computer in prices.json.
 
-No key and no Google Sheet: daily closing prices come from Yahoo Finance's public chart data, or from Stooq when
-Yahoo does not answer. They are kept in prices.json in the program folder and refreshed once a day, so the dashboard
-and the digests read them without waiting for the internet. Prices can be delayed and are for information only.
+Two sources, used together:
+  - Google Finance, through your own "My portfolio" Google Sheet when Google is connected (google_link.py): today's
+    price, change, 52-week range and P/E. Google does not let apps read its price history, so each day's price is
+    recorded here, building a history of its own.
+  - Yahoo Finance's public chart data (Stooq when Yahoo does not answer): a year of daily closes, no key needed.
+    It fills in the history from before you installed, and everything when Google is not connected.
+The dashboard and the digests read prices.json, so they never wait for the internet. Prices can be delayed and are for
+information only.
 
     python prices.py NVDA AAPL      fetch these now and print the latest close
 Standard library only.
@@ -26,7 +31,7 @@ SP500 = "^GSPC"
 US10Y = "^TNX"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"}
 MAX_SYMBOLS = 80          # a day's refresh never asks for more than this many
-SOURCE = "Yahoo Finance (or Stooq), daily closes. Prices can be delayed and are for information only, not for trading."
+SOURCE = "Google Finance (your portfolio sheet) and Yahoo Finance or Stooq daily closes. Prices can be delayed and are for information only, not for trading."
 SYMBOL = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-]{0,14}$")
 _lock = threading.Lock()
 
@@ -134,7 +139,11 @@ def refresh(symbols, log=print, fetcher=None, pause=0.3):
         for s in todo:
             try:
                 got = fetcher(s)
-                cache[s] = {**got, "day": today}
+                old = cache.get(s) or {}
+                theirs = {d: c for d, c in got["closes"]}
+                mine = [[d, c] for d, c in old.get("closes") or [] if d not in theirs]   # days only recorded here (Google Finance)
+                cache[s] = {**old, **got, "name": got.get("name") or old.get("name", ""), "currency": got.get("currency") or old.get("currency", ""),
+                            "closes": sorted([[d, c] for d, c in theirs.items()] + mine), "day": today}
                 fetched.append(s)
             except Exception as err:
                 failed.append(s)
@@ -147,6 +156,34 @@ def refresh(symbols, log=print, fetcher=None, pause=0.3):
     if todo:
         log(f"Prices: {len(fetched)} of {len(todo)} updated" + (f"; not found: {', '.join(failed[:8])}" if failed else ""))
     return fetched, failed
+
+
+def record_google(quotes, day=None, log=print):
+    """Keep today's Google Finance quotes ({ticker: {"price", "change_pct_day", ...}}) and add each price to the
+    stock's own daily history (the latest price of the day wins)."""
+    day = day or date.today().isoformat()
+    with _lock:
+        cache = load()
+        n = 0
+        for t, q in quotes.items():
+            t = clean(t)
+            if not t or q.get("price") is None:
+                continue
+            entry = cache.setdefault(t, {"name": "", "currency": "", "closes": []})
+            entry["google"] = {**{k: v for k, v in q.items() if v not in (None, "")}, "as_of": day}
+            entry["name"] = entry.get("name") or q.get("name") or ""
+            entry["currency"] = entry.get("currency") or q.get("currency") or ""
+            rows = entry.setdefault("closes", [])
+            if q.get("close_prev") is not None and rows and rows[-1][0] < day and len(rows) >= 1:
+                rows[-1][1] = round(float(q["close_prev"]), 4)   # the previous session's real close
+            if rows and rows[-1][0] == day:
+                rows[-1][1] = round(float(q["price"]), 4)
+            elif not rows or rows[-1][0] < day:
+                rows.append([day, round(float(q["price"]), 4)])
+            n += 1
+        save(cache)
+    log(f"Prices: {n} from Google Finance recorded")
+    return n
 
 
 # ---------------------------------------------------------------- reading
@@ -182,11 +219,16 @@ def quote(symbol, cache=None):
     if not rows:
         return None
     year = [c for _, c in rows[-252:]]
-    return {"ticker": clean(symbol), "name": entry.get("name") or "", "currency": entry.get("currency") or "", "price": rows[-1][1],
-            "as_of": rows[-1][0], "change_pct_day": change(rows, 1), "change_pct_week": change(rows, 5),
+    g = entry.get("google") or {}
+    fresh = g if g.get("as_of") == rows[-1][0] else {}   # Google Finance's own figures, when they are today's
+    price = fresh.get("price", rows[-1][1])
+    high = fresh.get("high_52w") or max(year)
+    return {"ticker": clean(symbol), "name": entry.get("name") or g.get("name") or "", "currency": entry.get("currency") or g.get("currency") or "",
+            "price": price, "as_of": rows[-1][0], "source": "Google Finance" if fresh else "Yahoo Finance",
+            "change_pct_day": fresh.get("change_pct_day", change(rows, 1)), "change_pct_week": change(rows, 5),
             "change_pct_month": change(rows, 21), "close_week_ago": rows[-6][1] if len(rows) > 5 else None,
-            "high_52w": max(year), "low_52w": min(year),
-            "from_high_pct": round((rows[-1][1] / max(year) - 1) * 100, 2)}
+            "high_52w": high, "low_52w": fresh.get("low_52w") or min(year), "pe": fresh.get("pe"),
+            "from_high_pct": round((price / high - 1) * 100, 2) if high else None}
 
 
 def as_watchlist(tickers, cache=None):

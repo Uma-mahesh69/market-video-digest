@@ -31,7 +31,8 @@ market levels, predictions and risks. These tools read those saved notes.
 
 How to use them well:
 - Start with digest_overview to see what is followed, how many videos are saved and whether the daily run is working.
-- For "how did the calls do", "who is right", "my holdings" or a period summary, use market_overview.
+- For "how are my stocks" or anything about one stock they own or watch, use my_stocks first.
+- For "how did the calls do", "who is right" or a period summary, use market_overview.
 - For "what did X say" or "what is the view on a stock", use stock_calls or list_videos, then get_video for detail.
 - Every item has a "link" that opens the video at the moment it was said. Cite those links.
 - Report each view as that analyst's or channel's view, with the date. Captions are automatic and can mishear names
@@ -192,6 +193,19 @@ def market_overview(days=30):
     return out
 
 
+def my_stocks(days=30):
+    out = insights.checkup(app.read_config(), days=max(7, min(int(days), 120)))
+    for s in out["stocks"]:
+        s.pop("shares", None)
+        s.pop("value", None)
+        s.pop("cost", None)
+    out.pop("total_value", None)
+    out["note"] = ("A plain-language check-up of each stock the person owns or watches: what the analysts in their videos said, "
+                   "whose calls have been good, Wall Street's rating (TipRanks) and the price. Share counts and money amounts are left out. "
+                   "It is information to help them decide, not advice: never tell them to buy or sell.")
+    return out
+
+
 def update_following(add_channels=(), remove_channels=(), add_analysts=(), remove_analysts=()):
     saved = app.read_config()
     if not app.real(saved.get("gemini_api_key")):
@@ -244,6 +258,10 @@ TOOLS = {t["spec"]["name"]: t for t in [
     tool(market_overview, "The dashboard's numbers for the last N days: the most-discussed stocks with bullish and bearish call counts and price moves since, "
          "how the calls did against the S&P 500, each analyst's record, the person's holdings by weight, what is coming up, and the signals worth reading first.",
          {"days": {"type": "integer", "default": 30, "minimum": 1, "maximum": 365}}),
+    tool(my_stocks, "A check-up of each stock the person owns or watches: whether analysts are positive, mixed or cautious on it and why "
+         "(points for and against, in plain words), what to watch (earnings, disagreements), weights in their holdings, and portfolio-level "
+         "notes such as too much in one stock. Use this for 'how are my stocks', 'should I worry about X', or a morning check.",
+         {"days": {"type": "integer", "default": 30, "minimum": 7, "maximum": 120}}),
     tool(update_following, "Change which YouTube channels and which analysts the daily digest covers. Confirm the change with the person first.",
          {"add_channels": {**NAMES, "description": "Channel links or @handles to add"}, "remove_channels": NAMES,
           "add_analysts": {**NAMES, "description": "Full names, e.g. Dan Ives. Other spellings after a slash: Tom Lee / Thomas Lee"}, "remove_analysts": NAMES}),

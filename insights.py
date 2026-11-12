@@ -290,6 +290,7 @@ def overview(days=30, cfg=None, end=None, start=None):
                   "change_pct_period": None} if sp else None,
         "prices_as_of": max((e.get("day") for e in cache.values() if isinstance(e, dict) and e.get("day")), default=None),
         "price_source": prices.SOURCE,
+        "checkup": checkup(cfg, days=max(days if (end - start).days == days else (end - start).days, 14), cache=cache),
         "recent_videos": [{"title": v.get("title"), "channel": v.get("channel"), "day": v["when"].astimezone().date().isoformat(),
                            "link": v["url"], "speakers": speakers(n)[:3], "summary": n.get("summary", "")} for v, n in videos[:12]],
     }
@@ -300,3 +301,174 @@ def tickers_to_price(cfg, days=90):
     calls = calls_in(window(date.today() - timedelta(days=days), date.today() + timedelta(days=1)))
     called = [t for t, _ in Counter(c["ticker"] for c in calls).most_common(60)]
     return list(dict.fromkeys([*(cfg.get("watchlist") or []), *(cfg.get("holdings") or {}).keys(), *called]))
+
+
+# ---------------------------------------------------------------- the check-up: each of your stocks in plain words
+
+STREET_SCORE = {"strong buy": 1.0, "buy": 0.6, "moderate buy": 0.5, "outperform": 0.5, "hold": 0.0, "neutral": 0.0,
+                "moderate sell": -0.5, "underperform": -0.5, "sell": -0.6, "strong sell": -1.0}
+VERDICT_TEXT = {"positive": "Analysts are positive", "mixed": "Analysts are mixed", "cautious": "Analysts are cautious",
+                "quiet": "Not enough analyst views yet"}
+
+
+def street_score(consensus):
+    return STREET_SCORE.get(str(consensus or "").strip().lower())
+
+
+def good_record(record):
+    """At least 3 scored calls, right at least half the time, and beating the S&P 500 on average."""
+    return bool(record and record.get("scored", 0) >= 3 and record.get("edge") is not None and record["edge"] > 0
+                and (record.get("hit_pct") or 0) >= 50)
+
+
+def analyst_weight(record):
+    """A call counts more from an analyst whose calls have beaten the S&P 500, and less from one whose have not."""
+    if not record or record.get("scored", 0) < 3 or record.get("edge") is None:
+        return 1.0
+    return 1.5 if good_record(record) else 0.6 if record["edge"] < 0 else 1.0
+
+
+def pct(x):
+    return f"{abs(x):.0f}%" if x is not None else ""
+
+
+def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
+    """The plain-language check-up of one stock."""
+    held = (cfg.get("holdings") or {}).get(t)
+    cost = (cfg.get("costs") or {}).get(t)
+    q = prices.quote(t, cache) or {}
+    mine = [c for c in calls if c["ticker"] == t]
+    counts = Counter(c["view"] for c in mine)
+    w_bull = sum(analyst_weight(records.get(c["analyst"])) for c in mine if c["view"] == BULL)
+    w_bear = sum(analyst_weight(records.get(c["analyst"])) for c in mine if c["view"] == BEAR)
+    n = counts.get(BULL, 0) + counts.get(BEAR, 0)
+    st = street.get(t) or {}
+    s_score = street_score(st.get("consensus"))
+    parts, weights_used = [], []
+    if n:
+        parts.append((w_bull - w_bear) / (w_bull + w_bear))
+        weights_used.append(min(1.0, n / 4))
+    if s_score is not None:
+        parts.append(s_score)
+        weights_used.append(1.0)
+    score = sum(p * w for p, w in zip(parts, weights_used)) / sum(weights_used) if parts else None
+    verdict = "quiet" if score is None else "positive" if score >= 0.3 else "cautious" if score <= -0.3 else "mixed"
+    agree = n >= 2 and s_score is not None and ((w_bull - w_bear) > 0) == (s_score > 0) and s_score != 0
+    confidence = "strong" if (n >= 4 and agree) or n >= 8 else "some" if n >= 2 or s_score is not None else "little"
+
+    good, bad, know = [], [], []
+    scored = [(c, s) for c in mine for s in [score_call(c, cache)] if s]
+    if counts.get(BULL, 0) > counts.get(BEAR, 0):
+        good.append(f"{counts[BULL]} of {n} analyst calls in the videos were bullish (they expect it to do well).")
+    elif counts.get(BEAR, 0) > counts.get(BULL, 0):
+        bad.append(f"{counts[BEAR]} of {n} analyst calls in the videos were bearish (they expect it to do poorly).")
+    elif n:
+        know.append(f"The analysts in the videos are split: {counts.get(BULL, 0)} bullish and {counts.get(BEAR, 0)} bearish calls.")
+    if st.get("consensus"):
+        up = st.get("upside_pct")
+        target = f", and their average price target is {pct(up)} {'above' if up >= 0 else 'below'} today's price" if up is not None else ""
+        line = f"Wall Street's analysts (TipRanks) rate it {st['consensus']}{target}."
+        (good if (s_score or 0) > 0 else bad if (s_score or 0) < 0 else know).append(line)
+    best = max((c for c in mine if good_record(records.get(c["analyst"])) and c["view"] in (BULL, BEAR)),
+               key=lambda c: records[c["analyst"]]["edge"], default=None)
+    if best:
+        r = records[best["analyst"]]
+        line = (f"{best['analyst']}, whose calls have been right {r['right']} of {r['scored']} times, is {best['view']}"
+                + (f": “{best['reason'][:120]}”" if best["reason"] else "") + ".")
+        (good if best["view"] == BULL else bad).append(line)
+    if len(scored) >= 2:
+        right = sum(s["right"] for _, s in scored)
+        know.append(f"Earlier calls on it in this period: {right} of {len(scored)} have been right so far, measured against the S&P 500.")
+    month = q.get("change_pct_month")
+    if month is not None and month <= -15:
+        bad.append(f"The price fell {pct(month)} over the last month.")
+    elif month is not None and month >= 15:
+        know.append(f"The price rose {pct(month)} over the last month, so some of the good news may already be in the price.")
+    if q.get("from_high_pct") is not None and q["from_high_pct"] <= -30:
+        know.append(f"It is {pct(q['from_high_pct'])} below its highest price of the past year.")
+    w = weights.get(t)
+    if w and w >= 25:
+        bad.append(f"It is {w:.0f}% of what your stocks are worth: a lot riding on one company.")
+    if verdict == "quiet":
+        know.append("No analyst in your channels has made a call on it lately, and there is no Wall Street view yet.")
+
+    watch = []
+    days_left = st.get("days_to_earnings")
+    if days_left is not None and 0 <= days_left <= 21:
+        watch.append(f"Earnings in {int(days_left)} day{'s' if days_left != 1 else ''}" + (f" ({st['next_earnings']})" if st.get("next_earnings") else "")
+                     + ": the price often moves a lot that day.")
+    name = (q.get("name") or next((c["name"] for c in mine if c["name"]), "")).lower()
+    for e in events:
+        text = str(e["event"]).lower()
+        if watch and "earning" in text:
+            continue   # earnings are already on the list, from Wall Street's calendar
+        if e.get("date") and (re.search(rf"\b{re.escape(t.lower())}\b", text) or (name and name.split()[0] in text)):
+            watch.append(f"{e['event']} on {e['date']}.")
+            break
+    if n >= 2 and s_score is not None and not agree and s_score != 0:
+        watch.append("The YouTube analysts and Wall Street disagree on it: worth reading both sides.")
+
+    basis = [f"{n} call{'s' if n != 1 else ''} in your channels' videos" if n else "", "Wall Street's rating" if s_score is not None else ""]
+    price = q.get("price")
+    value = held * price if held and price else None
+    return {
+        "ticker": t, "name": q.get("name") or next((c["name"] for c in mine if c["name"]), ""),
+        "owned": bool(held), "shares": held, "cost": cost, "value": value, "weight_pct": w,
+        "gain_pct": round((price / cost - 1) * 100, 1) if price and cost else None,
+        "price": price, "currency": q.get("currency"), "change_pct_day": q.get("change_pct_day"), "change_pct_month": month,
+        "from_high_pct": q.get("from_high_pct"), "as_of": q.get("as_of"), "source": q.get("source"),
+        "verdict": verdict, "verdict_text": VERDICT_TEXT[verdict], "confidence": confidence,
+        "basis": " and ".join(b for b in basis if b) or "nothing yet",
+        "score": None if score is None else round(score, 2),
+        "for": good, "against": bad, "worth_knowing": know, "watch": watch,
+        "calls": {**{v: counts.get(v, 0) for v in VIEWS}, "analysts": sorted({c["analyst"] for c in mine if c["analyst"]})},
+        "latest": [{k: c[k] for k in ("day", "view", "analyst", "channel", "reason", "link")} for c in sorted(mine, key=lambda c: c["day"], reverse=True)[:3]],
+        "street": {k: st.get(k) for k in ("consensus", "best_consensus", "price_target", "upside_pct", "smart_score", "next_earnings") if st.get(k) is not None} or None,
+    }
+
+
+def score_call(call, cache):
+    return score(call, cache)
+
+
+def checkup(cfg, days=30, cache=None, today=None):
+    """Every stock you own or watch, checked against what the analysts said in the last N days. Owned stocks first."""
+    today = today or date.today()
+    cache = cache if cache is not None else prices.load()
+    videos = window(today - timedelta(days=days), today + timedelta(days=1))
+    calls = calls_in(videos)
+    # records over a longer span: an analyst's record needs time to build
+    long_calls = calls_in(window(today - timedelta(days=120), today + timedelta(days=1)))
+    records = {a["analyst"]: a for a in analysts_table(long_calls, cache, cfg.get("analysts") or [])}
+    street = tipranks_latest(cfg)
+    weights = holdings_weights(cfg, cache)
+    events = upcoming(videos, today)
+    stocks = [prices.clean(t) for t in cfg.get("watchlist") or []]
+    stocks += [prices.clean(t) for t in (cfg.get("holdings") or {}) if prices.clean(t) not in stocks]
+    checks = [check_stock(t, calls, cache, records, street, cfg, weights, events, today) for t in stocks if t]
+    order = {"cautious": 0, "mixed": 1, "positive": 2, "quiet": 3}
+    checks.sort(key=lambda c: (not c["owned"], order[c["verdict"]], -(c["weight_pct"] or 0), c["ticker"]))
+    owned = [c for c in checks if c["owned"]]
+    values = [c["value"] for c in owned if c["value"]]
+    currencies = {c["currency"] for c in owned if c["value"]}
+    total = sum(values) if values and len(currencies) <= 1 else None
+    day = (sum(c["value"] * (c["change_pct_day"] or 0) / (100 + (c["change_pct_day"] or 0)) for c in owned if c["value"]) / total * 100
+           if total else None)
+    health = []
+    top = max(owned, key=lambda c: c["weight_pct"] or 0, default=None)
+    if top and (top["weight_pct"] or 0) >= 35:
+        health.append(f"{top['ticker']} is {top['weight_pct']:.0f}% of your stocks. If it falls, your whole portfolio falls with it; "
+                      "many investors keep any one stock well below that.")
+    if len(owned) and len(owned) < 4:
+        health.append(f"You own {len(owned)} stock{'s' if len(owned) != 1 else ''}. Spreading money over more companies (or a fund) lowers the risk of one bad surprise.")
+    cautious = [c["ticker"] for c in owned if c["verdict"] == "cautious"]
+    if cautious:
+        health.append(f"Analysts are cautious on {', '.join(cautious)}, which you own: see why below.")
+    quiet = [c["ticker"] for c in owned if c["verdict"] == "quiet"]
+    if quiet:
+        health.append(f"No recent analyst views on {', '.join(quiet)}. Adding a channel that covers them would help.")
+    return {"stocks": checks, "owned": len(owned), "watched": len(checks) - len(owned),
+            "total_value": round(total, 2) if total else None, "currency": next(iter(currencies), None) if total else None,
+            "day_change_pct": round(day, 2) if day is not None else None,
+            "counts": {v: sum(c["verdict"] == v for c in checks) for v in ("positive", "mixed", "cautious", "quiet")},
+            "health": health, "days": days}

@@ -94,6 +94,7 @@ details.extras[open] > summary{margin-bottom:8px}
 .banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--blue-soft);border-color:transparent}
 .banner p{flex:1;margin:0;min-width:200px}
 .indent{margin-left:28px}
+a.btn-link{text-decoration:none}
 table.stocks{border-collapse:collapse;width:100%;max-width:520px}
 table.stocks th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:0 6px 4px 0}
 table.stocks td{padding:3px 6px 3px 0}
@@ -104,7 +105,7 @@ table.stocks input{width:100%}
 <body>
 <header class="bar">
   <a class="brand" href="/">Market Digest</a>
-  <nav id="nav"><a href="/" data-v="home">Home</a><a href="/dashboard">Dashboard</a><a href="/chat">Chat</a><a href="/settings" data-v="settings">Settings</a></nav>
+  <nav id="nav"><a href="/">Overview</a><a href="/digests" data-v="home">Digests</a><a href="/chat">Chat</a><a href="/settings" data-v="settings">Settings</a></nav>
   <span class="sp"></span><span class="ver" id="ver"></span>
   <button type="button" class="link" id="quit" title="Close Market Digest. The daily digest still runs.">Quit</button>
 </header>
@@ -112,7 +113,7 @@ table.stocks input{width:100%}
 <main>
 <!-- ================================================================ HOME -->
 <section id="home" hidden>
-  <h1>Your daily digest</h1>
+  <h1>Your digests</h1>
   <p class="lead" id="homeLead">Loading…</p>
 
   <div class="card banner" id="updateBox" hidden>
@@ -211,20 +212,44 @@ table.stocks input{width:100%}
     <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
   </div>
 
-  <div class="card" data-step="2">
+  <div class="card" data-step="2" id="stocks">
     <h2>Your stocks <span class="tag opt">Optional</span></h2>
-    <p class="what">The stocks you watch get a price table in each digest and on the dashboard, next to what the analysts said about them.
-      Add how many shares you own to see each one's weight in your holdings. Prices are fetched by this computer; no sheet or account is needed,
-      and your share counts never leave this computer.</p>
-    <table class="stocks"><thead><tr><th>Ticker</th><th>Shares you own (optional)</th><th></th></tr></thead><tbody id="stockRows"></tbody></table>
+    <p class="what">The stocks you own or watch. Each gets a check-up on the Overview page: what the analysts say about it, how good their calls
+      have been, Wall Street's view and the price. Add the shares you own to see your holdings' value and weights, and the price you paid to see your gain.</p>
+    <div class="banner card" id="gBanner" hidden style="margin:0 0 12px;padding:10px 12px"><p id="gBannerText"></p></div>
+    <table class="stocks"><thead><tr><th>Ticker</th><th>Shares you own</th><th>Price you paid</th><th></th></tr></thead><tbody id="stockRows"></tbody></table>
+    <p class="help">Leave the shares empty for a stock you only watch. Your shares and prices stay on this computer (and in your own Google Sheet, if you connect Google).</p>
     <p class="err" id="e-stocks"></p>
-    <div class="tests"><button type="button" id="addStock">+ Add a stock</button><button type="button" data-test="prices">Check prices</button></div>
+    <div class="tests"><button type="button" id="addStock">+ Add a stock</button>
+      <button type="button" id="importBtn">Import from a file…</button><input type="file" id="importFile" accept=".csv,.xlsx,.xlsm,text/csv" hidden>
+      <button type="button" data-test="prices">Check prices</button></div>
+    <p class="help">Import: in your current tracker (Google Sheets, Excel), download the tab with your stocks as a .csv or .xlsx file and choose it here.
+      It needs a column called Ticker or Symbol; a Shares column is read too.</p>
     <p class="result" id="r-prices" aria-live="polite"></p>
+  </div>
+
+  <div class="card" id="google">
+    <h2>Google Finance <span class="tag opt">Recommended</span></h2>
+    <p class="what">Connect your Google account and Market Digest keeps your stocks in a Google Sheet in <b>your own</b> Drive, priced live by
+      Google Finance. Edit it in Google Sheets (on your phone too) or here: both stay the same. Market Digest can only see the files it creates;
+      nothing else in your Drive. There is no Market Digest server: your computer talks to Google directly.</p>
+    <div id="gOff">
+      <div class="tests"><a class="btn-link" id="gConnect" href="/oauth/start"><button type="button" class="primary">Connect Google</button></a></div>
+      <p class="help">Google asks you to sign in and allow Market Digest to "see, edit, create and delete only the specific Google Drive files you use with
+        this app". Your stocks above are copied into the new sheet.</p>
+    </div>
+    <div id="gOn" hidden>
+      <p class="result ok" id="gOnText"></p>
+      <div class="tests"><a id="gOpen" target="_blank" rel="noopener"><button type="button" class="primary">Open my portfolio sheet</button></a>
+        <button type="button" id="gSync">Update from the sheet now</button><button type="button" class="link" id="gOffBtn">Disconnect</button></div>
+    </div>
+    <p class="result" id="r-google" aria-live="polite"></p>
+    <p class="help" id="gUnavailable" hidden>Google sign-in is not set up in this version. Your stocks still work: prices come from Yahoo Finance.</p>
   </div>
 
   <div class="card" data-step="3">
     <h2>How you get the digest</h2>
-    <p class="what">Every digest is kept in Market Digest, under Home &gt; Recent digests. Choose how you hear about a new one.</p>
+    <p class="what">Every digest is kept in Market Digest, under Digests &gt; Recent digests. Choose how you hear about a new one.</p>
     <label class="switch"><input type="checkbox" id="notify"> Show a notice on my screen when it is ready</label>
     <label class="switch" style="margin-top:8px"><input type="checkbox" id="open_when_ready"> Open it in my browser when it is ready</label>
     <label class="switch" style="margin-top:8px"><input type="checkbox" id="email_on"> Also email it to me</label>
@@ -347,6 +372,8 @@ table.stocks input{width:100%}
     <p id="wizDoneText" style="margin:0 0 12px"></p>
     <div class="tests"><button type="button" class="primary" id="firstDigest">Make my first digest now</button><button type="button" id="wizFinish">Finish</button></div>
     <p class="help">The first digest covers the last 3 days, takes a few minutes and opens in your browser.</p>
+    <p class="help" id="wizGoogle" hidden><b>Next, recommended:</b> connect your Google account so your stocks are priced by Google Finance, in a sheet in your own Drive.
+      <a href="/settings#google">Connect Google Finance</a></p>
   </div>
 
   <div class="card" id="setupJob" hidden>
@@ -441,7 +468,7 @@ async function loadHome() {
     ['Videos included', (st.analysts.length ? `Only with ${st.analysts.map(a => a.split('/')[0].trim()).join(', ')}` : 'Every video from your channels')
       + (st.markets_only ? '; markets and stocks only' : '')],
     ['Summaries', [st.weekly ? 'weekly (Saturdays)' : '', st.monthly ? 'monthly (the 1st)' : ''].filter(Boolean).join(' and ') || 'Off'],
-    ['Your stocks', st.stocks ? `${st.stocks} watched${st.holdings ? `, ${st.holdings} with shares` : ''} · see the Dashboard` : (st.watchlist ? 'From your watchlist sheet' : 'None yet (Settings > Your stocks)')],
+    ['Your stocks', st.stocks ? `${st.stocks} watched${st.holdings ? `, ${st.holdings} with shares` : ''} · see the Overview` : (st.watchlist ? 'From your watchlist sheet' : 'None yet (Settings > Your stocks)')],
     ['TipRanks', st.tipranks.on ? `On · ${st.tipranks.calls} look-ups used this month` : 'Off'],
     ['Claude', st.claude.connected ? 'Connected: ask Claude about your digest' : 'Not connected (Settings > Ask Claude)'],
     ['Chat', 'Ask about the videos on the Chat page'],
@@ -573,8 +600,8 @@ function fillSettings(s) {
   $('email_on').checked = s.email_to.length > 0;
   $('weekly').checked = s.weekly; $('monthly').checked = s.monthly;
   $('stockRows').textContent = '';
-  for (const t of s.watchlist) $('stockRows').append(stockRow(t, s.holdings[t]));
-  if (!s.watchlist.length) $('stockRows').append(stockRow('', ''));
+  fillStocks(s.watchlist.map(t => ({ ticker: t, shares: s.holdings[t], cost: (s.costs || {})[t] })));
+  showGoogle(s.google);
   emailMode = s.email_service && !(s.email_to.length && s.smtp_password.saved && !s.email_confirmed) ? 'service' : 'gmail';
   $('svc_email').value = s.email_confirmed || (s.email_to[0] || '');
   showEmailMode();
@@ -602,17 +629,37 @@ function showEmailMode() {
   $('svcDone').hidden = !S.email_confirmed; $('svcAsk').hidden = !!S.email_confirmed;
   $('svcDoneText').textContent = S.email_confirmed ? `✓ Your digests are emailed to ${S.email_confirmed}.` : '';
 }
-function stockRow(ticker, shares) {
-  const tr = document.createElement('tr'), t = document.createElement('input'), n = document.createElement('input'), rm = document.createElement('button');
-  t.type = 'text'; t.value = ticker || ''; t.placeholder = 'NVDA'; t.spellcheck = false; t.setAttribute('aria-label', 'Ticker'); t.style.textTransform = 'uppercase';
-  n.type = 'text'; n.inputMode = 'decimal'; n.value = shares == null ? '' : String(shares); n.placeholder = 'e.g. 10'; n.setAttribute('aria-label', 'Shares you own');
-  rm.type = 'button'; rm.textContent = 'Remove'; rm.onclick = () => { tr.remove(); if (!$('stockRows').children.length) $('stockRows').append(stockRow('', '')); changed(); };
-  for (const x of [t, n, rm]) { const td = document.createElement('td'); td.append(x); tr.append(td); }
+function stockRow(ticker, shares, cost) {
+  const tr = document.createElement('tr'), rm = document.createElement('button');
+  const box = (value, placeholder, label, mode) => { const i = document.createElement('input'); i.type = 'text'; i.value = value == null ? '' : String(value);
+    i.placeholder = placeholder; i.setAttribute('aria-label', label); if (mode) i.inputMode = mode; i.spellcheck = false; return i; };
+  const t = box(ticker, 'NVDA', 'Ticker'); t.style.textTransform = 'uppercase';
+  const n = box(shares, 'e.g. 10', 'Shares you own', 'decimal'), c = box(cost, 'e.g. 120.50', 'Price you paid per share', 'decimal');
+  rm.type = 'button'; rm.textContent = 'Remove'; rm.onclick = () => { tr.remove(); if (!$('stockRows').children.length) $('stockRows').append(stockRow('', '', '')); changed(); };
+  for (const x of [t, n, c, rm]) { const td = document.createElement('td'); td.append(x); tr.append(td); }
   return tr;
 }
 function stockValues() {
-  return [...$('stockRows').children].map(tr => { const [t, n] = tr.querySelectorAll('input'); return { ticker: t.value.trim(), shares: n.value.trim() }; })
-    .filter(r => r.ticker || r.shares);
+  return [...$('stockRows').children].map(tr => { const [t, n, c] = tr.querySelectorAll('input'); return { ticker: t.value.trim(), shares: n.value.trim(), cost: c.value.trim() }; })
+    .filter(r => r.ticker || r.shares || r.cost);
+}
+function fillStocks(rows) {
+  $('stockRows').textContent = '';
+  for (const r of rows) $('stockRows').append(stockRow(r.ticker, r.shares, r.cost));
+  if (!rows.length) $('stockRows').append(stockRow('', '', ''));
+}
+function showGoogle(g) {
+  if (!g) return;
+  $('gUnavailable').hidden = g.available || g.connected;
+  $('gOff').hidden = g.connected || !g.available; $('gOn').hidden = !g.connected;
+  if (g.connected) {
+    $('gOpen').href = g.url;
+    $('gOnText').textContent = '✓ Connected. Your stocks are kept in your portfolio sheet, priced by Google Finance' + (g.synced ? ` (last read ${g.synced.replace('T', ' at ')}).` : '.');
+  }
+  $('gBanner').hidden = !g.connected;
+  $('gBannerText').textContent = 'These come from your portfolio sheet. Change them here or in the sheet: saving here updates the sheet, and the sheet is read with every digest.';
+  if (g.problem) show($('r-google'), g.reconnect ? 'bad' : 'warn', (g.reconnect ? '✕ ' : '') + g.problem + (g.reconnect ? ' Click Connect Google again.' : ''));
+  if (g.reconnect) { $('gOff').hidden = false; }
 }
 function smtpVisibility() {
   $('emailBox').hidden = !$('email_on').checked;
@@ -666,7 +713,35 @@ document.querySelectorAll('.show').forEach(b => b.onclick = () => {
 $('addAnalyst').onclick = () => { const r = analystRow(''); $('analysts').append(r); r.querySelector('input').focus(); changed(); };
 $('addChan').onclick = () => { const r = chanRow(''); $('chans').append(r); r.querySelector('input').focus(); changed(); };
 $('form').addEventListener('input', e => { if (e.target.id === 'email_to' || e.target.id === 'email_on') smtpVisibility(); changed(); });
-$('addStock').onclick = () => { const r = stockRow('', ''); $('stockRows').append(r); r.querySelector('input').focus(); changed(); };
+$('addStock').onclick = () => { const r = stockRow('', '', ''); $('stockRows').append(r); r.querySelector('input').focus(); changed(); };
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async () => {
+  const f = $('importFile').files[0]; if (!f) return;
+  show($('r-prices'), 'busy', 'Reading ' + f.name + '…');
+  try {
+    const buf = new Uint8Array(await f.arrayBuffer()); let bin = '';
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    const r = await api('/api/import', { name: f.name, data: btoa(bin) });
+    const have = new Map(stockValues().filter(x => x.ticker).map(x => [x.ticker.toUpperCase(), x]));
+    for (const x of r.stocks) have.set(x.ticker, { ...(have.get(x.ticker) || {}), ...Object.fromEntries(Object.entries(x).filter(([, v]) => v !== '')) });
+    fillStocks([...have.values()]); changed();
+    show($('r-prices'), 'ok', '✓ ' + r.message);
+  } catch (e) { show($('r-prices'), 'bad', '✕ ' + e.message); }
+  $('importFile').value = '';
+};
+$('gSync').onclick = async () => {
+  $('gSync').disabled = true; show($('r-google'), 'busy', 'Reading your portfolio sheet and Google Finance prices (up to half a minute)…');
+  try { const r = await api('/api/google/sync', {}); S.google = r.google; showGoogle(r.google); fillStocks(r.stocks); dirty = false;
+        show($('r-google'), r.google.problem ? 'bad' : 'ok', (r.google.problem ? '✕ ' : '✓ ') + r.message); }
+  catch (e) { show($('r-google'), 'bad', '✕ ' + e.message); }
+  $('gSync').disabled = false;
+};
+$('gOffBtn').onclick = async () => {
+  if (!confirm('Disconnect Google? Your portfolio sheet stays in your Drive; Market Digest stops reading it.')) return;
+  try { const r = await api('/api/google/disconnect', {}); S.google = r.google; showGoogle(r.google); show($('r-google'), 'ok', 'Disconnected. Your stocks stay here, priced from Yahoo Finance.'); }
+  catch (e) { show($('r-google'), 'bad', '✕ ' + e.message); }
+};
+$('gConnect').onclick = e => { if (dirty) { e.preventDefault(); show($('r-google'), 'warn', 'Save your changes first, then connect Google.'); } };
 $('useGmail').onclick = () => { emailMode = 'gmail'; showEmailMode(); changed(); };
 $('useSvc').onclick = () => { emailMode = 'service'; showEmailMode(); changed(); };
 $('svcChange').onclick = () => { S.email_confirmed = ''; $('svcCodeBox').hidden = true; $('r-svc').textContent = ''; $('r-svc').className = 'result'; showEmailMode(); $('svc_email').focus(); };
@@ -738,6 +813,7 @@ window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); 
 // ---------------------------------------------------------------- the first run: three steps
 function showStep() {
   document.querySelectorAll('#form [data-step]').forEach(c => c.hidden = Number(c.dataset.step) !== step);
+  $('google').hidden = true;
   document.querySelectorAll('#steps li').forEach(li => { const n = Number(li.dataset.s); li.className = n === step ? 'on' : n < step ? 'past' : ''; });
   $('extras').hidden = true; $('claudeCard').hidden = true;
   $('back').hidden = step === 1; $('next').hidden = step === 3; $('save').hidden = step !== 3;
@@ -774,7 +850,8 @@ function finishWizard(r) {
   $('form').hidden = true; $('welcome').hidden = true; $('foot').hidden = true;
   $('wizDone').hidden = false;
   $('wizDoneText').textContent = r.schedule_ok ? r.schedule.replace('Scheduled', 'Your digest is made') : 'Your settings are saved. ' + r.schedule;
-  $('wizFinish').textContent = S.setup ? 'Finish' : 'Go to the home page';
+  $('wizFinish').textContent = S.setup ? 'Finish' : 'See my overview';
+  $('wizGoogle').hidden = !(S.google && S.google.available && !S.google.connected);
   window.scrollTo(0, 0);
 }
 $('next').onclick = nextStep;
@@ -799,6 +876,10 @@ async function loadSettings() {
   if (!s.version) return stale();
   s.setup = s.setup || new URLSearchParams(location.search).has('setup');
   fillSettings(s);
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('google') === 'connected') { show($('r-google'), 'ok', '✓ Google is connected and your portfolio sheet is made. Prices are being read now; the Overview shows them in a minute.'); $('google').scrollIntoView(); }
+  if (qs.get('google_error')) { show($('r-google'), 'bad', '✕ ' + qs.get('google_error')); $('google').scrollIntoView(); }
+  if (qs.has('google') || qs.has('google_error')) history.replaceState(null, '', '/settings' + (qs.has('setup') ? '?setup=1' : ''));
   if (s.setup || s.first_time) { $('nav').hidden = true; $('quit').hidden = s.setup; }
   if (s.first_time) { wizard = true; $('welcome').hidden = false; $('settingsHead').hidden = true; showStep(); }
   else if (s.setup) { $('finish').hidden = false; $('testDigest').hidden = false; foot('Your settings are kept from before. Change anything you like, or click Finish.', ''); }

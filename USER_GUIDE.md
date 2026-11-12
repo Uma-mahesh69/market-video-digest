@@ -10,8 +10,10 @@ shown in grey boxes. Copy them exactly.
 4. Your settings
 5. Everyday use: the email
    - 5a. Extras: a prices sheet, the Econova hub and TipRanks
-6. Everyday use: Market Digest (status, settings and chat)
-   - 6a. The dashboard
+6. Everyday use: Market Digest (overview, digests, chat and settings)
+   - 6a. The Overview: your stocks' check-up, and the dashboard
+   - 6d. Your stocks and Google Finance
+   - 6e. Privacy: where your data is
    - 6b. Weekly and monthly digests
    - 6c. Ask Claude about your digest
 7. Useful commands
@@ -104,7 +106,7 @@ What is different on a Mac:
 - If macOS asks whether Terminal may access your Desktop or Google Drive, click **Allow**.
 
 On both, a failed run is retried every 30 minutes, 3 times. If all fail, a desktop notice says so, and the
-Market Digest home page shows why.
+Market Digest **Digests** page shows why.
 
 ## 4. Your settings
 
@@ -267,13 +269,14 @@ logged; the digest itself is never held up.
 3. **Test with TipRanks** connects, reads Apple's analyst data and uses 1 call. (The same as
    `python digest.py --tipranks-check`.)
 
-## 6. Everyday use: Market Digest (status, settings and chat)
+## 6. Everyday use: Market Digest (overview, digests, chat and settings)
 
 Double-click **Market Digest** on the desktop. The page opens in your browser at `http://127.0.0.1:8765`; no other
 window appears. Only this computer can open it. **Quit** at the top right closes Market Digest (the daily digest
-still runs at its time); double-clicking the desktop icon opens it again. It has three parts:
+still runs at its time); double-clicking the desktop icon opens it again. It opens on the **Overview**, the check-up of
+your stocks (section 6a). The other parts:
 
-**Home** answers "did it work?":
+**Digests** answers "did it work?":
 - **Every day at 07:30. Next: tomorrow at 07:30.** A green dot means the daily run is set; amber means it is turned
   off; red means the settings say on but the computer has no schedule (click **Save** in Settings to set it again).
 - **Last digest today at 07:31: 5 new videos, emailed.** Red if the last run failed, with the reason in plain words
@@ -283,7 +286,7 @@ still runs at its time); double-clicking the desktop icon opens it again. It has
 - **Recent digests** opens any of the last 8 digests. **Where things go** lists who gets the email, where the data
   files are saved, and how many TipRanks look-ups this month used. **Show the log** shows what each run did.
 
-When a newer version is out, a blue bar on Home says so: **Update now** installs it in a few seconds and keeps
+When a newer version is out, a blue bar on the Digests page says so: **Update now** installs it in a few seconds and keeps
 your settings, videos and chats.
 
 **Settings** has everything from the setup, filled in, each with a Test button.
@@ -306,10 +309,24 @@ Good questions to start with:
 - *Where do the channels disagree?*
 - *Explain the points about Treasury yields in plain terms.*
 
-## 6a. The dashboard
+## 6a. The Overview: your stocks' check-up, and the dashboard
 
-**Market Digest > Dashboard** shows what your digests add up to, for the last 7, 30 or 90 days. It updates by
-itself after every digest. Every section starts with a line saying what it shows; in short:
+Market Digest opens on the **Overview**. It starts with **Your stocks**: what your stocks are worth (if you gave the
+shares you own) and a card for each stock you own or watch, the ones that need attention first:
+
+- **A verdict in plain words**: *Analysts are positive*, *mixed*, *cautious*, or *Not enough analyst views yet*.
+  It weighs the bullish and bearish calls in your channels' videos (a call counts more from an analyst whose calls
+  have beaten the S&P 500, and less from one whose have not) together with Wall Street's rating from TipRanks.
+  "Based on ..." says what it rests on.
+- **+ points for**, **− points against** (including too much of your money in one stock), **◷ what to watch**
+  (earnings soon, the videos and Wall Street disagreeing), and under **More**: things worth knowing (the price far
+  from its high, how earlier calls on it turned out) and the latest calls, each linked to the moment in the video.
+- Above the cards, notes on your portfolio as a whole: one stock taking a big share, few stocks, stocks with no
+  analyst views.
+
+It is a summary to help you decide, not advice to buy or sell. Below your stocks, **What the analysts said** shows
+what your digests add up to, for the last 7, 30 or 90 days. It updates by itself after every digest. Every section
+starts with a line saying what it shows; in short:
 
 - **The four numbers at the top**: how many videos were read; the mood (the share of bullish calls among bullish and
   bearish ones); and how often the **bullish calls beat the S&P 500** and the **bearish calls lagged it**.
@@ -345,7 +362,7 @@ each video:
 - *"Give me a morning briefing."* (also in Claude's **+** menu as **morning-briefing**, with **stock-view** and
   **weekly-dashboard**)
 - *"Build me a dashboard of this week's calls."* (or *"How did my analysts' calls do this month?"*, from the same numbers
-  as the Dashboard page)
+  as the Overview page)
 - *"Add Bloomberg Television to my channels and follow Mike Wilson."* (Claude asks before changing anything.)
 
 To turn it on: **Market Digest > Settings > Ask Claude about your digest > Connect to Claude**, then quit the Claude
@@ -359,6 +376,41 @@ What to know:
 - It works with the Claude desktop app (Windows or Mac), on any Claude plan that allows local tools. In Claude Code,
   use `claude mcp add market-digest -- python mcp_server.py` from the program folder.
 - Claude's answers are information, not investment advice.
+
+## 6d. Your stocks and Google Finance
+
+You can give Market Digest your stocks in three ways (Settings > **Your stocks**):
+
+1. **Connect Google (recommended).** Click **Connect Google** in Settings, sign in, and allow Market Digest to use
+   "only the specific Google Drive files you use with this app". It creates **Market Digest - My portfolio** in your
+   Drive, with the stocks you had typed. In its **My stocks** tab, type a ticker (NVDA, or NASDAQ:NVDA), the shares
+   you own (empty if you only watch it) and the price you paid; Google Finance fills in the name, price, today's
+   change, value, gain, 52-week range and P/E. Edit it in Google Sheets (on your phone too) or in Market Digest:
+   saving in Market Digest updates the sheet, and the sheet is read with every digest (or **Update from the sheet
+   now**). Do not edit the **Prices** tab: Market Digest keeps it.
+2. **Type them in Settings**: ticker, shares, price paid. Prices then come from Yahoo Finance.
+3. **Import from a file**: in your current tracker (Google Sheets, Excel), download the tab with your stocks as .csv
+   or .xlsx (Google Sheets: File > Download) and choose it under **Import from a file**. It reads the Ticker or Symbol
+   column, and Shares and Cost columns if there are any. Check the rows, then **Save**.
+
+Tickers: US stocks as they are (AAPL, BRK-B). Elsewhere, either Google's form (KRX:005930, LON:VOD) or Yahoo's
+(005930.KS, VOD.L); Market Digest converts between them.
+
+Google's web Google Finance portfolios (google.com/finance) cannot be read by any app; copy those stocks into your
+sheet once.
+
+## 6e. Privacy: where your data is
+
+- **On your computer**: your settings and keys (`digest_config.json`), your stocks and share counts, the saved
+  videos, digests and chats, and the prices. Nothing is sent to a Market Digest server: there is none.
+- **In your Google account**, if you connect Google: your portfolio sheet. Market Digest can open only the files it
+  created; it cannot see anything else in your Drive. Google Account > Security > Third-party access shows and can
+  remove it; **Disconnect** in Settings does the same (the sheet stays yours).
+- **Sent to Google Gemini**: each video's captions and the numbers behind the weekly opening, to be summarised.
+  Your stocks and share counts are not.
+- **Sent to TipRanks**, if you add a key: the tickers to look up.
+- **The email service**, if you use it: your address, and each digest it sends (a copy stays in the sender's Sent
+  folder). The digest email lists your watchlist's prices but never your share counts.
 
 ## 7. Useful commands
 
@@ -390,7 +442,7 @@ for example `python3 digest.py --check`. To start the scheduled run now:
 
 - **Change channels, email, keys or time:** Market Digest > **Settings**, then **Save**. Saving also updates the
   daily schedule. To pause the digest, untick **Make the digest every day** and save.
-- **Update to a new version:** open Market Digest. When a newer version is out, a blue bar on Home says so; click
+- **Update to a new version:** open Market Digest. When a newer version is out, a blue bar on the Digests page says so; click
   **Update now**. It takes a few seconds and keeps your settings, saved digests and chats. (By hand: get the new
   files and double-click the installer again; the page opens with your settings filled in, click **Finish**.
   `install.bat -Unattended` does the same without opening the page.)
@@ -405,7 +457,7 @@ for example `python3 digest.py --check`. To start the scheduled run now:
 
 ## 9. If something goes wrong
 
-Open **Market Digest**. The home page says whether the last run worked and, if not, why. In **Settings**, click each
+Open **Market Digest** > **Digests**. It says whether the last run worked and, if not, why. In **Settings**, click each
 **Test** button: the one that fails names the problem. Then see [TROUBLESHOOTING.md](TROUBLESHOOTING.md), which lists
 each problem we have actually seen, its cause and the fix.
 
@@ -415,6 +467,6 @@ The most common:
 |---|---|
 | "Google says this key is not valid" | Copy the key again from Google AI Studio and paste the whole key. |
 | "Gmail did not accept this address and app password" | Use a Gmail **app password** (16 letters), not your normal password. |
-| No email today | The home page says why. "No new videos" means the channels posted nothing new. |
+| No email today | Market Digest > Digests says why. "No new videos" means the channels posted nothing new. |
 | "Market Digest stopped responding" | It was closed (Quit, or the computer restarted). Double-click **Market Digest** again. |
 | The chat says web search was not available | Normal on a free Gemini key. Web search needs billing. |

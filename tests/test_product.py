@@ -189,7 +189,7 @@ class ClaudeTools(Folder):
         self.assertIn("not investment advice", hello["instructions"])
         self.assertIsNone(mcp_server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
         tools = mcp_server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
-        self.assertEqual(len(tools), 9)
+        self.assertEqual(len(tools), 10)
         for t in tools:
             self.assertEqual(t["inputSchema"]["type"], "object")
         self.assertEqual(len(mcp_server.handle({"jsonrpc": "2.0", "id": 3, "method": "prompts/list"})["result"]["prompts"]), 3)
@@ -354,3 +354,60 @@ class Scoring(unittest.TestCase):
         self.assertEqual(period.bounds("month", date(2026, 11, 11)), (date(2026, 10, 1), date(2026, 11, 1), "2026-10"))
         self.assertEqual(period.due({}, {"last_week": "2026-11-07", "last_month": "2026-10"}, date(2026, 11, 11)), [])
         self.assertEqual(period.due({"monthly": False}, {}, date(2026, 11, 14)), ["week"])
+
+
+class Checkup(Folder):
+    """The plain-language check-up of each stock."""
+
+    def setUp(self):
+        super().setUp()
+        digest.CACHE_DIR.mkdir()
+        from datetime import date, datetime, timedelta, timezone
+        self.today = date.today()
+        n = 0
+        for view, ticker, who, count in (("bullish", "NVDA", "Dan Ives", 5), ("bearish", "TSLA", "Mike Wilson", 3), ("bullish", "TSLA", "Tom Lee", 1)):
+            for _ in range(count):
+                n += 1
+                when = datetime.now(timezone.utc) - timedelta(days=n % 10 + 1)
+                (digest.CACHE_DIR / f"v{n:010d}.json").write_text(json.dumps({
+                    "summary": "s", "speakers": [{"name": who}], "stocks": [{"name": ticker, "ticker": ticker, "view": view, "reason": "r", "analyst": who}],
+                    "_video": {"id": f"v{n:010d}", "title": "t", "channel": "c", "published": when.isoformat(), "url": f"https://www.youtube.com/watch?v=v{n:010d}"}}))
+        self.patch = mock.patch.object(app.insights, "tipranks_latest", lambda cfg: {"NVDA": {"ticker": "NVDA", "consensus": "Strong Buy", "upside_pct": 20.0, "days_to_earnings": 4}})
+        self.patch.start()
+        self.cache = mock.patch.object(app.prices, "CACHE", self.tmp / "prices.json")
+        self.cache.start()
+        rows = [[(self.today - timedelta(days=i)).isoformat(), 100.0] for i in range(30, -1, -1)]
+        (self.tmp / "prices.json").write_text(json.dumps({"NVDA": {"closes": rows}, "TSLA": {"closes": rows}, "AAPL": {"closes": rows}, "^GSPC": {"closes": rows}}))
+
+    def tearDown(self):
+        self.patch.stop()
+        self.cache.stop()
+        super().tearDown()
+
+    def test_verdicts_and_reasons(self):
+        c = app.insights.checkup({"watchlist": ["NVDA", "TSLA", "AAPL"], "holdings": {"NVDA": 10, "TSLA": 1}}, days=30)
+        by = {s["ticker"]: s for s in c["stocks"]}
+        self.assertEqual(by["NVDA"]["verdict"], "positive")
+        self.assertIn("Strong Buy", " ".join(by["NVDA"]["for"]))
+        self.assertTrue(any("Earnings in 4 days" in w for w in by["NVDA"]["watch"]))
+        self.assertEqual(by["TSLA"]["verdict"], "cautious")
+        self.assertIn("3 of 4 analyst calls", " ".join(by["TSLA"]["against"]))
+        self.assertEqual(by["AAPL"]["verdict"], "quiet")
+        self.assertEqual([s["ticker"] for s in c["stocks"]][:2], ["TSLA", "NVDA"])   # what you own first, the cautious ones on top
+        self.assertTrue(any("NVDA is 91%" in h for h in c["health"]))                # too much in one stock
+        self.assertTrue(any("cautious on TSLA" in h for h in c["health"]))
+
+    def test_a_record_is_trusted_only_when_it_beat_the_market_and_was_right_half_the_time(self):
+        self.assertTrue(app.insights.good_record({"scored": 4, "edge": 2.0, "hit_pct": 75}))
+        self.assertFalse(app.insights.good_record({"scored": 29, "edge": 0.5, "hit_pct": 41}))
+        self.assertFalse(app.insights.good_record({"scored": 2, "edge": 5.0, "hit_pct": 100}))
+
+
+class Import(unittest.TestCase):
+    def test_a_google_tracker_exported_as_csv(self):
+        import base64
+        text = "Investment tracker\n\nSymbol,Stock name,# Shares,Cost per share\nNASDAQ:NVDA,NVIDIA,20,120.5\nAAPL,Apple,\"1,500\",\nTotal,,,\n"
+        got = app.import_file({"name": "t.csv", "data": base64.b64encode(text.encode()).decode()})
+        self.assertEqual(got["stocks"], [{"ticker": "NVDA", "shares": "20", "cost": "120.5"}, {"ticker": "AAPL", "shares": "1500", "cost": ""}])
+        with self.assertRaises(ValueError):
+            app.import_file({"name": "x.csv", "data": base64.b64encode(b"a,b\n1,2\n").decode()})

@@ -1,30 +1,28 @@
-# Market Video Digest
+# Market Digest
 
-Every morning, a digest of what the finance YouTube channels you follow said, so you don't have to watch them. It
-comes with **Market Digest**, an app on your computer with a **dashboard** of the analysts' calls and how they turned
-out, **weekly and monthly** summaries, your settings, and a chat about the videos.
+**A check-up of your own stocks, every morning, from what the analysts are saying.** Market Digest reads the finance
+YouTube channels you follow, checks each of your stocks against what the analysts said, how good their calls have
+been, Wall Street's rating (TipRanks) and the price from **Google Finance**, and shows it all on one clear page that
+needs no finance background.
 
-Every morning it:
+It runs on **your own computer** (Windows or Mac). Your stocks stay in your own Google account and on your computer;
+there is no Market Digest server. The only online services are the ones that do the thinking and the prices:
+Google Gemini (free key), Google Finance, and optionally TipRanks.
 
-1. checks your channels for new videos (only those with the analysts you follow, if you choose),
-2. reads each video's captions,
-3. has Google Gemini pull out what matters: the main points, stocks and each analyst's view on them, market
-   levels quoted, predictions, risks and upcoming events,
-4. shows you one digest (on screen, in your browser, and by email if you like), where every point links to the
-   exact moment in the video where it was said.
+What you see:
 
-It runs on your own Windows PC or Mac and keeps your data there. The only key you need is a free Gemini key.
+- **Overview**: each stock you own or watch, with a plain verdict ("Analysts are positive / mixed / cautious") and
+  why: the points for and against, whose calls have been good, Wall Street's rating and price target, the price
+  moves, and what to watch (earnings, disagreements). Plus notes on your portfolio as a whole, like too much in one
+  stock. Below it: the stocks the analysts talked about, how their calls did against the S&P 500, each analyst's
+  record, the mood day by day, and what is coming up. A glossary explains every term.
+- **Your stocks from Google Finance**: connect Google and your stocks live in a sheet in your own Drive, priced by
+  Google Finance; edit it there or in the app. Or type them in, or import your current tracker.
+- **Daily, weekly and monthly digests**: on screen, in your browser and by email if you like (just your address, no
+  password), every point linked to the moment in the video where it was said.
+- **Only the analysts you follow**, **a chat** about the videos, and **Claude** connected to your own data.
 
-What you get in Market Digest:
-
-- **Dashboard**: what matters now, the stocks the analysts talked about and which way they lean, how their calls did
-  against the S&P 500, each analyst's record, your holdings by weight, the mood day by day, what is coming up.
-- **Weekly and monthly digests**: the period's story, the most-discussed stocks, the best and worst calls.
-- **Your stocks**: type your watchlist (and shares, if you like); prices are fetched by your computer.
-- **Email with just your address**: confirm it with a code; no Gmail password needed.
-- **Claude**: one click lets the Claude desktop app answer questions from your own digest.
-- **Extras** for advanced use: a Google Drive folder of daily JSON files (the Econova hub), a Google Finance prices
-  sheet, and Wall Street's view from TipRanks.
+Market Digest sums up what analysts said and what prices did, to help you decide. It is not investment advice.
 
 ## Quick start (Windows or Mac)
 
@@ -37,7 +35,8 @@ password** (https://myaccount.google.com/apppasswords). The settings page links 
    - Windows says "Windows protected your PC"? Click **More info > Run anyway**.
    - macOS says it cannot check the file? Right-click it > **Open** > **Open**.
 3. **The setup page opens in your browser: three short steps.** Paste your Gemini key, click the channels and analysts
-   you want, pick a time. Then **Save and finish** and **Make my first digest now**.
+   you want, add your stocks, pick a time. Then **Save and finish** and **Make my first digest now**.
+4. **Recommended:** Settings > **Connect Google**, so your stocks are priced by Google Finance in a sheet in your own Drive.
 
 That's it. Each morning's digest opens in your browser with a notice on screen (email is optional), and
 **Market Digest** is on your desktop: it shows whether the last digest worked, holds the settings, has the chat, and
@@ -47,11 +46,12 @@ updates itself in one click when a new version is out.
 
 | I want to... | Do this |
 |---|---|
-| Read today's digest | It opens by itself when ready (or **Market Digest** > Home > Recent digests, or the email). |
-| See how the analysts' calls are doing | **Market Digest** > **Dashboard** (7, 30 or 90 days). |
+| Read today's digest | It opens by itself when ready (or **Market Digest** > Digests > Recent digests, or the email). |
+| Check my stocks | **Market Digest** opens on the **Overview**: a check-up of each stock you own or watch. |
+| See how the analysts' calls are doing | **Overview**, below your stocks (7, 30 or 90 days). |
 | Weekly and monthly summaries | Arrive by themselves on Saturdays and on the 1st (Settings > How you get the digest). |
-| Add my stocks | **Settings > Your stocks**: tickers, and shares if you want your holdings on the dashboard. |
-| Know whether it ran, and why not | **Market Digest** (desktop). The home page shows the last run, in plain words. |
+| Add my stocks | **Settings > Your stocks** (or your Google portfolio sheet once Google is connected), or **Import from a file**. |
+| Know whether it ran, and why not | **Market Digest** > **Digests** shows the last run, in plain words. |
 | Change channels, email, keys or time | **Market Digest** > Settings. Each setting has a Test button. |
 | Ask about the videos | **Market Digest** > Chat. Or connect the Claude desktop app (Settings > Ask Claude) and ask Claude. |
 | Get a digest right now | **Market Digest** > Make today's digest now |
@@ -61,7 +61,7 @@ updates itself in one click when a new version is out.
 | Add past days to the JSON folder | `python email_backfill.py digests\digest-*.html` (USER_GUIDE.md, 5a) |
 | See the dashboard | Open it in Claude (the link is in the Drive folder's START HERE doc). Every number has an (i) that explains it. |
 | Add Wall Street's view | Get a key at https://mcp.tipranks.com/ (Keys) and paste it in Settings > TipRanks |
-| Update to the newest version | **Market Digest** > Home > **Update now** (shown when a new version is out; settings are kept) |
+| Update to the newest version | **Market Digest** > Digests > **Update now** (shown when a new version is out; settings are kept) |
 | Close it | **Quit** at the top right of the page. The daily digest still runs. |
 
 ## Documents
@@ -70,6 +70,7 @@ updates itself in one click when a new version is out.
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: what to do when something goes wrong.
 - **[CHANGELOG.md](CHANGELOG.md)**: what changed in each version.
 - **[email_service/README.md](email_service/README.md)**: setting up the email service (once, by the developer).
+- **[docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md)**: setting up "Connect Google" (once, by the developer).
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: how it works inside, for developers. *(In `docs/`, not in the setup zip.)*
 - **[PRESENTATION.md](docs/PRESENTATION.md)**: a 6-slide overview of the project. *(In `docs/`, not in the setup zip.)*
 

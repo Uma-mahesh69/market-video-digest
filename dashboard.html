@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dashboard · Market Digest</title>
+<title>Market Digest</title>
 <style>
 :root{--paper:#F4F6F9;--surface:#FFFFFF;--ink:#16202E;--muted:#5C6878;--line:#DCE2EA;--blue:#2447C5;--blue-soft:#E8EDFB;
   --red:#B42318;--red-soft:#FDECEA;--green:#1A7F37;--green-soft:#E6F4EA;--amber:#8A5A00;--amber-soft:#FFF4D6;--grey:#AEB7C4;
@@ -62,17 +62,70 @@ svg text{font:11px var(--sans);fill:var(--muted)}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .note{background:var(--amber-soft);color:var(--amber);border-radius:8px;padding:10px 12px;font-size:14px;margin:0 0 16px}
+.summary{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline;margin:0 0 6px}
+.summary .big{font:600 30px/1.2 var(--serif)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+.chip{font-size:13px;border-radius:999px;padding:3px 10px;background:var(--paper);border:1px solid var(--line)}
+.health{list-style:none;margin:12px 0 0;padding:0}
+.health li{background:var(--amber-soft);color:var(--amber);border-radius:8px;padding:8px 12px;margin:0 0 8px;font-size:14px}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:0 0 16px}
+.check{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-top:4px solid var(--grey)}
+.check.positive{border-top-color:var(--green)}.check.cautious{border-top-color:var(--red)}.check.mixed{border-top-color:#D29922}
+.check .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.check .t{font:600 20px/1.2 var(--serif)}
+.check .n{font-size:13px;color:var(--muted)}
+.check .px{text-align:right;font-variant-numeric:tabular-nums}
+.check .px b{display:block;font-size:17px}
+.verdict{display:inline-block;margin:10px 0 2px;font-weight:600;font-size:15px;border-radius:6px;padding:3px 10px}
+.verdict.positive{background:var(--green-soft);color:var(--green)}.verdict.cautious{background:var(--red-soft);color:var(--red)}
+.verdict.mixed{background:var(--amber-soft);color:var(--amber)}.verdict.quiet{background:var(--paper);color:var(--muted)}
+.basis{font-size:12px;color:var(--muted);margin:0 0 8px}
+.pts{list-style:none;margin:6px 0 0;padding:0;font-size:14px}
+.pts li{position:relative;padding:3px 0 3px 22px}
+.pts li::before{position:absolute;left:0;top:3px;font-weight:700}
+.pts .g::before{content:"+";color:var(--green)}.pts .b::before{content:"\2212";color:var(--red)}
+.pts .k::before{content:"i";color:var(--blue);font-style:italic}.pts .w::before{content:"\25F7";color:#D29922}
+.owned{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--blue);background:var(--blue-soft);border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:3px}
+.check details{margin-top:8px;font-size:13px}
+.check details summary{cursor:pointer;color:var(--blue)}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.cta a.btn{display:inline-block;padding:8px 14px;border-radius:6px;text-decoration:none;border:1px solid var(--line)}
+.cta a.btn.primary{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
+dl.gloss{display:grid;grid-template-columns:minmax(140px,auto) 1fr;gap:8px 16px;margin:12px 0 0;font-size:14px}
+dl.gloss dt{font-weight:600}dl.gloss dd{margin:0;color:var(--muted)}
+h2.section{font:600 22px/1.3 var(--serif);margin:26px 0 4px}
 @media (max-width:820px){.tiles{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.bar{padding:10px 16px;gap:10px}main{padding:16px}}
 @media (max-width:640px){.bar{flex-wrap:wrap;row-gap:6px;padding:8px 12px}.bar nav{order:3;width:100%;overflow-x:auto}.bar nav a{padding:5px 9px}.bar .ver{display:none}}
 </style></head>
 <body>
 <header class="bar">
   <a class="brand" href="/">Market Digest</a>
-  <nav><a href="/">Home</a><a href="/dashboard" aria-current="page">Dashboard</a><a href="/chat">Chat</a><a href="/settings">Settings</a></nav>
+  <nav><a href="/" aria-current="page">Overview</a><a href="/digests">Digests</a><a href="/chat">Chat</a><a href="/settings">Settings</a></nav>
+  <span style="flex:1"></span>
+  <button type="button" id="quit" style="border:0;background:none;color:var(--blue);text-decoration:underline;padding:0" title="Close Market Digest. The daily digest still runs.">Quit</button>
 </header>
 <main>
+  <section id="mine">
+    <h1>Your stocks</h1>
+    <p class="lead" id="mineLead">Loading…</p>
+    <div class="card" id="mineSummary" hidden>
+      <div class="summary"><span class="big" id="worth"></span><span id="worthDay"></span><span class="small" id="worthSrc"></span></div>
+      <div class="chips" id="verdictChips"></div>
+      <ul class="health" id="health"></ul>
+    </div>
+    <div class="card" id="mineEmpty" hidden>
+      <h2>Add your stocks to get a check-up</h2>
+      <p class="what" style="margin-bottom:0">Tell Market Digest which stocks you own or watch. For each one, it puts together what the analysts in your
+        channels said, how good their calls have been, Wall Street's view and the price, in plain words.</p>
+      <div class="cta"><a class="btn primary" href="/settings#stocks">Add my stocks</a><a class="btn" id="ctaGoogle" href="/settings#google" hidden>Connect Google Finance</a></div>
+    </div>
+    <div class="checks" id="checks"></div>
+    <p class="small" id="mineFoot"></p>
+  </section>
+
+  <h2 class="section">What the analysts said</h2>
   <div class="head">
-    <div><h1>Dashboard</h1></div>
+    <div></div>
     <span class="sp"></span>
     <div role="group" aria-label="Period" id="periods">
       <button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button>
@@ -83,7 +136,7 @@ svg text{font:11px var(--sans);fill:var(--muted)}
 
   <div id="empty" class="card" hidden>
     <h2>Nothing here yet</h2>
-    <p class="empty">The dashboard fills in from your digests. Make one on the <a href="/">Home page</a> ("Make today's digest now"), then come back.</p>
+    <p class="empty">This fills in from your digests. Make one on the <a href="/digests">Digests page</a> ("Make today's digest now"), then come back.</p>
   </div>
 
   <div id="body" hidden>
@@ -100,7 +153,7 @@ svg text{font:11px var(--sans);fill:var(--muted)}
     <ul class="signals" id="signals"></ul>
   </div>
 
-  <div class="card" id="holdCard" hidden>
+  <div class="card" id="holdCard" hidden style="display:none">
     <h2>Your holdings</h2>
     <p class="what">Weight is each stock's share of what your holdings are worth now. Share counts stay on this computer (Settings &gt; Your stocks).</p>
     <div class="scroll"><table><thead><tr><th>Stock</th><th class="num">Weight</th><th class="num">Price</th><th class="num">Today</th><th class="num">1 month</th><th class="num">From 1-year high</th><th class="num">Calls (bull / bear)</th></tr></thead><tbody id="holdings"></tbody></table></div>
@@ -145,6 +198,27 @@ svg text{font:11px var(--sans);fill:var(--muted)}
   </div>
   <p class="small" id="foot"></p>
   </div>
+
+  <div class="card">
+    <details>
+      <summary><b>What do these words mean?</b></summary>
+      <dl class="gloss">
+        <dt>Bullish</dt><dd>The analyst expects the stock (or the market) to go up.</dd>
+        <dt>Bearish</dt><dd>The analyst expects it to go down.</dd>
+        <dt>Neutral or mixed</dt><dd>No clear view either way, or good and bad points together.</dd>
+        <dt>S&amp;P 500</dt><dd>An index of the 500 largest US companies: the usual yardstick for "the market". A call is counted as right when the stock did better than it (bullish) or worse (bearish).</dd>
+        <dt>Average edge</dt><dd>How many percentage points an analyst's calls beat the S&amp;P 500 by, on average. Above zero is good.</dd>
+        <dt>Wall Street's rating</dt><dd>The consensus of professional analysts at banks and brokers, from TipRanks: Strong Buy, Moderate Buy, Hold, Moderate Sell or Strong Sell.</dd>
+        <dt>Price target</dt><dd>The price those analysts expect in about 12 months. "+18%" means 18% above today's price.</dd>
+        <dt>52-week (1-year) high</dt><dd>The highest price in the past year. Far below it can mean a bargain or a company in trouble: the analysts' reasons tell you which.</dd>
+        <dt>Weight</dt><dd>A stock's share of what all your stocks are worth.</dd>
+        <dt>Earnings</dt><dd>The day a company reports its results. The price often moves a lot that day.</dd>
+        <dt>P/E</dt><dd>Price divided by a year's profit per share: how many years of today's profit the price pays for. Higher usually means more growth is expected.</dd>
+      </dl>
+    </details>
+  </div>
+  <p class="small">Market Digest sums up what analysts said and what prices did, to help you decide. It is not advice to buy or sell, and it can be wrong:
+    captions mishear things and analysts are often wrong. For decisions that matter, talk to a licensed financial adviser.</p>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -164,14 +238,68 @@ function stack(r) {
   return s;
 }
 
+const fmtMoney = (x, cur) => x == null ? '—' : x.toLocaleString(undefined, { style: cur && cur.length === 3 ? 'currency' : 'decimal', currency: cur && cur.length === 3 ? cur : undefined, maximumFractionDigits: x >= 1000 ? 0 : 2 });
+function points(list, cls) { const ul = el('ul', 'pts'); for (const t of list) ul.append(el('li', cls, t)); return ul; }
+
+function drawCheckup(c, g) {
+  const box = $('checks'); box.textContent = '';
+  const n = c.stocks.length;
+  $('mineEmpty').hidden = n > 0; $('mineSummary').hidden = n === 0;
+  $('ctaGoogle').hidden = !(g && g.available && !g.connected);
+  if (!n) { $('mineLead').textContent = 'No stocks yet.'; return; }
+  $('mineLead').textContent = `What the analysts say about the ${c.owned ? c.owned + ' stock' + (c.owned === 1 ? '' : 's') + ' you own' : ''}${c.owned && c.watched ? ' and ' : ''}${c.watched ? c.watched + ' you watch' : ''}, over the last ${c.days} days.`;
+  $('worth').textContent = c.total_value != null ? fmtMoney(c.total_value, c.currency) : (c.owned ? '' : 'Watching ' + c.watched + ' stocks');
+  $('worthDay').textContent = c.day_change_pct != null ? `${pct(c.day_change_pct)} today` : '';
+  $('worthDay').className = tone(c.day_change_pct);
+  $('worthSrc').textContent = c.total_value != null ? 'what your stocks are worth' : '';
+  const chips = $('verdictChips'); chips.textContent = '';
+  for (const [v, label] of [['positive', 'positive'], ['mixed', 'mixed'], ['cautious', 'cautious'], ['quiet', 'not enough views']]) {
+    if (c.counts[v]) chips.append(el('span', 'chip', `${c.counts[v]} ${label}`));
+  }
+  const h = $('health'); h.textContent = '';
+  for (const t of c.health) h.append(el('li', null, t));
+  for (const s of c.stocks) {
+    const card = el('article', 'check ' + s.verdict);
+    const top = el('div', 'top'), who = el('div');
+    const t = el('div', 't', s.ticker); t.append(el('span', 'owned', s.owned ? (s.weight_pct ? `you own · ${s.weight_pct}%` : 'you own') : 'watching'));
+    who.append(t, el('div', 'n', s.name || ''));
+    const px = el('div', 'px');
+    if (s.price != null) { px.append(el('b', null, fmtMoney(s.price, s.currency))); px.append(el('span', 'small ' + tone(s.change_pct_day), `${pct(s.change_pct_day)} today`)); }
+    top.append(who, px); card.append(top);
+    card.append(el('span', 'verdict ' + s.verdict, s.verdict_text));
+    card.append(el('p', 'basis', 'Based on ' + s.basis + (s.gain_pct != null ? ` · your gain: ${pct(s.gain_pct)}` : '')));
+    if (s.for.length) card.append(points(s.for, 'g'));
+    if (s.against.length) card.append(points(s.against, 'b'));
+    if (s.watch.length) card.append(points(s.watch, 'w'));
+    const more = [...s.worth_knowing];
+    if (more.length || s.latest.length) {
+      const det = el('details'), sum = el('summary', null, 'More: ' + [more.length ? 'worth knowing' : '', s.latest.length ? 'latest calls' : ''].filter(Boolean).join(' and '));
+      det.append(sum);
+      if (more.length) det.append(points(more, 'k'));
+      for (const l of s.latest) {
+        const p = el('p'); p.style.margin = '6px 0 0';
+        p.append(el('span', 'pill ' + l.view, l.view), ' ', link(`${l.analyst || l.channel}, ${short(l.day)}`, l.link));
+        if (l.reason) p.append(el('div', 'small', l.reason));
+        det.append(p);
+      }
+      card.append(det);
+    }
+    box.append(card);
+  }
+  const src = c.stocks.find(s => s.source) ? c.stocks.find(s => s.source).source : '';
+  $('mineFoot').textContent = src ? `Prices: ${src}${g && g.connected ? ' (your portfolio sheet)' : ''}.` : '';
+}
+
 async function load() {
   document.querySelectorAll('#periods button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days)));
   let d;
   try { const r = await fetch('/api/dashboard?days=' + days); d = await r.json(); if (!r.ok) throw new Error(d.error); }
   catch (e) { $('lead').textContent = 'Market Digest stopped. Start it again with Market Digest on the desktop.'; return; }
+  if (!d.configured) { location.href = '/settings'; return; }
+  drawCheckup(d.checkup, d.google);
   $('lead').textContent = `${short(d.start)} to ${short(d.end)}: ${d.videos} videos from ${d.channels} channel${d.channels === 1 ? '' : 's'}, ${d.calls} stock calls.`;
   $('empty').hidden = d.videos > 0; $('body').hidden = d.videos === 0;
-  $('noPrices').hidden = !!d.prices_as_of;
+  $('noPrices').hidden = !!d.prices_as_of || !d.videos;
   $('noPrices').textContent = 'Prices have not been fetched yet, so calls cannot be scored. They are fetched with each digest; the next one fills this in.';
   if (!d.videos) return;
 
@@ -293,6 +421,10 @@ function drawMood(series) {
   box.append(svg);
 }
 
+$('quit').onclick = async () => {
+  try { await fetch('/api/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) {}
+  document.querySelector('main').innerHTML = '<div class="card"><h1>Market Digest is closed</h1><p class="lead">The daily digest still runs at its time. To open this page again, double-click Market Digest on the desktop.</p></div>';
+};
 document.querySelectorAll('#periods button').forEach(b => b.onclick = () => { days = Number(b.dataset.days); try { localStorage.setItem('mdDays', days); } catch (e) {} load(); });
 load();
 </script>
