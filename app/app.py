@@ -51,7 +51,7 @@ PORT = 8765
 LABEL = "com.nugenix.market-digest"   # the launchd job on a Mac
 TASK = "Market video digest"          # the Task Scheduler task on Windows
 SECRETS = ("gemini_api_key", "smtp_password", "tipranks_api_key", "email_key", "google_token")   # never sent to the page
-DEFAULTS = {"channels": ["https://www.youtube.com/@TheStreet"], "email_to": [], "smtp_user": "", "json_dir": "", "watchlist_csv": "",
+DEFAULTS = {"channels": ["https://www.youtube.com/@CNBCtelevision", "https://www.youtube.com/@markets", "https://www.youtube.com/@YahooFinance"], "email_to": [], "smtp_user": "", "json_dir": "", "watchlist_csv": "",
             "daily_time": "07:30", "schedule_on": True, "lookback_hours": 26, "max_videos": 20, "analysts": [], "markets_only": True,
             "notify": True, "watchlist": [], "holdings": {}, "weekly": True, "monthly": True}
 REPO = "Uma-mahesh69/market-video-digest"

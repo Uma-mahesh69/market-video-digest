@@ -122,6 +122,8 @@ Terminal window, press Return. A folder made with `git clone` does not have eith
 
 Python from python.org needs its certificates installed once. The installer tries this itself. If it still fails:
 open **Applications > Python 3.x**, double-click **Install Certificates.command**, then run the installer again.
+If the installer set up its own private Python (the Mac had none), it gives it the Mac's own certificates; running
+the installer again refreshes them.
 
 ### Mac: the JSON file is not appearing in Google Drive
 

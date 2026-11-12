@@ -23,7 +23,8 @@ done
 
 step "1. Python"
 PY=""
-for exe in /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3 "$(command -v python3 || true)"; do
+OWN_PY="$INSTALL_DIR/python/bin/python3"   # the private copy this installer puts there when the Mac has no Python
+for exe in "$OWN_PY" /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3 "$(command -v python3 || true)"; do
     [ -n "$exe" ] && [ -x "$exe" ] || continue
     if "$exe" -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)" 2>/dev/null; then
         PY="$("$exe" -c "import sys; print(sys.executable)")"
@@ -31,8 +32,44 @@ for exe in /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/
     fi
 done
 if [ -z "$PY" ]; then
+    # No Python on this Mac: fetch a private copy into the program folder, so nobody has to install anything by hand.
+    # It is the standalone Python build that tools like uv use (github.com/astral-sh/python-build-standalone),
+    # checked against the release's published checksums, and used by Market Digest only.
+    PBS_TAG="20241016"; PBS_VER="3.12.7"
+    case "$(uname -m)" in arm64) PBS_ARCH="aarch64" ;; *) PBS_ARCH="x86_64" ;; esac
+    PBS_FILE="cpython-$PBS_VER+$PBS_TAG-$PBS_ARCH-apple-darwin-install_only.tar.gz"
+    PBS_URL="https://github.com/astral-sh/python-build-standalone/releases/download/$PBS_TAG"
+    echo "Python is not on this Mac. Downloading a private copy for Market Digest (about 17 MB)..."
+    TMP="$(mktemp -d)"
+    if curl -fsSL "$PBS_URL/$PBS_FILE" -o "$TMP/py.tar.gz" && curl -fsSL "$PBS_URL/SHA256SUMS" -o "$TMP/SHA256SUMS"; then
+        want="$(grep " $PBS_FILE\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"
+        got="$(shasum -a 256 "$TMP/py.tar.gz" | cut -d' ' -f1)"
+        if [ -n "$want" ] && [ "$want" = "$got" ]; then
+            mkdir -p "$INSTALL_DIR" && rm -rf "$INSTALL_DIR/python" && tar -xzf "$TMP/py.tar.gz" -C "$INSTALL_DIR" && [ -x "$OWN_PY" ] && PY="$OWN_PY"
+        else
+            echo "The download did not match its published checksum, so it was not used."
+        fi
+    fi
+    rm -rf "$TMP"
+fi
+case "$PY" in "$INSTALL_DIR/python/"*)
+    # This Python does not read the Mac's keychain for web certificates: give it a copy of the Mac's own root
+    # certificates, read at every start by sitecustomize (refreshed each time the installer runs).
+    PYDIR="$INSTALL_DIR/python"
+    security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain > "$PYDIR/certs.pem" 2>/dev/null
+    SITE="$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+    cat > "$SITE/sitecustomize.py" <<'PYEOF'
+# Written by the Market Digest installer: this Python uses the Mac's own root certificates for https.
+import os
+_certs = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "certs.pem")
+if os.path.isfile(_certs) and os.path.getsize(_certs) > 0:
+    os.environ.setdefault("SSL_CERT_FILE", os.path.normpath(_certs))
+PYEOF
+    ;;
+esac
+if [ -z "$PY" ]; then
     open "https://www.python.org/downloads/macos/" 2>/dev/null
-    fail "Python 3.9 or newer is not installed. Install it from the page that just opened (the macOS 64-bit universal installer), then run this installer again."
+    fail "Python could not be set up automatically. Install it from the page that just opened (the macOS 64-bit universal installer), then run this installer again."
 fi
 echo "Using $PY"
 

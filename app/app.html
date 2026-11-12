@@ -95,6 +95,12 @@ details.extras[open] > summary{margin-bottom:8px}
 .banner p{flex:1;margin:0;min-width:200px}
 .indent{margin-left:28px}
 a.btn-link{text-decoration:none}
+ol.keysteps{margin:4px 0 14px;padding-left:22px}
+ol.keysteps li{margin:0 0 10px}
+.bigbtn{display:inline-block;background:var(--blue);border:1px solid var(--blue);color:var(--surface);font-weight:600;border-radius:6px;
+  padding:9px 16px;text-decoration:none;margin-right:10px;cursor:pointer;font:inherit;font-weight:600}
+.bigbtn:hover{filter:brightness(1.08)}
+ol.keysteps .help{display:inline}
 table.stocks{border-collapse:collapse;width:100%;max-width:520px}
 table.stocks th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:0 6px 4px 0}
 table.stocks td{padding:3px 6px 3px 0}
@@ -162,11 +168,11 @@ table.stocks input{width:100%}
 <section id="settings" hidden>
   <div class="card welcome" id="welcome" hidden>
     <h1>Set up your market digest</h1>
-    <p style="margin:0">Three short steps. Everything you enter stays on this computer.</p>
+    <p style="margin:0">About two minutes. Everything you enter stays on this computer.</p>
     <ol class="steps" id="steps">
-      <li data-s="1"><b>1</b> Your Gemini key</li>
-      <li data-s="2"><b>2</b> Who to follow</li>
-      <li data-s="3"><b>3</b> When and how you get it</li>
+      <li data-s="1"><b>1</b> Your free Gemini key</li>
+      <li data-s="2"><b>2</b> Your stocks</li>
+      <li data-s="3"><b>3</b> Finish</li>
     </ol>
   </div>
   <div id="settingsHead"><h1>Settings</h1><p class="lead">Change anything, test it, then click <b>Save</b>. Everything stays on this computer.</p></div>
@@ -175,9 +181,14 @@ table.stocks input{width:100%}
   <form id="form" autocomplete="off" novalidate>
   <div class="card" data-step="1">
     <h2>Gemini key <span class="tag req">Needed</span></h2>
-    <p class="what">Gemini is Google's AI. It reads each video's captions and writes the digest. The key is free:
-      open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>, click <i>Create API key</i>, copy it and paste it here.</p>
-    <label class="f" for="gemini_api_key">API key</label>
+    <p class="what">Gemini is Google's AI. It reads each video and writes your digest. The key is free and takes a minute:</p>
+    <ol class="keysteps">
+      <li><a class="bigbtn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get my free key</a>
+        <span class="help">Google opens in a new tab. Sign in, click <b>Create API key</b>, then <b>Copy</b>.</span></li>
+      <li><button type="button" class="bigbtn" id="pasteKey">Paste my key</button>
+        <span class="help">Come back here and click it (or paste into the box below).</span></li>
+    </ol>
+    <label class="f" for="gemini_api_key">Your key</label>
     <div class="row"><input type="password" id="gemini_api_key" spellcheck="false"><button type="button" class="show" data-for="gemini_api_key">Show</button></div>
     <p class="saved" id="saved-gemini_api_key" hidden></p>
     <p class="err" id="e-gemini_api_key"></p>
@@ -185,35 +196,8 @@ table.stocks input{width:100%}
     <p class="result" id="r-gemini" aria-live="polite"></p>
   </div>
 
-  <div class="card" data-step="2">
-    <h2>YouTube channels <span class="tag req">Needed</span></h2>
-    <p class="what">The channels whose new videos go into the digest. Click a popular one, or add your own: open the channel on YouTube and copy
-      the address from the top of the browser, like <i>https://www.youtube.com/@TheStreet</i>, or type its handle, like <i>@TheStreet</i>.</p>
-    <div id="popBox"><p class="help" style="margin:0 0 4px"><b>Popular channels</b> (click to add):</p><div class="chips" id="popChans" style="margin-bottom:12px"></div></div>
-    <div id="chans"></div>
-    <p class="err" id="e-channels"></p>
-    <div class="tests"><button type="button" id="addChan">+ Add a channel</button><button type="button" data-test="channels">Test the channels</button></div>
-    <p class="result" id="r-channels" aria-live="polite"></p>
-  </div>
-
-  <div class="card" data-step="2">
-    <h2>Analysts to follow <span class="tag opt">Optional</span></h2>
-    <p class="what">Want only certain people? Pick them, and only videos where they <b>speak</b> go into the digest.
-      Leave the list empty to include every video from your channels.</p>
-    <div id="analysts"></div>
-    <p class="err" id="e-analysts"></p>
-    <div class="tests"><button type="button" id="addAnalyst">+ Add an analyst</button></div>
-    <p class="help">Write the full name, like <i>Dan Ives</i>. If captions spell it differently, add the other spelling after a slash: <i>Tom Lee / Thomas Lee</i>.</p>
-    <div id="suggestBox" hidden>
-      <p class="help" style="margin-top:12px"><b>Suggestions</b> (click to add; a number is how many of your saved videos they are in):</p>
-      <div class="chips" id="suggest"></div>
-    </div>
-    <label class="switch" style="margin-top:14px"><input type="checkbox" id="markets_only"> Leave out videos that are not about markets or stocks</label>
-    <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
-  </div>
-
   <div class="card" data-step="2" id="stocks">
-    <h2>Your stocks <span class="tag opt">Optional</span></h2>
+    <h2>Your stocks</h2>
     <p class="what">The stocks you own or watch. Each gets a check-up on the Overview page: what the analysts say about it, how good their calls
       have been, Wall Street's view and the price. Add the shares you own to see your holdings' value and weights, and the price you paid to see your gain.</p>
     <div class="banner card" id="gBanner" hidden style="margin:0 0 12px;padding:10px 12px"><p id="gBannerText"></p></div>
@@ -236,6 +220,33 @@ table.stocks input{width:100%}
     <p class="result" id="r-prices" aria-live="polite"></p>
   </div>
 
+  <div class="card" data-step="2" id="chanCard">
+    <h2>YouTube channels <span class="tag req">Needed</span></h2>
+    <p class="what">The channels whose new videos go into the digest. Click a popular one, or add your own: open the channel on YouTube and copy
+      the address from the top of the browser, like <i>https://www.youtube.com/@TheStreet</i>, or type its handle, like <i>@TheStreet</i>.</p>
+    <div id="popBox"><p class="help" style="margin:0 0 4px"><b>Popular channels</b> (click to add):</p><div class="chips" id="popChans" style="margin-bottom:12px"></div></div>
+    <div id="chans"></div>
+    <p class="err" id="e-channels"></p>
+    <div class="tests"><button type="button" id="addChan">+ Add a channel</button><button type="button" data-test="channels">Test the channels</button></div>
+    <p class="result" id="r-channels" aria-live="polite"></p>
+  </div>
+
+  <div class="card" data-step="2" id="analystCard">
+    <h2>Analysts to follow <span class="tag opt">Optional</span></h2>
+    <p class="what">Want only certain people? Pick them, and only videos where they <b>speak</b> go into the digest.
+      Leave the list empty to include every video from your channels.</p>
+    <div id="analysts"></div>
+    <p class="err" id="e-analysts"></p>
+    <div class="tests"><button type="button" id="addAnalyst">+ Add an analyst</button></div>
+    <p class="help">Write the full name, like <i>Dan Ives</i>. If captions spell it differently, add the other spelling after a slash: <i>Tom Lee / Thomas Lee</i>.</p>
+    <div id="suggestBox" hidden>
+      <p class="help" style="margin-top:12px"><b>Suggestions</b> (click to add; a number is how many of your saved videos they are in):</p>
+      <div class="chips" id="suggest"></div>
+    </div>
+    <label class="switch" style="margin-top:14px"><input type="checkbox" id="markets_only"> Leave out videos that are not about markets or stocks</label>
+    <p class="help">For example interviews about politics or sport, with no stocks, market levels or predictions in them.</p>
+  </div>
+
   <div class="card" id="google">
     <h2>Google Finance <span class="tag opt">Recommended</span></h2>
     <p class="what" id="gIntroSheet" hidden>Keep your stocks in a Google Sheet of your own, priced live by Google Finance. Market Digest reads it every
@@ -254,22 +265,6 @@ table.stocks input{width:100%}
         <button type="button" id="gSync">Update from the sheet now</button><button type="button" class="link" id="gOffBtn">Disconnect</button></div>
     </div>
     <p class="result" id="r-google" aria-live="polite"></p>
-    <details id="gSheetBox" style="margin-top:12px">
-      <summary id="gSheetSum">Or use Google Finance without signing in: a sheet of your own</summary>
-      <ol style="margin:10px 0 0;padding-left:20px;font-size:14px">
-        <li><a id="gTemplate" target="_blank" rel="noopener">Make your own copy of the Market Digest sheet</a> (Google asks where to save it; it is yours).</li>
-        <li>In its <b>My stocks</b> tab, type your tickers in column A (like NVDA or NASDAQ:NVDA). Google Finance fills in the prices.
-          Do <b>not</b> type your shares there: type them above, where they stay on this computer.</li>
-        <li><b>File &gt; Share &gt; Publish to web</b>: choose <b>My stocks</b> and <b>Comma-separated values (.csv)</b>, click <b>Publish</b>, copy the link.</li>
-        <li>Paste it here, then click <b>Save</b> at the bottom.</li>
-      </ol>
-      <label class="f" for="watchlist_csv">Your sheet's published link (CSV)</label>
-      <input type="url" id="watchlist_csv" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=0&amp;single=true&amp;output=csv">
-      <p class="err" id="e-watchlist_csv"></p>
-      <div class="tests"><button type="button" data-test="watchlist">Test the sheet</button><button type="button" id="gSync2">Read the sheet now</button></div>
-      <p class="result" id="r-watchlist" aria-live="polite"></p>
-      <p class="help">A published sheet can be opened by anyone who has its link, which is why your shares stay in Market Digest instead.</p>
-    </details>
   </div>
 
   <div class="card" data-step="3">
@@ -330,7 +325,7 @@ table.stocks input{width:100%}
   </div>
 
   <details class="extras" id="extras">
-  <summary>Extras: shared folder, watchlist, TipRanks and more options</summary>
+  <summary>Extras: TipRanks, a Google Finance sheet, a shared folder and more options</summary>
   <div class="card">
     <h2>Shared folder for the Econova hub <span class="tag opt">Optional</span></h2>
     <p class="what">Each day's digest is also saved as data files, which the Econova dashboard reads. To share them, choose a folder inside Google Drive
@@ -341,6 +336,24 @@ table.stocks input{width:100%}
     <p class="err" id="e-json_dir"></p>
     <div class="tests"><button type="button" data-test="folder">Test the folder</button></div>
     <p class="result" id="r-folder" aria-live="polite"></p>
+  </div>
+
+  <div class="card" id="gSheetBox">
+    <h2>A Google Finance sheet of your own <span class="tag opt">Advanced</span></h2>
+    <p class="what">You do not need this: Market Digest finds prices by itself. Use it if you want your list in a Google Sheet, priced by Google Finance.</p>
+    <ol style="margin:10px 0 0;padding-left:20px;font-size:14px">
+      <li><a id="gTemplate" target="_blank" rel="noopener">Make your own copy of the Market Digest sheet</a> (Google asks where to save it; it is yours).</li>
+      <li>In its <b>My stocks</b> tab, type your tickers in column A (like NVDA or NASDAQ:NVDA). Google Finance fills in the prices.
+        Do <b>not</b> type your shares there: type them above, where they stay on this computer.</li>
+      <li><b>File &gt; Share &gt; Publish to web</b>: choose <b>My stocks</b> and <b>Comma-separated values (.csv)</b>, click <b>Publish</b>, copy the link.</li>
+      <li>Paste it here, then click <b>Save</b> at the bottom.</li>
+    </ol>
+    <label class="f" for="watchlist_csv">Your sheet's published link (CSV)</label>
+    <input type="url" id="watchlist_csv" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=0&amp;single=true&amp;output=csv">
+    <p class="err" id="e-watchlist_csv"></p>
+    <div class="tests"><button type="button" data-test="watchlist">Test the sheet</button><button type="button" id="gSync2">Read the sheet now</button></div>
+    <p class="result" id="r-watchlist" aria-live="polite"></p>
+    <p class="help">A published sheet can be opened by anyone who has its link, which is why your shares stay in Market Digest instead.</p>
   </div>
 
   <div class="card">
@@ -664,10 +677,11 @@ function fillStocks(rows) {
 }
 function showGoogle(g) {
   if (!g) return;
-  // Signing in needs the app registered with Google; without it, the sheet-link route is the way, so it opens by itself.
+  // Signing in needs the app registered with Google: until then the Google card is not shown at all,
+  // and the sheet-link route waits in Extras for those who want it.
   $('gSheetBox').hidden = g.connected || !g.template && !g.sheet_link;
-  if (!g.available || g.sheet_link) $('gSheetBox').open = true;
-  $('gSheetSum').textContent = g.available ? 'Or use Google Finance without signing in: a sheet of your own' : 'Use Google Finance: a sheet of your own (2 minutes)';
+  if (g.sheet_link) $('extras').open = true;
+  $('google').hidden = wizard || (!g.available && !g.connected && !g.reconnect);
   if (g.template) $('gTemplate').href = g.template;
   $('gIntro').hidden = !g.available && !g.connected; $('gIntroSheet').hidden = !$('gIntro').hidden;
   $('gOff').hidden = g.connected || !g.available; $('gOn').hidden = !g.connected;
@@ -854,12 +868,18 @@ window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); 
 // ---------------------------------------------------------------- the first run: three steps
 function showStep() {
   document.querySelectorAll('#form [data-step]').forEach(c => c.hidden = Number(c.dataset.step) !== step);
+  $('analystCard').hidden = true;   // an advanced filter: in Settings later, not in the first run
+  if (step === 2) {   // the main action of this step: bring the stocks over from Google Finance
+    const empty = !stockValues().some(x => x.ticker);
+    $('pasteBox').hidden = !empty;
+  }
   $('google').hidden = true;
   document.querySelectorAll('#steps li').forEach(li => { const n = Number(li.dataset.s); li.className = n === step ? 'on' : n < step ? 'past' : ''; });
   $('extras').hidden = true; $('claudeCard').hidden = true;
   $('back').hidden = step === 1; $('next').hidden = step === 3; $('save').hidden = step !== 3;
   $('save').textContent = 'Save and finish';
-  foot(['', 'Paste your key, then click Next. It is checked with Google.', 'Pick at least one channel. Analysts are optional.', 'Choose a time, then save.'][step], '');
+  foot(['', 'Get your free key, paste it: it is checked with Google by itself.', 'Paste your stocks from Google Finance (or type them). The channels are already chosen; change them if you like.',
+        'All set to sensible defaults. Change anything you like, then click Save and finish.'][step], '');
   window.scrollTo(0, 0);
 }
 async function nextStep() {
@@ -896,6 +916,24 @@ function finishWizard(r) {
   window.scrollTo(0, 0);
 }
 $('next').onclick = nextStep;
+// The key: pasted with one click, and checked as soon as it looks whole, so the person does not have to find "Next".
+let keyTimer = null;
+async function checkKeyNow() {
+  const k = $('gemini_api_key').value.trim();
+  if (!wizard || step !== 1 || k.length < 30 || $('next').disabled) return;
+  await nextStep();
+}
+$('gemini_api_key').addEventListener('input', () => { clearTimeout(keyTimer); keyTimer = setTimeout(checkKeyNow, 400); });
+$('pasteKey').onclick = async () => {
+  try {
+    const t = (await navigator.clipboard.readText()).trim();
+    if (!t) throw new Error('empty');
+    $('gemini_api_key').value = t; changed(); checkKeyNow();
+  } catch (e) {
+    $('gemini_api_key').focus();
+    show($('r-gemini'), 'warn', 'Your browser did not let the page read the clipboard. Click in the box and press Ctrl+V (Cmd+V on a Mac).');
+  }
+};
 $('back').onclick = () => { step -= 1; warned = 0; showStep(); };
 $('firstDigest').onclick = () => { $('firstDigest').disabled = true; $('setupJob').hidden = false; run('preview', $('setupJob'), $('setupJobText'), $('setupJobLog')); };
 $('wizFinish').onclick = () => { if (S.setup) $('finish').onclick(); else location.href = '/'; };

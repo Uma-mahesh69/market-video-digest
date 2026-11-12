@@ -163,3 +163,27 @@ class Server(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FirstRun(unittest.TestCase):
+    """The first run asks for as little as possible: the key, the stocks; the rest has working defaults."""
+
+    def test_three_popular_channels_are_chosen_from_the_start(self):
+        popular = dict(app.POPULAR_CHANNELS).values()
+        self.assertEqual(len(app.DEFAULTS["channels"]), 3)
+        for url in app.DEFAULTS["channels"]:
+            self.assertIn(url, popular)
+            self.assertRegex(url, app.CHANNEL)
+
+    def test_the_setup_page_gets_the_key_and_asks_for_no_links(self):
+        page = (Path(app.__file__).parent / "app.html").read_text(encoding="utf-8")
+        self.assertIn('href="https://aistudio.google.com/apikey"', page)
+        self.assertIn('id="pasteKey"', page)
+        for label in ("Your free Gemini key", "Your stocks", "Finish"):
+            self.assertIn(label, page)
+        # the stocks come before the channels in step 2, and the sheet-link route is in Extras, not in the first run
+        self.assertLess(page.index('id="stocks"'), page.index('id="chanCard"'))
+        extras = page.index('id="extras"')
+        self.assertGreater(page.index('id="gSheetBox"'), extras)
+        self.assertGreater(page.index('id="watchlist_csv"'), extras)
+        self.assertNotIn('data-step', page[page.index('id="gSheetBox"') - 60:page.index('id="gSheetBox"')])

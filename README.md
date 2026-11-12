@@ -26,17 +26,19 @@ Market Digest sums up what analysts said and what prices did, to help you decide
 
 ## Quick start (Windows or Mac)
 
-You need a **Gemini API key** (free, from https://aistudio.google.com/apikey) and, to receive emails, a **Gmail app
-password** (https://myaccount.google.com/apppasswords). The settings page links to both. On a Mac you also need
-**Python 3.9 or newer** (https://www.python.org/downloads/macos/; the installer tells you if it is missing).
+All you need is a free **Gemini key**; the setup page has a button that gets it. Nothing else to install: the
+installer brings Python if the computer has none (Windows and Mac). Email is optional and needs only your address.
 
 1. Get the files: unzip `market-digest-setup.zip`, or on GitHub click **Code > Download ZIP** (or `git clone` it).
 2. Double-click the installer in that folder: **`install.bat`** on Windows, **`install-mac.command`** on a Mac.
    - Windows says "Windows protected your PC"? Click **More info > Run anyway**.
    - macOS says it cannot check the file? Right-click it > **Open** > **Open**.
-3. **The setup page opens in your browser: three short steps.** Paste your Gemini key, click the channels and analysts
-   you want, add your stocks, pick a time. Then **Save and finish** and **Make my first digest now**.
-4. **Recommended:** Settings > **Connect Google**, so your stocks are priced by Google Finance in a sheet in your own Drive.
+3. **The setup page opens in your browser: about two minutes.**
+   1. **Your free Gemini key:** click **Get my free key**, then **Paste my key**. It is checked by itself.
+   2. **Your stocks:** on google.com/finance select all of your watchlist or portfolio, copy, and paste it in; Market
+      Digest picks out the tickers. Three popular channels (CNBC, Bloomberg, Yahoo Finance) are already chosen.
+   3. **Finish:** everything is set to sensible defaults (7:30 each morning, weekly and monthly digests on).
+   Then **Save and finish** and **Make my first digest now**.
 
 That's it. Each morning's digest opens in your browser with a notice on screen (email is optional), and
 **Market Digest** is on your desktop: it shows whether the last digest worked, holds the settings, has the chat, and

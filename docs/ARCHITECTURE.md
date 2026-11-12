@@ -198,7 +198,9 @@ The program is in `app/` (what is installed; `app/MANIFEST` lists it), the insta
 
 ## 7. Dependencies
 
-- **Python 3.9+** (the installer installs 3.13 if needed). **Standard library only**; there are no pip packages.
+- **Python 3.9+** (the Windows installer installs 3.13 if needed; the Mac installer puts a private
+  python-build-standalone 3.12 in `~/market-digest/python`, checked against the release's SHA256SUMS, with a
+  `sitecustomize.py` pointing `SSL_CERT_FILE` at the Mac's exported root certificates). **Standard library only**; there are no pip packages.
 - **ytmd** (bundled) and **yt-dlp** (on PATH or downloaded to `bin\`).
 - **Google Gemini API** (free tier works). **Gmail SMTP** for email (optional).
 - **Windows Task Scheduler** and PowerShell 5.1 (built into Windows).

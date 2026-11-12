@@ -68,23 +68,26 @@ A window shows the steps. You only act at step 4:
 
 | Step | What happens |
 |---|---|
-| 1. Python | Finds Python (on Windows it installs Python 3.13 if needed; this can take a few minutes). |
+| 1. Python | Finds Python. If there is none, it installs it (Windows: Python 3.13; Mac: a private copy in the program folder). This can take a few minutes. |
 | 2. Program files | Copies the program to `C:\Users\<you>\market-digest` (Windows) or `~/market-digest` (Mac). |
 | 3. yt-dlp | Downloads the official caption reader if it is missing. |
-| 4. Settings | **The setup page opens in your browser: three short steps** (below). |
+| 4. Settings | **The setup page opens in your browser: three short steps, about two minutes** (below). |
 | 5. Daily schedule | Sets the daily run at the time you chose. |
 | 6. Desktop | Adds **Market Digest** to the desktop. |
 
 **The three setup steps:**
 
-1. **Your Gemini key.** Paste it (Ctrl+V, or Cmd+V on a Mac) and click **Next**. It is checked with Google; if it is
-   wrong, the page says so in plain words.
-2. **Who to follow.** Click the **popular channels** you want (CNBC Television, Bloomberg Television, Yahoo Finance,
-   TheStreet, Fox Business, Schwab Network), or add any channel's address. Optionally click the **analysts** you care
-   about: then only videos where they speak go into the digest, and the others are left out before Gemini reads them,
-   so more channels cost nothing extra. Optionally type **your stocks** (tickers like NVDA), and how many shares you
-   own of each if you want your holdings on the dashboard. **Next** checks each channel on YouTube.
-3. **When and how you get it.** Pick the daily time. By default a notice appears on your screen and the digest opens
+1. **Your free Gemini key.** Click **Get my free key**: Google AI Studio opens in a new tab. Sign in with your Google
+   account, click **Create API key**, then **Copy**. Come back and click **Paste my key** (or press Ctrl+V, Cmd+V on a
+   Mac, in the box). The key is checked with Google by itself, and the page moves on when it works; if it is wrong,
+   the page says so in plain words.
+2. **Your stocks.** On **google.com/finance**, open your watchlist or portfolio, press **Ctrl+A** then **Ctrl+C**
+   (Cmd+A, Cmd+C on a Mac), and paste it into the box (Ctrl+V), then **Find my stocks**: Market Digest picks out the
+   tickers. You can also type tickers (NVDA, AAPL), or **Import from a file**. Add the shares you own to see your
+   holdings' value (they stay on this computer). Below it, three **popular channels** are already chosen (CNBC
+   Television, Bloomberg Television, Yahoo Finance); click others (TheStreet, Fox Business, Schwab Network) or add any
+   channel's address if you like. **Next** checks each channel on YouTube.
+3. **Finish.** Everything is already set to sensible defaults; change what you like. Pick the daily time. By default a notice appears on your screen and the digest opens
    in your browser when it is ready, so **no email setup is needed**. To get it by email too, tick **Also email it to
    me**, type your address, click **Email me a code** and type the 6-digit code from that email. That's all: the
    Market Digest email service sends it. (**Send from my own Gmail account instead** is there if you prefer; it needs
@@ -93,8 +96,8 @@ A window shows the steps. You only act at step 4:
 Click **Save and finish**, then **Make my first digest now**: a digest of the last 3 days opens in your browser.
 Then click **Finish**. The installer window says **Done**; you can close it.
 
-Everything else (a shared folder, a watchlist sheet, TipRanks, connecting Claude) is optional and lives in
-**Settings** afterwards, each with a **Test** button that answers in plain words.
+Everything else (only the analysts you choose, TipRanks, a Google Finance sheet, a shared folder, connecting Claude)
+is optional and lives in **Settings** afterwards, each with a **Test** button that answers in plain words.
 
 What is different on a Mac:
 
@@ -379,16 +382,19 @@ What to know:
 
 ## 6d. Your stocks and Google Finance
 
-You can give Market Digest your stocks in four ways (Settings > **Your stocks** and **Google Finance**):
+You can give Market Digest your stocks in several ways (Settings > **Your stocks**). The easiest is the first.
 
-1. **Connect Google (recommended).** Click **Connect Google** in Settings, sign in, and allow Market Digest to use
+0. **Paste from google.com/finance.** Click **Paste from Google Finance…**, copy your watchlist or portfolio page there
+   (Ctrl+A, Ctrl+C) and paste it in. Market Digest picks out the tickers; prices then come by themselves (Yahoo
+   Finance, Stooq). Do it again whenever your list changes.
+1. **Connect Google**, when this version offers it (Settings shows a **Google Finance** card). Click **Connect Google**, sign in, and allow Market Digest to use
    "only the specific Google Drive files you use with this app". It creates **Market Digest - My portfolio** in your
    Drive, with the stocks you had typed. In its **My stocks** tab, type a ticker (NVDA, or NASDAQ:NVDA), the shares
    you own (empty if you only watch it) and the price you paid; Google Finance fills in the name, price, today's
    change, value, gain, 52-week range and P/E. Edit it in Google Sheets (on your phone too) or in Market Digest:
    saving in Market Digest updates the sheet, and the sheet is read with every digest (or **Update from the sheet
    now**). Do not edit the **Prices** tab: Market Digest keeps it.
-2. **A Google Finance sheet of your own, without signing in** (Settings > Google Finance > "a sheet of your own"):
+2. **A Google Finance sheet of your own, without signing in** (Settings > **Extras** > "A Google Finance sheet of your own"):
    click **Make your own copy of the Market Digest sheet**, type your tickers in its **My stocks** tab (not your
    shares), then **File > Share > Publish to web**, choose **My stocks** and **Comma-separated values (.csv)**,
    **Publish**, and paste the link into Market Digest and **Save**. Market Digest reads it each morning and uses
