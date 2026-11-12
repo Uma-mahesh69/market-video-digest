@@ -18,9 +18,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from digest_export import build_payload, file_name, load_tickers, save
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))   # the program, for digest_export
+from digest_export import build_payload, file_name, load_tickers, save  # noqa: E402
 
-HERE = Path(__file__).resolve().parent
+HERE = Path.cwd()   # run it in the program folder, where digest_config.json is
 VIEWS = ("bullish", "bearish", "neutral", "mixed")
 
 

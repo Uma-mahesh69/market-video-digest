@@ -859,7 +859,7 @@ class Update:
 
     @classmethod
     def fetch_latest(cls):
-        req = urllib.request.Request(f"https://raw.githubusercontent.com/{REPO}/master/VERSION", headers=dg.UA)
+        req = urllib.request.Request(f"https://raw.githubusercontent.com/{REPO}/master/app/VERSION", headers=dg.UA)
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.read().decode("utf-8", "replace").strip()[:20]
 
@@ -895,7 +895,8 @@ def apply_update(download=None):
     except Exception as err:
         raise RuntimeError(f"The update could not be downloaded ({err}). Check the internet connection and try again.")
     with archive:
-        names = {n.split("/", 1)[1]: n for n in archive.namelist() if "/" in n}
+        # GitHub's zip holds one top folder (market-video-digest-master/); the program is in its app/ folder
+        names = {parts[2]: n for n in archive.namelist() for parts in [n.split("/", 2)] if len(parts) == 3 and parts[1] == "app" and parts[2]}
         try:   # the release says which files it is made of, so a version that adds a file still updates fully
             wanted = program_files(archive.read(names["MANIFEST"]).decode("utf-8"))
         except (KeyError, ValueError) as err:

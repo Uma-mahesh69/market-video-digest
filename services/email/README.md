@@ -36,7 +36,7 @@ You need: the Google account the emails should come from (naravaumamahesh@gmail.
    Go to (project name) (unsafe)**: it is your own script. Allow it to send email and use the spreadsheet.
 5. Copy the **Web app URL** (it ends in `/exec`). Open it in a browser: it should say
    "Market Digest email service is running."
-6. Put the URL in `service.json` in the project, as `"email_service": "https://script.google.com/macros/s/.../exec"`,
+6. Put the URL in `app/service.json` in the project, as `"email_service": "https://script.google.com/macros/s/.../exec"`,
    commit it, and raise `VERSION`. Every installed copy picks it up with its next update.
 
 ## Looking after it
@@ -47,5 +47,5 @@ You need: the Google account the emails should come from (naravaumamahesh@gmail.
   version > Deploy**. The URL stays the same.
 - **How much quota is left today:** the app's Settings shows it if a send fails; or run
   `MailApp.getRemainingDailyQuota()` in the Apps Script editor.
-- `APP_TOKEN` in `Code.gs` must match `email_service_token` in `service.json`. It identifies the app; it is not a
+- `APP_TOKEN` in `Code.gs` must match `email_service_token` in `app/service.json`. It identifies the app; it is not a
   password (the app is public). The protection is the code sent to each address.

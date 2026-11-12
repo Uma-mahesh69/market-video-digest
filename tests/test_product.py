@@ -81,7 +81,7 @@ class Updates(Folder):
         with zipfile.ZipFile(buf, "w") as z:
             for name, data in files.items():
                 if name != drop:
-                    z.writestr("market-video-digest-master/" + name, data)
+                    z.writestr("market-video-digest-master/app/" + name, data)
         return lambda: buf.getvalue()
 
     def test_the_manifest_matches_the_files_in_the_project(self):

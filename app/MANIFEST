@@ -13,7 +13,6 @@ tipranks.py
 chat.py
 chat.html
 ytmd
-README.md
 digest_config.example.json
 prices.py
 insights.py

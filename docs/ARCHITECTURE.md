@@ -35,6 +35,10 @@ a plain-language summary.
 
 ## 2. Components
 
+The program is in `app/` (what is installed; `app/MANIFEST` lists it), the installers at the top, developer tools in
+`tools/`, the email service in `services/email/`, docs in `docs/`, tests in `tests/`. File names below are inside
+`app/` unless a folder is given.
+
 | Component | File | What it does |
 |---|---|---|
 | **Digest pipeline** | `digest.py` | The daily job: find new videos, get captions, summarise with Gemini, render, email. Also `--check` and `--rebuild`. |
@@ -45,7 +49,7 @@ a plain-language summary.
 | **Caption reader** | `ytmd` (external, MIT licence, v0.7.0) | Downloads captions through yt-dlp and stores them in a SQLite full-text index at `%USERPROFILE%\ytmd`. Provides `add`, `read`, `search`, `info`, `doctor`. |
 | **yt-dlp** | `bin\yt-dlp.exe` or already installed | Fetches caption files from YouTube for ytmd. |
 | **Installer** | `install.bat` + `install.ps1` (Windows), `install-mac.command` (Mac) | Double-click setup: Python, yt-dlp, the launchers, then the settings page in the browser (`app.py --setup`), the daily schedule (`app.py --schedule`) and the Market Digest desktop shortcut. It asks nothing in the terminal. |
-| **Packager** | `make_package.bat` | Builds `market-digest-setup.zip` from an explicit allow-list of files, so settings and keys can never be included. |
+| **Packager** | `tools/make_package.bat` | Builds `market-digest-setup.zip` (installers, guides and `app/` from `app/MANIFEST`) in a clean staging folder, so settings and keys can never be included. |
 | **Daily run** | `app.py --daily` | Started by Task Scheduler (`pythonw.exe`, so no window) or launchd. Runs `digest.py` with its output appended to `digest.log`, retries a failed run every 30 minutes, 3 times (Task Scheduler's own "restart on failure" ignores a program's exit code, so it cannot do this), then shows a desktop notice. A good run with new videos shows a "digest is ready" notice and opens the digest (`notify`, `open_when_ready`). |
 | **Desktop launcher** | A shortcut to `pythonw.exe app.py` (Windows); `Market Digest.app`, a generated bundle whose script starts `app.py` in the background (Mac) | No console or Terminal window. The page's **Quit** button stops the app (`POST /api/quit`); `app.py --stop` does the same from the installer before an update. `run_app.bat` / `run_app.command` are kept as visible-window fallbacks, and `run_chat.*` so old Digest chat shortcuts still work. |
 | **Updates** | `VERSION`, `app.py` (`Update`, `apply_update`, `restart`) | The app compares its `VERSION` with the one on GitHub `master` (in the background, every 6 hours). **Update now** downloads the `master` zip, checks every program file is present and that each `.py` compiles and each `.json` parses, replaces the files in `PROGRAM_FILES` (never settings or data), and restarts itself. A bad download changes nothing. Releasing = merging to `master` with a higher `VERSION`. |
@@ -55,11 +59,11 @@ a plain-language summary.
 | **Insights** | `insights.py` | Code, not AI: calls from the saved notes; per-stock tables, which way calls lean, price moves since the first call; each call scored against the S&P 500 (first close after the video to the latest close, once 3 trading days have passed); analysts' records; holdings weights; signals. Used by the dashboard, the weekly and monthly digests and Claude's `market_overview`. |
 | **Dashboard** | `dashboard.html` + `GET /api/dashboard?days=` | A page in the app over `insights.overview()`; no network needed when shown. |
 | **Weekly and monthly digests** | `period.py` | `--due` after each good daily run: a week (Saturday to Friday) on Saturdays, a month on the 1st, each once (`last_week`, `last_month` in the state). The numbers come from `insights`; Gemini writes only the opening from them, and the digest goes out without it if Gemini fails. A fresh install starts counting from the next period. |
-| **Email service** | `email_service/Code.gs` (Apps Script, deployed once by the developer), `service.json`, `digest.call_service()` | Users confirm their address with a 6-digit code; the service then sends with that computer's own key. Limits per address and per day; the Users tab lists and can block addresses. Without `service.json`'s URL, or by choice, email goes through the user's own Gmail (SMTP) as before. |
+| **Email service** | `services/email/Code.gs` (Apps Script, deployed once by the developer), `service.json`, `digest.call_service()` | Users confirm their address with a 6-digit code; the service then sends with that computer's own key. Limits per address and per day; the Users tab lists and can block addresses. Without `service.json`'s URL, or by choice, email goes through the user's own Gmail (SMTP) as before. |
 | **Claude tools** | `mcp_server.py` | A Model Context Protocol server over stdin/stdout (standard library only) that the Claude desktop app starts itself. Read tools over the saved notes (`digest_overview`, `list_videos`, `get_video`, `stock_calls`, `search_captions`, `daily_digest`), two actions (`update_following`, `make_digest`), three ready-made prompts, and instructions (cite the video moments; not investment advice). Secrets are never returned. **Connect to Claude** in Settings writes the entry into `claude_desktop_config.json` (keeping what is there, with a one-time copy of the original). |
 | **JSON export** | `digest_export.py`, `digest_schema.json`, `tickers.json` | Builds, checks and saves the day's JSON file for the Econova hub. |
-| **Watchlist** | `market_data.py`, `market_schema.json`, `watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
-| **Backfill** | `email_backfill.py` | Turns digests already sent (saved HTML or the email) back into the day's JSON file, through the same export. |
+| **Watchlist** | `market_data.py`, `market_schema.json`, `tools/watchlist_template.csv` | Reads the watchlist sheet (Google Finance prices), finds the insight cards, saves the market-data file; `--coverage` counts recent mentions per stock. |
+| **Backfill** | `tools/email_backfill.py` | Turns digests already sent (saved HTML or the email) back into the day's JSON file, through the same export. |
 | **Dashboard page** | `docs/econova_dashboard/` | The Analyst Video Digest page that reads the daily files and the watchlist sheet live from Google Drive. |
 | **Tests** | `tests/test_*.py` (export, daily run, app, market data, TipRanks, ...) | `python -m unittest` in the project folder runs them; no network needed. |
 | **Earlier prototype** | `ask.py` (workshop folder only) | The first Q&A tool (one question, cited answer). Not part of the installed product. |

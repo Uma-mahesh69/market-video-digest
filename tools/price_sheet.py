@@ -16,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-TICKERS = Path(__file__).with_name("tickers.json")
+TICKERS = Path(__file__).resolve().parent.parent / "app" / "tickers.json"
 DAYS = 120          # calendar days of closes: about 85 trading days
 WIDTH = 160         # columns the sheet gets, so the closes have room to spill
 FIRST = 7           # column G: the first close

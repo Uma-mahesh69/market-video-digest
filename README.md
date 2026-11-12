@@ -57,8 +57,8 @@ updates itself in one click when a new version is out.
 | Get a digest right now | **Market Digest** > Make today's digest now |
 | Check everything works | The **Test** buttons in Settings (or `python digest.py --check` in the program folder) |
 | Feed the Econova hub | Each run also saves `video-digest_YYYY-MM-DD.json` in `json_dir` (set it to a Google Drive for desktop folder to share it). See [ARCHITECTURE.md](docs/ARCHITECTURE.md) §3. |
-| See prices for my stocks next to the analysts' calls | Set up the watchlist sheet: USER_GUIDE.md, section 5a. |
-| Add past days to the JSON folder | `python email_backfill.py digests\digest-*.html` (USER_GUIDE.md, 5a) |
+| See prices for my stocks next to the analysts' calls | Add your stocks in Settings; they appear on the Overview. |
+| Add past days to the JSON folder | In the program folder: `python <project>\tools\email_backfill.py digests\digest-*.html` (docs/USER_GUIDE.md, 5a) |
 | See the dashboard | Open it in Claude (the link is in the Drive folder's START HERE doc). Every number has an (i) that explains it. |
 | Add Wall Street's view | Get a key at https://mcp.tipranks.com/ (Keys) and paste it in Settings > TipRanks |
 | Update to the newest version | **Market Digest** > Digests > **Update now** (shown when a new version is out; settings are kept) |
@@ -66,13 +66,25 @@ updates itself in one click when a new version is out.
 
 ## Documents
 
-- **[USER_GUIDE.md](USER_GUIDE.md)**: installation, settings, daily use, updating and removing it.
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: what to do when something goes wrong.
+- **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**: installation, settings, daily use, updating and removing it.
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**: what to do when something goes wrong.
 - **[CHANGELOG.md](CHANGELOG.md)**: what changed in each version.
-- **[email_service/README.md](email_service/README.md)**: setting up the email service (once, by the developer).
+- **[services/email/README.md](services/email/README.md)**: setting up the email service (once, by the developer).
 - **[docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md)**: setting up "Connect Google" (once, by the developer).
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: how it works inside, for developers. *(In `docs/`, not in the setup zip.)*
-- **[PRESENTATION.md](docs/PRESENTATION.md)**: a 6-slide overview of the project. *(In `docs/`, not in the setup zip.)*
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: how it works inside, for developers. *(Not in the setup zip.)*
+- **[docs/PRESENTATION.md](docs/PRESENTATION.md)**: a 6-slide overview of the project. *(Not in the setup zip.)*
+
+## What is where
+
+| Folder | What it holds |
+|---|---|
+| `app/` | The program: everything that is installed on a customer's computer (listed in `app/MANIFEST`). |
+| `install.bat`, `install.ps1`, `install-mac.command` | The installers. They copy `app/` to the customer's computer and open the setup page. |
+| `docs/` | The user guide, troubleshooting, and the developer docs (architecture, Google setup, hub integration). |
+| `services/email/` | The email service (a Google Apps Script), deployed once by the developer. |
+| `tools/` | Developer tools: `make_package.bat` (builds the setup zip), `price_sheet.py`, `email_backfill.py`, the watchlist template. |
+| `tests/` | `python -m unittest` from the project folder. |
+| `archive/` | Early prototypes, kept for reference. |
 
 ## Good to know
 

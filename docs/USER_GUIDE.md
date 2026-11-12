@@ -182,7 +182,7 @@ digest reports what analysts said and what prices did.
 Google Finance cannot export a watchlist, so the list lives in a Google Sheet whose `GOOGLEFINANCE()` formulas fetch
 the prices. To set it up once:
 
-1. Open https://sheets.new (a new Google Sheet), then **File > Import > Upload** and choose `watchlist_template.csv`
+1. Open https://sheets.new (a new Google Sheet), then **File > Import > Upload** and choose `tools/watchlist_template.csv` (in the project)
    from the program folder. Choose **Replace current sheet** and **Convert text to numbers, dates, and formulas**.
 2. Change the tickers in column **B** to your own stocks (keep column A as `watch`). Add or delete rows as you like.
    Keep the two last rows (`sp500` and `us10y`): they give the S&P 500 level and the 10-year Treasury yield.
@@ -213,7 +213,7 @@ The dashboard reads the two daily files from the Google Drive folder **Econova /
 2. Open Market Digest > **Settings** and choose that folder under **Shared folder** (or type it), for example
    `G:\My Drive\Econova\Video Digests\json`. `python digest.py --check` should say the JSON folder can be written.
 3. To add days from before the JSON export existed, from their saved digests:
-   `python email_backfill.py digests\digest-2026-10-*.html --out "G:\My Drive\Econova\Video Digests\json"`.
+   `python <project>\tools\email_backfill.py digests\digest-2026-10-*.html --out "G:\My Drive\Econova\Video Digests\json"`.
    Several digests on one day become one file, and a day that already has a file is left as it is. Saved digests
    sit in the folder the run started from: `market-digest\digests` for scheduled runs, and the project folder's
    `digests` for runs you started there. Give both patterns in one command, or a day can come out empty.
@@ -224,7 +224,7 @@ The dashboard also checks the calls against prices and shows your own holdings. 
 read through Google Drive (nothing is published):
 
 1. **Market Digest Prices**: Google Finance prices and 120 days of closes for every ticker in `tickers.json`. Make
-   it with `python price_sheet.py --extra GOOG > price_sheet.csv` (add any holding that `tickers.json` lacks after
+   it with `python tools\price_sheet.py --extra GOOG > price_sheet.csv` (in the project folder) (add any holding that `tickers.json` lacks after
    `--extra`), then in Google Sheets **File > Import > Upload**, **Replace spreadsheet**, with **Convert text to
    numbers, dates, and formulas**. When `tickers.json` gains tickers, import a fresh CSV over the same sheet.
 2. **Google Finance Investment Tracker**: Google's template (Sheets > Template gallery > Investment tracker). Put

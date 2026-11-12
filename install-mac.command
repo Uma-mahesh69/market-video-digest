@@ -6,19 +6,19 @@
 set -uo pipefail
 
 INSTALL_DIR="${MARKET_DIGEST_DIR:-$HOME/market-digest}"
-SRC="$(cd "$(dirname "$0")" && pwd)"
+SRC="$(cd "$(dirname "$0")" && pwd)/app"   # the program's files are in the app folder next to this installer
 
 step() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[31mSTOPPED: %s\033[0m\n' "$1"; exit 1; }
 # MANIFEST lists the program's files, one a line (the same list the app's own updater uses).
-[ -f "$SRC/MANIFEST" ] || fail "MANIFEST is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
+[ -f "$SRC/MANIFEST" ] || fail "The app folder is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
 FILES=()
 while IFS= read -r f || [ -n "$f" ]; do
     f="${f%$'\r'}"   # a zip made on Windows can carry Windows line endings
     [ -n "$f" ] && FILES+=("$f")
 done < "$SRC/MANIFEST"
 for f in "${FILES[@]}"; do
-    [ -e "$SRC/$f" ] || fail "$f is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
+    [ -e "$SRC/$f" ] || fail "app/$f is missing next to install-mac.command. Unzip the whole folder first, then run the installer from it."
 done
 
 step "1. Python"
