@@ -411,3 +411,16 @@ class Import(unittest.TestCase):
         self.assertEqual(got["stocks"], [{"ticker": "NVDA", "shares": "20", "cost": "120.5"}, {"ticker": "AAPL", "shares": "1500", "cost": ""}])
         with self.assertRaises(ValueError):
             app.import_file({"name": "x.csv", "data": base64.b64encode(b"a,b\n1,2\n").decode()})
+
+
+class Paste(unittest.TestCase):
+    """Tickers from a page copied on google.com/finance, or a typed list."""
+
+    def test_a_copied_google_finance_page(self):
+        page = ("Your watchlists\nWatchlist\nNVDA\nNVIDIA Corp\n$173.73\n0.00%\nRELIANCE\nReliance Industries Ltd\n₹1,412.30\n-0.85%\n"
+                "https://www.google.com/finance/quote/TCS:NSE\nBRK.B\nBerkshire Hathaway\nUSD\nS&P 500\nINDEXSP:.INX\nNVDA:NASDAQ\n")
+        self.assertEqual(app.find_tickers(page), ["TCS.NS", "NVDA", "RELIANCE.NS", "BRK-B"])
+
+    def test_a_typed_list_but_not_a_sentence(self):
+        self.assertEqual(app.find_tickers("msft\nAMZN, GOOGL"), ["MSFT", "AMZN", "GOOGL"])
+        self.assertEqual(app.find_tickers("Hello there, nothing here"), [])

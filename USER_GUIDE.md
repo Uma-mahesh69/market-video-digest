@@ -401,8 +401,11 @@ You can give Market Digest your stocks in four ways (Settings > **Your stocks** 
 Tickers: US stocks as they are (AAPL, BRK-B). Elsewhere, either Google's form (KRX:005930, LON:VOD) or Yahoo's
 (005930.KS, VOD.L); Market Digest converts between them.
 
-Google's web Google Finance portfolios (google.com/finance) cannot be read by any app; copy those stocks into your
-sheet once.
+**Your stocks on google.com/finance?** Google does not let any app read the watchlists and portfolios on the Google
+Finance website. Bring them over once: open your watchlist or portfolio on google.com/finance, press Ctrl+A then
+Ctrl+C (Cmd on a Mac), and in Market Digest > Settings > Your stocks click **Paste from Google Finance…**, paste, and
+**Find my stocks**. It picks out the tickers (stocks priced in rupees are taken as NSE). Add the shares you own,
+check the list, and **Save**. From then on, keep them in Market Digest or in your Google Finance sheet.
 
 ## 6e. Privacy: where your data is
 

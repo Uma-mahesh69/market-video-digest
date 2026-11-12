@@ -221,8 +221,16 @@ table.stocks input{width:100%}
     <p class="help">Leave the shares empty for a stock you only watch. Your shares and prices stay on this computer (and in your own Google Sheet, if you connect Google).</p>
     <p class="err" id="e-stocks"></p>
     <div class="tests"><button type="button" id="addStock">+ Add a stock</button>
+      <button type="button" id="pasteBtn">Paste from Google Finance…</button>
       <button type="button" id="importBtn">Import from a file…</button><input type="file" id="importFile" accept=".csv,.xlsx,.xlsm,text/csv" hidden>
       <button type="button" data-test="prices">Check prices</button></div>
+    <div id="pasteBox" hidden style="margin-top:10px">
+      <p class="help" style="margin:0 0 6px"><b>From google.com/finance:</b> open your watchlist or portfolio there, press <b>Ctrl+A</b> then <b>Ctrl+C</b>
+        (<b>Cmd+A</b>, <b>Cmd+C</b> on a Mac), and paste it below with <b>Ctrl+V</b>. Market Digest picks out the tickers. You can also type tickers, separated by commas.</p>
+      <textarea id="pasteText" rows="6" style="width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)"
+        placeholder="Paste your Google Finance watchlist or portfolio here"></textarea>
+      <div class="tests"><button type="button" class="primary" id="pasteGo">Find my stocks</button><button type="button" class="link" id="pasteCancel">Cancel</button></div>
+    </div>
     <p class="help">Import: in your current tracker (Google Sheets, Excel), download the tab with your stocks as a .csv or .xlsx file and choose it here.
       It needs a column called Ticker or Symbol; a Shares column is read too.</p>
     <p class="result" id="r-prices" aria-live="polite"></p>
@@ -726,6 +734,20 @@ $('addChan').onclick = () => { const r = chanRow(''); $('chans').append(r); r.qu
 $('form').addEventListener('input', e => { if (e.target.id === 'email_to' || e.target.id === 'email_on') smtpVisibility(); changed(); });
 $('addStock').onclick = () => { const r = stockRow('', '', ''); $('stockRows').append(r); r.querySelector('input').focus(); changed(); };
 $('importBtn').onclick = () => $('importFile').click();
+$('pasteBtn').onclick = () => { $('pasteBox').hidden = false; $('pasteText').focus(); };
+$('pasteCancel').onclick = () => { $('pasteBox').hidden = true; $('pasteText').value = ''; };
+$('pasteGo').onclick = async () => {
+  $('pasteGo').disabled = true;
+  try {
+    const r = await api('/api/paste', { text: $('pasteText').value });
+    const have = new Map(stockValues().filter(x => x.ticker).map(x => [x.ticker.toUpperCase(), x]));
+    for (const x of r.stocks) if (!have.has(x.ticker)) have.set(x.ticker, x);
+    fillStocks([...have.values()]); changed();
+    $('pasteBox').hidden = true; $('pasteText').value = '';
+    show($('r-prices'), 'ok', '✓ ' + r.message);
+  } catch (e) { show($('r-prices'), 'bad', '✕ ' + e.message); }
+  $('pasteGo').disabled = false;
+};
 $('importFile').onchange = async () => {
   const f = $('importFile').files[0]; if (!f) return;
   show($('r-prices'), 'busy', 'Reading ' + f.name + '…');

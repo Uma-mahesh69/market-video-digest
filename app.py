@@ -138,6 +138,50 @@ def find_stocks(rows):
     return []
 
 
+FINANCE_EXCHANGES = {"NASDAQ", "NYSE", "NYSEARCA", "NYSEAMERICAN", "BATS", "OTCMKTS", "NSE", "BOM", "LON", "TYO", "KRX", "KOSDAQ",
+                     "HKG", "ETR", "FRA", "EPA", "AMS", "BIT", "SWX", "TSE", "CVE", "ASX", "SHA", "SHE", "TPE", "SGX", "INDEXSP",
+                     "INDEXNASDAQ", "INDEXDJX", "INDEXNSE", "INDEXBOM"}
+EXCHANGE_SUFFIX = {"NSE": ".NS", "BOM": ".BO", "LON": ".L", "TYO": ".T", "KRX": ".KS", "KOSDAQ": ".KQ", "HKG": ".HK", "ETR": ".DE",
+                   "FRA": ".F", "EPA": ".PA", "AMS": ".AS", "BIT": ".MI", "SWX": ".SW", "TSE": ".TO", "CVE": ".V", "ASX": ".AX",
+                   "SHA": ".SS", "SHE": ".SZ", "TPE": ".TW", "SGX": ".SI"}
+NOT_TICKERS = NOT_STOCKS | {"USD", "INR", "EUR", "GBP", "JPY", "ETF", "INC", "CORP", "LTD", "PLC", "AG", "SA", "NV", "CO", "AM", "PM", "GMT",
+                            "EST", "EDT", "IST", "UTC", "THE", "AND", "FOR", "YOU", "MY", "BUY", "SELL", "HOLD", "NEW", "ALL", "DAY", "WEEK",
+                            "YTD", "MAX", "USA", "US", "UK", "EU", "AI", "CEO", "IPO", "Q1", "Q2", "Q3", "Q4", "OK", "N/A", "OTC", "CFD"} | FINANCE_EXCHANGES
+
+
+def find_tickers(text):
+    """Tickers in text pasted from google.com/finance (a watchlist or portfolio page, copied whole) or typed in a list.
+    Google Finance writes them as NVDA:NASDAQ, RELIANCE:NSE (its links: /finance/quote/NVDA:NASDAQ); a copied page
+    has each ticker on its own line. Returns our symbols (NVDA, RELIANCE.NS), in the order found."""
+    found = []
+
+    def add(sym, exch=""):
+        sym = sym.upper().strip(".")
+        if exch in ("INDEXSP", "INDEXNASDAQ", "INDEXDJX", "INDEXNSE", "INDEXBOM"):
+            return   # indexes are not stocks you hold
+        t = sym + EXCHANGE_SUFFIX.get(exch, "") if exch else sym
+        t = prices.clean(t.replace(".", "-") if not exch and re.fullmatch(r"[A-Z]+\.[A-Z]", sym) else t)
+        if t and t not in found and sym not in NOT_TICKERS:
+            found.append(t)
+
+    for sym, exch in re.findall(r"\b([A-Z0-9][A-Z0-9.&\-]{0,14}):([A-Z]{2,13})\b", text.upper()):
+        if exch in FINANCE_EXCHANGES:
+            add(sym, exch)
+    for exch, sym in re.findall(r"\b([A-Z]{2,13}):([A-Z0-9][A-Z0-9.\-]{0,14})\b", text.upper()):
+        if exch in FINANCE_EXCHANGES:
+            add(sym, exch)
+    lines = [ln.strip() for ln in text.splitlines()]
+    for i, line in enumerate(lines):   # a copied page: the ticker alone on its line (as written, so "Apple" or "Price" never count)
+        if re.fullmatch(r"[A-Z][A-Z0-9&\-]{0,11}(\.[A-Z])?", line):
+            rupees = any("₹" in ln for ln in lines[i + 1:i + 4])   # priced in rupees: an Indian stock, on NSE
+            add(line, "NSE" if rupees and "." not in line else "")
+    tokens = [t for t in re.split(r"[\s,;]+", text.strip()) if t]
+    if not found and 0 < len(tokens) <= 60 and all(re.fullmatch(r"[A-Za-z]{1,6}([.\-][A-Za-z]{1,2})?", t) for t in tokens):
+        for token in tokens:   # a typed list, "msft, AMZN googl": only when every word looks like a ticker
+            add(token.upper())
+    return found
+
+
 def import_file(req):
     """The stocks in a file the person dropped on the page: a CSV or Excel export of their tracker. Nothing is saved
     here; the page shows the rows, and Save keeps them."""
@@ -1232,6 +1276,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"google": google_state(cfg)})
         if path == "/api/import":
             return self.send(200, import_file(req))
+        if path == "/api/paste":
+            found = find_tickers(str(req.get("text") or "")[:200_000])
+            if not found:
+                raise ValueError("No tickers found. On google.com/finance, open your watchlist or portfolio, press Ctrl+A (Cmd+A on a Mac), "
+                                 "then Ctrl+C, and paste here. Or type the tickers, one per line.")
+            return self.send(200, {"stocks": [{"ticker": t, "shares": "", "cost": ""} for t in found],
+                                   "message": f"Found {len(found)}: {', '.join(found)}. Add the shares you own, check the list, then click Save."})
         if path == "/api/claude":
             return self.send(200, claude_connect(on=req.get("action") != "disconnect"))
         if path == "/api/update":
