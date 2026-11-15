@@ -314,32 +314,39 @@ Good questions to start with:
 
 ## 6a. The Overview: your stocks' check-up, and the dashboard
 
-Market Digest opens on the **Overview**. It starts with **Your stocks**: what your stocks are worth (if you gave the
-shares you own) and a card for each stock you own or watch, the ones that need attention first:
+Market Digest opens on the **Overview**: your stocks in one table, like a watchlist on Google Finance, with an
+answer for each. It updates by itself after every digest.
 
-- **A verdict in plain words**: *Analysts are positive*, *mixed*, *cautious*, or *Not enough analyst views yet*.
-  It weighs the bullish and bearish calls in your channels' videos (a call counts more from an analyst whose calls
-  have beaten the S&P 500, and less from one whose have not) together with Wall Street's rating from TipRanks.
-  "Based on ..." says what it rests on.
-- **+ points for**, **− points against** (including too much of your money in one stock), **◷ what to watch**
-  (earnings soon, the videos and Wall Street disagreeing), and under **More**: things worth knowing (the price far
-  from its high, how earlier calls on it turned out) and the latest calls, each linked to the moment in the video.
-- Above the cards, notes on your portfolio as a whole: one stock taking a big share, few stocks, stocks with no
-  analyst views.
+**At the top:** what your stocks are worth and today's change (if you gave the shares you own); how many of your
+stocks are a **Yes**, a **Wait** or a **No**; the analysts' mood on your stocks; and the next earnings date. Under
+it, short alerts: one stock taking a big share of your money, a stock you own that analysts say No to, earnings
+this week.
 
-It is a summary to help you decide, not advice to buy or sell. Below your stocks, **What the analysts said** shows
-what your digests add up to, for the last 7, 30 or 90 days. It updates by itself after every digest. Every section
-starts with a line saying what it shows; in short:
+**My stocks**, one row a stock:
 
-- **The four numbers at the top**: how many videos were read; the mood (the share of bullish calls among bullish and
-  bearish ones); and how often the **bullish calls beat the S&P 500** and the **bearish calls lagged it**.
-- **What matters now**: a few sentences picked by code: your holdings that analysts turned bearish on, stocks where
-  the videos and Wall Street disagree, calls that are working or not, the analyst with the best record.
-- **Your holdings** (if you typed share counts): each stock's weight, its price moves, and the calls on it.
-- **Stocks the analysts talked about**: each stock's calls (green bullish, red bearish, grey neutral or mixed), which
-  way they lean, the latest call with its reason and a link to the moment, and the price move since the first call.
-- **Mood, day by day**, **Analysts** (calls, how many were right, average edge over the S&P 500), **Best and worst
-  calls**, **Coming up** and **Latest videos**.
+| Column | What it shows |
+|---|---|
+| **Price**, **Today** | The latest price and today's change. |
+| **Invest?** | **YES**: the analysts clearly favour it. **NO**: they are clearly against it. **WAIT**: they are split. **—**: no views yet. It combines the bullish and bearish calls in your channels' videos (a call counts more from an analyst whose past calls beat the S&P 500, less from one whose did not) with Wall Street's rating from TipRanks. |
+| **Confidence** | How much stands behind that answer, 5% to 95%: how one-sided the views are, how many calls there are, whether the videos and Wall Street agree, and how earlier calls on that stock turned out. |
+| **Analysts** | Bullish calls ▲ against bearish calls ▼ in the videos. |
+| **Wall St**, **Target** | TipRanks' consensus rating, and how far the average 12-month price target is above or below today's price. |
+| **3 months**, **52-week range** | The price over three months, and where today's price sits between the year's low and high. |
+
+Click a column's name to sort by it. **Click a row** to open it: a larger price chart; the **key numbers** (week
+and month moves, the year's low and high, price target, Smart Score, P/E, next earnings, how many earlier calls were
+right, and your shares, value, gain and share of portfolio); and **Behind the signal**: the facts that made the
+answer, as short labels, with the latest calls, each linked to the moment in the video.
+
+The other tabs, for the last 7, 30 or 90 days:
+
+- **Ideas**: the stocks the analysts talked about most that are not on your list, with the same columns.
+- **Analysts**: who made calls, how often they were right and by how much they beat the S&P 500, and the best and
+  worst calls.
+- **Calendar & videos**: earnings and events the videos mentioned, the mood day by day, and the latest videos.
+
+**How to read this page**, at the bottom, explains every term. The signal sums up what analysts said; it is not
+personal financial advice, and analysts are often wrong.
 
 How a call is scored: from the first close after the video to the latest close, once 3 trading days have passed. A
 bullish call is right if the stock did better than the S&P 500; a bearish call, if it did worse. Prices are daily

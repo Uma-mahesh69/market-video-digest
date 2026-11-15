@@ -12,6 +12,10 @@ Installed copies update themselves: Market Digest shows **Update now** on its Ho
   price), what to watch (earnings, disagreements), and notes on your portfolio as a whole (too much in one stock).
 - The Overview is the first page; the old home page is now **Digests**. A glossary explains the terms.
 - Import your stocks from an existing tracker (CSV or Excel), with the price you paid, to see your gain.
+- **The Overview is a table, like a Google Finance watchlist**: for each of your stocks, **Invest? Yes / No / Wait**,
+  a **confidence** percentage, the analysts' calls, Wall Street's rating and target, a price chart and the 52-week
+  range. Click a stock for its key numbers and the facts behind the signal. Tabs: Ideas, Analysts, Calendar & videos.
+  Far less text. The weekly digest and Claude's `my_stocks` carry the same signal.
 - **Simpler first run**, about two minutes: **Get my free key** and **Paste my key** (checked by itself), then
   paste your stocks straight from google.com/finance; three popular channels are already chosen. No links, no other keys.
 - On a Mac with no Python, the installer sets up a private copy by itself.

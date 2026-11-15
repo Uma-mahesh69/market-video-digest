@@ -332,6 +332,55 @@ def pct(x):
     return f"{abs(x):.0f}%" if x is not None else ""
 
 
+SIGNAL = {"positive": "yes", "cautious": "no", "mixed": "wait", "quiet": "none"}
+
+
+def confidence_pct(score, n, has_street, agree, track=None):
+    """How much stands behind the signal, 5 to 95: how one-sided the views are, how much evidence there is
+    (calls in the videos, Wall Street's rating, and the two agreeing), and how earlier calls on the stock turned out.
+    None when there are no views at all."""
+    if score is None:
+        return None
+    evidence = 0.45 * min(1.0, n / 5) + (0.35 if has_street else 0) + (0.20 if agree else 0)
+    conviction = min(1.0, abs(score) / 0.8)
+    if abs(score) < 0.3:   # "wait": how sure we are that the views really are split
+        value = 0.9 * evidence * (1 - conviction / 2)
+    else:
+        value = 0.4 * conviction + 0.6 * evidence
+        if track and track["scored"] >= 3:   # earlier calls on it that went wrong take some of the confidence away
+            value *= 0.8 + 0.4 * track["right"] / track["scored"]
+    return int(max(5, min(95, round(value * 100))))
+
+
+def factors_of(counts, n, st, s_score, month, from_high, weight, days_left, agree, track):
+    """The few facts behind the signal, as short labels: tone is good, bad, warn or info."""
+    out = []
+    bull, bear = counts.get(BULL, 0), counts.get(BEAR, 0)
+    if n:
+        out.append({"text": f"{bull} of {n} video calls bullish", "tone": "good" if bull > bear else "bad" if bear > bull else "info"})
+    if st.get("consensus"):
+        out.append({"text": f"Wall St: {st['consensus']}", "tone": "good" if (s_score or 0) > 0 else "bad" if (s_score or 0) < 0 else "info"})
+    if st.get("upside_pct") is not None:
+        up = st["upside_pct"]
+        out.append({"text": f"Target {'+' if up >= 0 else '−'}{abs(up):.0f}%", "tone": "good" if up >= 10 else "bad" if up < 0 else "info"})
+    if st.get("smart_score") is not None:
+        sc = st["smart_score"]
+        out.append({"text": f"Smart Score {sc:g}/10", "tone": "good" if sc >= 8 else "bad" if sc <= 3 else "info"})
+    if track and track["scored"] >= 2:
+        out.append({"text": f"{track['right']} of {track['scored']} past calls right", "tone": "good" if track["right"] * 2 > track["scored"] else "bad" if track["right"] * 2 < track["scored"] else "info"})
+    if month is not None and abs(month) >= 15:
+        out.append({"text": f"{'Up' if month > 0 else 'Down'} {abs(month):.0f}% in a month", "tone": "info" if month > 0 else "bad"})
+    if from_high is not None and from_high <= -30:
+        out.append({"text": f"{abs(from_high):.0f}% below 1-year high", "tone": "info"})
+    if weight and weight >= 25:
+        out.append({"text": f"{weight:.0f}% of your portfolio", "tone": "warn"})
+    if days_left is not None and 0 <= days_left <= 21:
+        out.append({"text": f"Earnings in {int(days_left)}d", "tone": "warn"})
+    if n >= 2 and s_score not in (None, 0) and not agree:
+        out.append({"text": "Videos and Wall St disagree", "tone": "warn"})
+    return out
+
+
 def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
     """The plain-language check-up of one stock."""
     held = (cfg.get("holdings") or {}).get(t)
@@ -394,6 +443,9 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
 
     watch = []
     days_left = st.get("days_to_earnings")
+    when = to_date(st.get("next_earnings"))   # the saved count goes stale: count from the date itself when there is one
+    if when:
+        days_left = (when.date() - today).days
     if days_left is not None and 0 <= days_left <= 21:
         watch.append(f"Earnings in {int(days_left)} day{'s' if days_left != 1 else ''}" + (f" ({st['next_earnings']})" if st.get("next_earnings") else "")
                      + ": the price often moves a lot that day.")
@@ -411,12 +463,19 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
     basis = [f"{n} call{'s' if n != 1 else ''} in your channels' videos" if n else "", "Wall Street's rating" if s_score is not None else ""]
     price = q.get("price")
     value = held * price if held and price else None
+    track = {"right": sum(s["right"] for _, s in scored), "scored": len(scored)} if scored else None
+    closes = prices.series(t, cache)[-66:]   # about three months of closes, for the small chart
     return {
         "ticker": t, "name": q.get("name") or next((c["name"] for c in mine if c["name"]), ""),
         "owned": bool(held), "shares": held, "cost": cost, "value": value, "weight_pct": w,
         "gain_pct": round((price / cost - 1) * 100, 1) if price and cost else None,
         "price": price, "currency": q.get("currency"), "change_pct_day": q.get("change_pct_day"), "change_pct_month": month,
         "from_high_pct": q.get("from_high_pct"), "as_of": q.get("as_of"), "source": q.get("source"),
+        "change_pct_week": q.get("change_pct_week"), "high_52w": q.get("high_52w"), "low_52w": q.get("low_52w"), "pe": q.get("pe"),
+        "spark": [c for _, c in closes], "spark_from": closes[0][0] if closes else None,
+        "signal": SIGNAL[verdict], "confidence_pct": confidence_pct(score, n, s_score is not None, agree, track),
+        "factors": factors_of(counts, n, st, s_score, month, q.get("from_high_pct"), w, days_left, agree, track),
+        "track": track, "days_to_earnings": days_left if days_left is not None and days_left >= 0 else None,
         "verdict": verdict, "verdict_text": VERDICT_TEXT[verdict], "confidence": confidence,
         "basis": " and ".join(b for b in basis if b) or "nothing yet",
         "score": None if score is None else round(score, 2),
@@ -429,6 +488,15 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
 
 def score_call(call, cache):
     return score(call, cache)
+
+
+def ideas(mine, calls, cache, records, street, cfg, events, today, limit=12):
+    """The stocks the analysts talked about most that are not on your list, with the same signal: what else to look at."""
+    counted = Counter(c["ticker"] for c in calls if c["ticker"] not in mine and c["view"] in (BULL, BEAR))
+    rows = [check_stock(t, calls, cache, records, street, cfg, {}, events, today) for t, n in counted.most_common(limit * 2) if n >= 2]
+    rows = [r for r in rows if r["signal"] != "none"]
+    rows.sort(key=lambda r: (-(r["calls"][BULL] + r["calls"][BEAR]), r["ticker"]))
+    return rows[:limit]
 
 
 def checkup(cfg, days=30, cache=None, today=None):
@@ -467,8 +535,23 @@ def checkup(cfg, days=30, cache=None, today=None):
     quiet = [c["ticker"] for c in owned if c["verdict"] == "quiet"]
     if quiet:
         health.append(f"No recent analyst views on {', '.join(quiet)}. Adding a channel that covers them would help.")
-    return {"stocks": checks, "owned": len(owned), "watched": len(checks) - len(owned),
+    alerts = []   # the same notes, as short labels for the top of the page
+    if top and (top["weight_pct"] or 0) >= 35:
+        alerts.append({"text": f"{top['ticker']} is {top['weight_pct']:.0f}% of your portfolio", "tone": "warn"})
+    if len(owned) and len(owned) < 4:
+        alerts.append({"text": f"Only {len(owned)} stock{'s' if len(owned) != 1 else ''} owned: little spread", "tone": "warn"})
+    for c in owned:
+        if c["verdict"] == "cautious":
+            alerts.append({"text": f"You own {c['ticker']}: analysts say No", "tone": "bad"})
+    for c in checks:
+        if c["days_to_earnings"] is not None and c["days_to_earnings"] <= 7:
+            alerts.append({"text": f"{c['ticker']} earnings in {int(c['days_to_earnings'])}d", "tone": "info"})
+    return {"stocks": checks, "owned": len(owned), "watched": len(checks) - len(owned), "alerts": alerts,
             "total_value": round(total, 2) if total else None, "currency": next(iter(currencies), None) if total else None,
             "day_change_pct": round(day, 2) if day is not None else None,
             "counts": {v: sum(c["verdict"] == v for c in checks) for v in ("positive", "mixed", "cautious", "quiet")},
+            "signals": {v: sum(c["signal"] == v for c in checks) for v in ("yes", "wait", "no", "none")},
+            "next_earnings": min(({"ticker": c["ticker"], "date": (c["street"] or {}).get("next_earnings"), "days": c["days_to_earnings"]}
+                                  for c in checks if c["days_to_earnings"] is not None), key=lambda e: e["days"], default=None),
+            "ideas": ideas(stocks, calls, cache, records, street, cfg, events, today),
             "health": health, "days": days}

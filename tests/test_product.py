@@ -397,6 +397,38 @@ class Checkup(Folder):
         self.assertTrue(any("NVDA is 91%" in h for h in c["health"]))                # too much in one stock
         self.assertTrue(any("cautious on TSLA" in h for h in c["health"]))
 
+    def test_each_stock_gets_a_yes_no_signal_with_a_confidence_and_the_numbers(self):
+        c = app.insights.checkup({"watchlist": ["NVDA", "TSLA", "AAPL"], "holdings": {"NVDA": 10, "TSLA": 1}}, days=30)
+        by = {s["ticker"]: s for s in c["stocks"]}
+        self.assertEqual([by[t]["signal"] for t in ("NVDA", "TSLA", "AAPL")], ["yes", "no", "none"])
+        self.assertEqual(c["signals"], {"yes": 1, "wait": 0, "no": 1, "none": 0 + 1})
+        # videos and Wall Street agreeing on 5 calls is worth more than 4 calls alone; no views, no confidence
+        self.assertGreater(by["NVDA"]["confidence_pct"], by["TSLA"]["confidence_pct"])
+        self.assertTrue(5 <= by["TSLA"]["confidence_pct"] <= 95)
+        self.assertIsNone(by["AAPL"]["confidence_pct"])
+        labels = [f["text"] for f in by["NVDA"]["factors"]]
+        self.assertIn("5 of 5 video calls bullish", labels)
+        self.assertIn("Wall St: Strong Buy", labels)
+        self.assertIn("Target +20%", labels)
+        self.assertEqual(len(by["NVDA"]["spark"]), 31)
+        self.assertEqual((by["NVDA"]["low_52w"], by["NVDA"]["high_52w"]), (100.0, 100.0))
+        self.assertIn({"text": "You own TSLA: analysts say No", "tone": "bad"}, c["alerts"])
+        self.assertEqual(c["next_earnings"]["ticker"], "NVDA")
+
+    def test_confidence_grows_with_evidence_and_shrinks_when_earlier_calls_went_wrong(self):
+        conf = app.insights.confidence_pct
+        self.assertIsNone(conf(None, 0, False, False))
+        self.assertLess(conf(1.0, 1, False, False), conf(1.0, 5, False, False))
+        self.assertLess(conf(1.0, 5, False, False), conf(1.0, 5, True, True))
+        self.assertLess(conf(1.0, 5, True, True, {"right": 0, "scored": 5}), conf(1.0, 5, True, True, {"right": 5, "scored": 5}))
+        self.assertEqual(conf(1.0, 20, True, True, {"right": 9, "scored": 9}), 95)   # never certain
+        self.assertGreaterEqual(conf(0.0, 0, True, False), 5)
+
+    def test_ideas_are_the_most_called_stocks_that_are_not_on_the_list(self):
+        c = app.insights.checkup({"watchlist": ["NVDA"]}, days=30)
+        self.assertEqual([(s["ticker"], s["signal"]) for s in c["ideas"]], [("TSLA", "no")])
+        self.assertEqual(app.insights.checkup({"watchlist": ["NVDA", "TSLA"]}, days=30)["ideas"], [])
+
     def test_a_record_is_trusted_only_when_it_beat_the_market_and_was_right_half_the_time(self):
         self.assertTrue(app.insights.good_record({"scored": 4, "edge": 2.0, "hit_pct": 75}))
         self.assertFalse(app.insights.good_record({"scored": 29, "edge": 0.5, "hit_pct": 41}))

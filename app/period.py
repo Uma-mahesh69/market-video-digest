@@ -100,12 +100,14 @@ def render(kind, ov, words, theme_list, start, end):
     check = ov.get("checkup") or {}
     if check.get("stocks"):
         tone = {"positive": C["bullish"], "cautious": C["bearish"], "mixed": C["mixed"], "quiet": C["muted"]}
+        word = {"yes": "YES", "no": "NO", "wait": "WAIT", "none": "—"}
         rows = [[f'<b>{e(s["ticker"])}</b>' + (' <span style="font-size:11px;color:%s">you own</span>' % C["blue"] if s["owned"] else ""),
-                 f'<span style="color:{tone[s["verdict"]]}"><b>{e(s["verdict_text"])}</b></span>',
-                 "<br>".join(e(x) for x in (s["for"][:1] + s["against"][:1] + s["watch"][:1])) or e(s["worth_knowing"][0] if s["worth_knowing"] else "")]
+                 f'<span style="color:{tone[s["verdict"]]}"><b>{word[s["signal"]]}</b></span>',
+                 f'{s["confidence_pct"]}%' if s["confidence_pct"] is not None else "—",
+                 e(" · ".join(f["text"] for f in s["factors"][:4])) or "No analyst views yet"]
                 for s in check["stocks"][:12]]
         intro = "".join(f'<p style="margin:0 0 8px;padding:8px 10px;background:#FFF4D6;border-radius:6px;font-size:14px">{e(h)}</p>' for h in check["health"][:2])
-        parts.append(section("Your stocks", intro + table(["Stock", "What analysts say", "Why"], rows)))
+        parts.append(section("Your stocks", intro + table(["Stock", "Invest?", "Confidence", "Behind it"], rows)))
     if ov["signals"]:
         parts.append(section("What matters", bullets([e(s["text"]) + (f' <a href="{e(s["link"])}" style="color:{C["blue"]}">watch</a>' if s["link"] else "")
                                                       for s in ov["signals"]])))

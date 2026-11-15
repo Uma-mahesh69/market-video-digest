@@ -1,6 +1,6 @@
 # Market Digest
 
-**A check-up of your own stocks, every morning, from what the analysts are saying.** Market Digest reads the finance
+**Should I invest? A Yes / No signal for each of your own stocks, every morning, from what the analysts are saying.** Market Digest reads the finance
 YouTube channels you follow, checks each of your stocks against what the analysts said, how good their calls have
 been, Wall Street's rating (TipRanks) and the price from **Google Finance**, and shows it all on one clear page that
 needs no finance background.
@@ -9,13 +9,16 @@ It runs on **your own computer** (Windows or Mac). Your stocks stay in your own 
 there is no Market Digest server. The only online services are the ones that do the thinking and the prices:
 Google Gemini (free key), Google Finance, and optionally TipRanks.
 
+![The Overview: your stocks with a Yes / No signal, confidence and key numbers](docs/img/overview.png)
+
+*(Example data.)*
+
 What you see:
 
-- **Overview**: each stock you own or watch, with a plain verdict ("Analysts are positive / mixed / cautious") and
-  why: the points for and against, whose calls have been good, Wall Street's rating and price target, the price
-  moves, and what to watch (earnings, disagreements). Plus notes on your portfolio as a whole, like too much in one
-  stock. Below it: the stocks the analysts talked about, how their calls did against the S&P 500, each analyst's
-  record, the mood day by day, and what is coming up. A glossary explains every term.
+- **Overview**: your stocks in one table, like a Google Finance watchlist, each with **Invest? Yes / No / Wait**,
+  a **confidence** percentage, the analysts' bullish and bearish calls, Wall Street's rating and price target, a
+  price chart and the 52-week range. Click a stock for its key numbers and the facts behind the signal. More tabs:
+  **Ideas** (most-discussed stocks you do not have), **Analysts** (whose calls have been right), **Calendar**.
 - **Your stocks from Google Finance**: connect Google and your stocks live in a sheet in your own Drive, priced by
   Google Finance; edit it there or in the app. Or type them in, or import your current tracker.
 - **Daily, weekly and monthly digests**: on screen, in your browser and by email if you like (just your address, no
@@ -49,8 +52,8 @@ updates itself in one click when a new version is out.
 | I want to... | Do this |
 |---|---|
 | Read today's digest | It opens by itself when ready (or **Market Digest** > Digests > Recent digests, or the email). |
-| Check my stocks | **Market Digest** opens on the **Overview**: a check-up of each stock you own or watch. |
-| See how the analysts' calls are doing | **Overview**, below your stocks (7, 30 or 90 days). |
+| Check my stocks | **Market Digest** opens on the **Overview**: Invest? Yes / No / Wait, with a confidence, for each stock you own or watch. Click a stock for its numbers. |
+| See how the analysts' calls are doing | **Overview > Analysts** (7, 30 or 90 days). |
 | Weekly and monthly summaries | Arrive by themselves on Saturdays and on the 1st (Settings > How you get the digest). |
 | Add my stocks | **Settings > Your stocks** (or your Google portfolio sheet once Google is connected), or **Import from a file**. |
 | Know whether it ran, and why not | **Market Digest** > **Digests** shows the last run, in plain words. |

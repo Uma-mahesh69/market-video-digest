@@ -199,10 +199,14 @@ def my_stocks(days=30):
         s.pop("shares", None)
         s.pop("value", None)
         s.pop("cost", None)
+    for s in [*out["stocks"], *out.get("ideas", [])]:
+        s.pop("spark", None)   # the chart's points: of no use in a conversation
     out.pop("total_value", None)
-    out["note"] = ("A plain-language check-up of each stock the person owns or watches: what the analysts in their videos said, "
-                   "whose calls have been good, Wall Street's rating (TipRanks) and the price. Share counts and money amounts are left out. "
-                   "It is information to help them decide, not advice: never tell them to buy or sell.")
+    out["note"] = ("Each stock the person owns or watches (and 'ideas': the most-discussed stocks not on their list). 'signal' is what the "
+                   "analysts' views add up to: yes (they clearly favour it), no (clearly against), wait (split), none (no views yet); "
+                   "'confidence_pct' is how much stands behind it (5 to 95); 'factors' are the facts behind it. It combines the calls in "
+                   "their videos with Wall Street's rating (TipRanks). Share counts and money amounts are left out. Present the signal as "
+                   "what the analysts say, not as your own advice to buy or sell.")
     return out
 
 
