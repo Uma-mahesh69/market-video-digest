@@ -1,0 +1,44 @@
+rules_version = '2';
+// Who may read and write what. The engine uses an admin key and is not bound by these rules.
+//   stocks, charts, market : the shared pages. Any signed-in user reads; nobody writes.
+//   public                 : the example on the front page. Anyone reads.
+//   users/{uid}            : a user's own list and email choices. Only that user, and only in the expected shape.
+//   requests/{ticker}      : "please start covering this stock". A signed-in user may add one.
+//   videos, mail, engine   : the engine's own. No access from a browser.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function mine(uid) { return signedIn() && request.auth.uid == uid; }
+    function validPrefs(p) {
+      return p is map && p.keys().hasOnly(['daily', 'weekly'])
+        && (!('daily' in p) || p.daily in ['every', 'changes', 'off'])
+        && (!('weekly' in p) || p.weekly is bool);
+    }
+    function validUser(d) {
+      return d.keys().hasOnly(['email', 'name', 'photo', 'stocks', 'prefs', 'onboarded', 'created', 'updated'])
+        && d.email is string && d.email == request.auth.token.email   // emails only ever go to the address signed in with
+        && (!('name' in d) || (d.name is string && d.name.size() <= 80))
+        && (!('photo' in d) || (d.photo is string && d.photo.size() <= 600))
+        && (!('stocks' in d) || (d.stocks is list && d.stocks.size() <= 60))
+        && (!('prefs' in d) || validPrefs(d.prefs))
+        && (!('onboarded' in d) || d.onboarded is bool)
+        && (!('created' in d) || d.created is string)
+        && (!('updated' in d) || d.updated is string);
+    }
+
+    match /stocks/{ticker} { allow read: if signedIn(); }
+    match /charts/{ticker} { allow read: if signedIn(); }
+    match /market/{page}   { allow read: if signedIn(); }
+    match /public/{page}   { allow read: if true; }
+
+    match /users/{uid} {
+      allow get, delete: if mine(uid);
+      allow create, update: if mine(uid) && validUser(request.resource.data);
+    }
+    match /requests/{ticker} {
+      allow create, update: if signedIn() && ticker.matches('^[A-Z0-9._-]{1,15}$')
+        && request.resource.data.keys().hasOnly(['by', 'at'])
+        && request.resource.data.by == request.auth.uid && request.resource.data.at is string;
+    }
+  }
+}

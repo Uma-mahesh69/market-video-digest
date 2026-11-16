@@ -40,3 +40,7 @@ presentation-deck/
 Thumbs.db
 Desktop.ini
 prices.json
+.engine-cache/
+
+# local Firebase emulator logs
+*-debug.log

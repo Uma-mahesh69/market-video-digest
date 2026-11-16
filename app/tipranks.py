@@ -230,7 +230,12 @@ def rows(data):
                         "upside_pct": None if up is None else round(up * 100, 1), "smart_score": _num(rec.get("smartScore")),
                         "price": _num(rec.get("price")), "next_earnings": rec.get("nextEarningsDate"),
                         "days_to_earnings": _num(rec.get("daysUntilEarnings")), "news_sentiment": _num(rec.get("newsSentiment")),
-                        "url": rec.get("url")})
+                        "url": rec.get("url"),
+                        # the rest of what get_assets_data gives, for the stock page
+                        "sector": rec.get("sector") or None, "market_cap": _num(rec.get("marketCap")), "pe": _num(rec.get("peRatio")),
+                        "dividend_yield_pct": None if _num(rec.get("dividendYield")) is None else round(_num(rec.get("dividendYield")) * 100, 2),
+                        "hedge_fund_score": _num(rec.get("hedgeFundsScore")), "insider_score": _num(rec.get("insiderScore")),
+                        "ytd_pct": _num(rec.get("ytdGainPct")), "year_pct": _num(rec.get("yearlyGainPct"))})
             continue
         flat = _flat(rec)
         out.append({

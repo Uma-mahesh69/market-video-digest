@@ -1,0 +1,36 @@
+{
+  "_comment": "What the shared engine reads, for every user at once. Edit, commit, and the next run uses it.",
+  "channels": [
+    {"name": "CNBC Television", "url": "https://www.youtube.com/@CNBCtelevision"},
+    {"name": "Bloomberg Television", "url": "https://www.youtube.com/@markets"},
+    {"name": "Yahoo Finance", "url": "https://www.youtube.com/@YahooFinance"},
+    {"name": "Schwab Network", "url": "https://www.youtube.com/@SchwabNetwork"},
+    {"name": "Fox Business", "url": "https://www.youtube.com/@FoxBusiness"},
+    {"name": "TheStreet", "url": "https://www.youtube.com/@TheStreet"}
+  ],
+  "analysts": ["Dan Ives", "Tom Lee", "Mike Wilson", "Ed Yardeni", "Liz Ann Sonders", "Jeremy Siegel", "Mohamed El-Erian", "Cathie Wood",
+               "Gene Munster", "Sam Stovall", "Savita Subramanian", "Jim Cramer", "David Kostin", "Lori Calvasina", "Adam Parker",
+               "Brian Belski", "Julian Emanuel", "Gary Black", "Stacy Rasgon", "Ross Gerber", "Josh Brown", "Stephanie Link"],
+  "limits": {
+    "videos_per_day": 40,
+    "videos_per_run": 8,
+    "max_video_minutes": 20,
+    "lookback_hours": 36,
+    "video_fps": 0.2,
+    "tipranks_batch": 40,
+    "tipranks_calls_per_day": 3,
+    "tipranks_reserve": 2
+  },
+  "email": {"hour_utc": 2, "weekly_weekday": 5},
+  "base_tickers": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "BRK-B", "JPM", "LLY", "V", "UNH", "XOM", "MA", "COST", "WMT",
+                   "HD", "PG", "JNJ", "NFLX", "ORCL", "BAC", "CRM", "ABBV", "KO", "CVX", "AMD", "PEP", "ADBE", "TMO", "MCD", "CSCO", "ACN", "DIS",
+                   "INTC", "QCOM", "IBM", "GE", "CAT", "GS", "MS", "PFE", "MRK", "NKE", "BA", "UBER", "PLTR", "SNOW", "SHOP", "COIN", "MU",
+                   "TSM", "ASML", "ARM", "SMCI", "PYPL", "SBUX", "T", "VZ", "F", "GM", "C", "WFC", "BLK", "SPY", "QQQ"],
+  "packs": [
+    {"name": "Big Tech", "tickers": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]},
+    {"name": "AI and chips", "tickers": ["NVDA", "AMD", "AVGO", "TSM", "MU", "PLTR", "SMCI"]},
+    {"name": "Banks", "tickers": ["JPM", "BAC", "GS", "MS", "WFC", "C"]},
+    {"name": "Household names", "tickers": ["COST", "WMT", "KO", "MCD", "DIS", "NKE", "SBUX"]},
+    {"name": "Health", "tickers": ["LLY", "UNH", "JNJ", "ABBV", "PFE", "MRK"]}
+  ]
+}

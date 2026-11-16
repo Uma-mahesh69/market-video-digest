@@ -363,7 +363,7 @@ _resting = {}   # (model, uses tools) -> when it last failed
 _resting_lock = threading.Lock()
 
 
-def call_gemini(cfg, body, models=None, patient=True):
+def call_gemini(cfg, body, models=None, patient=True, timeout=120):
     """Send one request to the first model in the list that is up.
     A busy, out-of-quota or silent model is skipped for 10 minutes and the next one is tried at once,
     so a bad model costs one failed call per run instead of minutes of retries per video.
@@ -379,7 +379,7 @@ def call_gemini(cfg, body, models=None, patient=True):
             req = urllib.request.Request(API_URL.format(model=model), data=json.dumps(body).encode("utf-8"),
                                          headers={"Content-Type": "application/json", "x-goog-api-key": cfg["gemini_api_key"]})
             try:
-                with urllib.request.urlopen(req, timeout=120) as r:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
                     return json.load(r)
             except urllib.error.HTTPError as err:
                 last = GeminiError(err.code, err.read().decode("utf-8", "replace")[:300])
