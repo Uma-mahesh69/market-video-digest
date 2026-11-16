@@ -44,7 +44,7 @@ service grows with the number of channels, not the number of users.
 | `tools/check.py` | Tries every secret for real ("Check setup" workflow). |
 | `tools/make_symbols.py` | Builds the search list at deploy time. |
 | `tools/demo_data.py` | Invented data for local work and tests. |
-| `tests/e2e.cjs` | The whole product in a browser against the emulators: 48 checks, the security rules included. |
+| `tests/e2e.cjs` | The whole product in a browser against the emulators: 52 checks, the security rules included. |
 
 The signal itself, the scoring of analysts' calls and the notes format are the tested code in `app/`
 (`insights.py`, `prices.py`, `tipranks.py`, `digest.py`), which the engine imports.
@@ -75,8 +75,8 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-md python cloud/tools
 Open http://127.0.0.1:5000. "Continue with Google" opens the emulator's own sign-in, where any made-up account works.
 
 ```
-python -m unittest                 # 154 tests: the desktop app's, and the engine's on invented data
-node cloud/tests/e2e.cjs           # 48 checks in a real browser (npm i -g playwright)
+python -m unittest                 # 156 tests: the desktop app's, and the engine's on invented data
+node cloud/tests/e2e.cjs           # 52 checks in a real browser (npm i -g playwright)
 ```
 
 ## Decisions worth knowing

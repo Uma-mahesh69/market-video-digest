@@ -186,4 +186,27 @@ def build(pairs, cache, street, prev, universe, today, sources, themes=None):
             charts[t] = ch
     docs = market_docs(cards, pairs, calls30, cache, sources, today, themes)
     docs["analysts"] = analysts_doc(calls120, cache, sources["analysts"], pairs, today)
+    docs["overview"]["top_calls"] = top_calls(docs["analysts"]["rows"], cards, today)
     return cards, charts, docs
+
+
+def top_calls(analysts, cards, today, days=21, n=10):
+    """What the best-rated analysts have just turned bullish on: one line a stock, the best analyst's newest call."""
+    since = (today - timedelta(days=days)).isoformat()
+    found = []
+    for a in analysts:
+        if (a.get("stars") or 0) < 3.5:
+            continue
+        for c in a["recent"]:
+            if c["view"] == insights.BULL and c["day"] >= since and c["ticker"] in cards:
+                found.append({"ticker": c["ticker"], "name": cards[c["ticker"]].get("name") or "", "analyst": a["analyst"], "stars": a["stars"],
+                              "hit_pct": a.get("hit_pct"), "day": c["day"], "reason": c["reason"][:200], "link": c["link"],
+                              "signal": cards[c["ticker"]]["signal"]})
+    found.sort(key=lambda c: c["day"], reverse=True)
+    found.sort(key=lambda c: -c["stars"])
+    out, seen = [], set()
+    for c in found:
+        if c["ticker"] not in seen:
+            seen.add(c["ticker"])
+            out.append(c)
+    return out[:n]

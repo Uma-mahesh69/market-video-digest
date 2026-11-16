@@ -64,6 +64,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await p.locator('.card.flush tbody tr.link').first().locator('.icon-btn').click(); await p.click('text=Edit what I hold');
   await p.locator('.modal input').nth(0).fill('10'); await p.locator('.modal input').nth(1).fill('100'); await p.click('.modal >> text=Save'); await wait(p, 1200);
   ok('typing shares shows the portfolio value', (await p.locator('.tile .k').first().textContent()).includes('Portfolio value'));
+  ok('and a portfolio health card: by signal, by sector, what Wall Street expects', await (async () => { const t = await p.locator('.page').textContent(); return ['Portfolio health', 'By value: Yes', 'Wall Street expects', 'Biggest position'].every(x => t.includes(x)); })());
   await p.click('text=Add stocks'); await p.fill('.modal input.input', 'costco'); await wait(p, 400); await p.locator('.modal .results button').first().click();
   await p.click('.modal >> text=Add to my stocks'); await wait(p, 1500);
   ok('a stock can be added from the dashboard', await rows(p) === 11);
@@ -89,12 +90,15 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   ok('ideas: Add puts the stock in my list', await p.locator('.card.flush .btn.sm').count() === before - 1);
   await p.click('.seg >> text=Most discussed'); await wait(p, 300);
   ok('ideas: other lists open', await rows(p) >= 5);
+  ok('ideas: fresh calls from the best-rated analysts', (await p.locator('.page').textContent()).includes('Fresh bullish calls from the best-rated analysts'));
   await p.goto(BASE + '/#/analysts'); await p.waitForSelector('tbody tr.link'); await wait(p);
   ok('analysts: a ranked table with ratings', await p.locator('tbody tr.link').count() >= 5 && await p.locator('.stars').count() >= 5);
   await p.locator('tbody tr.link').first().click(); await wait(p, 900);
   ok('an analyst\'s page lists their calls with results', (await p.locator('.page').textContent()).includes('Latest calls') && await p.locator('tbody tr').count() >= 3);
   await p.goto(BASE + '/#/calendar'); await wait(p, 1200);
   ok('calendar: earnings for my stocks and the latest videos', await p.locator('.list a .badge').count() >= 3 && (await p.locator('.page').textContent()).includes('Latest videos read'));
+  await p.goto(BASE + '/#/help'); await wait(p, 600);
+  ok('how it works: questions and a glossary', await (async () => { const t = await p.locator('.page').textContent(); return ['Is this financial advice?', 'Confidence', 'Smart Score', 'P/E'].every(x => t.includes(x)); })() && (await p.locator('.theme').count()) >= 15);
   await p.goto(BASE + '/#/status'); await wait(p, 900);
   ok('status page shows the last run', (await p.locator('.page').textContent()).includes('Last run'));
 
@@ -103,6 +107,10 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await p.click('text=Only when a signal changes'); await wait(p, 900);
   await p.reload(); await p.waitForSelector('.shell'); await wait(p, 1200);
   ok('email choices are saved', await p.locator('input[name=daily]').nth(1).isChecked());
+  await p.click('.seg >> text=Dark'); await wait(p, 200);
+  const dark = await p.evaluate(() => [document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor]);
+  await p.click('.seg >> text=Match my device');
+  ok('appearance: dark can be chosen', dark[0] === 'dark' && dark[1] !== 'rgb(243, 245, 249)', dark.join(' '));
   const [download] = await Promise.all([p.waitForEvent('download'), p.click('text=Download my data')]);
   ok('my data can be downloaded', download.suggestedFilename() === 'market-digest-my-data.json');
 

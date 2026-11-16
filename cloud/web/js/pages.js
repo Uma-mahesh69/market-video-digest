@@ -7,11 +7,14 @@ export const has = t => !!(data.profile && data.profile.stocks.some(s => s.t ===
 
 // ---------------------------------------------------------------- the stock table
 const COLS = [
-  ['Stock', '', r => r.ticker], ['Price', 'r', r => r.price], ['Today', 'r hide-s', r => r.change_pct_day],
-  ['Invest?', 'c', r => ({ yes: 3, wait: 2, no: 1, none: 0 })[r.signal]], ['Confidence', 'conf-h', r => r.confidence_pct],
-  ['Analysts', 'hide-x4', r => (r.calls.bullish || 0) - (r.calls.bearish || 0)], ['Wall St', 'hide-x3', r => (r.street || {}).consensus || ''],
-  ['Target', 'r hide-x4', r => (r.street || {}).upside_pct], ['3 months', 'c hide-x2', r => r.spark && r.spark.length > 1 ? r.spark[r.spark.length - 1] / r.spark[0] : null],
-  ['52-week range', 'c hide-x1', r => r.high_52w > r.low_52w ? (r.price - r.low_52w) / (r.high_52w - r.low_52w) : null], ['', 'c', null]];
+  ['Stock', '', r => r.ticker], ['Price', 'r', r => r.price, 'The latest closing price'], ['Today', 'r hide-s', r => r.change_pct_day, 'The change on the latest market day'],
+  ['Invest?', 'c', r => ({ yes: 3, wait: 2, no: 1, none: 0 })[r.signal], 'What the analysts\' views add up to: Yes, No, or Wait when they are split'],
+  ['Confidence', 'conf-h', r => r.confidence_pct, 'How much stands behind the signal, from 5% to 95%'],
+  ['Analysts', 'hide-x4', r => (r.calls.bullish || 0) - (r.calls.bearish || 0), 'Bullish and bearish calls in the videos, last 30 days'],
+  ['Wall St', 'hide-x3', r => (r.street || {}).consensus || '', 'The consensus of professional analysts, from TipRanks'],
+  ['Target', 'r hide-x4', r => (r.street || {}).upside_pct, 'How far Wall Street\'s 12-month price target is from today\'s price'],
+  ['3 months', 'c hide-x2', r => r.spark && r.spark.length > 1 ? r.spark[r.spark.length - 1] / r.spark[0] : null, 'The price over the last three months'],
+  ['52-week range', 'c hide-x1', r => r.high_52w > r.low_52w ? (r.price - r.low_52w) / (r.high_52w - r.low_52w) : null, 'Where the price sits between the year\'s low (left) and high (right)'], ['', 'c', null]];
 const sorts = {};
 
 // rows: cards (with shares/weight when they are the user's). action(row) gives the last cell.
@@ -22,8 +25,8 @@ export function stockTable(id, rows, action) {
     const sort = sorts[id];
     const list = sort ? [...rows].sort((a, b) => { const g = COLS[sort.col][2], x = g(a), y = g(b); return x == null ? 1 : y == null ? -1 : (x > y ? 1 : x < y ? -1 : 0) * sort.dir; }) : rows;
     const head = el('tr');
-    COLS.forEach(([label, cls, get], i) => {
-      const th = el('th', { class: cls + (get ? ' sort' : ''), text: label });
+    COLS.forEach(([label, cls, get, tip], i) => {
+      const th = el('th', { class: cls + (get ? ' sort' : ''), text: label, title: tip ? tip + '. Click to sort.' : null });
       if (get) {
         if (sort && sort.col === i) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending');
         th.onclick = () => { if (sort && sort.col === i) { if (sort.dir < 0) sorts[id] = { col: i, dir: 1 }; else delete sorts[id]; } else sorts[id] = { col: i, dir: -1 }; draw(); };
@@ -188,6 +191,10 @@ export async function ideas(root, refresh) {
     tile('Bullish calls that beat the market', o.scorecard.bullish.hit_pct == null ? '—' : o.scorecard.bullish.hit_pct + '%', o.scorecard.bullish.scored ? `${o.scorecard.bullish.right} of ${o.scorecard.bullish.scored} scored calls` : 'Scored after 3 trading days'),
     tile('Bearish calls that proved right', o.scorecard.bearish.hit_pct == null ? '—' : o.scorecard.bearish.hit_pct + '%', o.scorecard.bearish.scored ? `${o.scorecard.bearish.right} of ${o.scorecard.bearish.scored} scored calls` : 'Scored after 3 trading days')),
     el('.row', { style: { marginBottom: '12px' } }, seg), card);
+  if (o.top_calls && o.top_calls.length) hold.append(el('.card', { style: { marginTop: '14px' } }, el('h2', { text: 'Fresh bullish calls from the best-rated analysts' }),
+    el('.list', {}, o.top_calls.map(c => el('div', { style: { alignItems: 'center' } }, el('span.when', { text: day(c.day) }), el('a.badge', { href: '#/s/' + encodeURIComponent(c.ticker), text: c.ticker }),
+      el('.body', {}, el('a', { href: '#/a/' + encodeURIComponent(c.analyst), style: { fontWeight: 600 }, text: c.analyst }), ' ', stars(c.stars), el('.small', { text: c.reason })),
+      sig(c.signal), el('a.icon-btn', { href: c.link, target: '_blank', rel: 'noopener', title: 'Watch this moment', 'aria-label': 'Watch this moment' }, icon('play')))))));
   if (o.themes && o.themes.length) hold.append(el('.card', { style: { marginTop: '14px' } }, el('h2', { text: "Today's themes" }), o.themes.map(t => el('.theme', {}, el('b', { text: t.theme }), el('span', { text: t.detail })))));
   draw();
 }
@@ -271,6 +278,39 @@ export async function calendar(root) {
     el('.card', { style: { marginTop: '14px' } }, el('h2', { text: 'Latest videos read' }), videos));
 }
 
+// ---------------------------------------------------------------- how to read it
+const WORDS = [
+  ['Invest? Yes / No / Wait', 'What the analysts\u2019 views on a stock add up to. YES: they clearly favour it. NO: they are clearly against it. WAIT: they are split. A dash means nobody has given a view yet. It is the same for everyone who follows that stock; it does not know your finances.'],
+  ['Confidence', 'How much stands behind the signal, from 5% to 95%. It rises when the views are one-sided, when there are many of them, when the video analysts and Wall Street agree, and when earlier calls on that stock turned out right.'],
+  ['Bullish, bearish', 'A bullish call expects the stock to rise; a bearish call expects it to fall.'],
+  ['Analyst rating (stars)', 'How an analyst\u2019s past calls did: how often they were right, and by how much they beat the market. It needs at least 3 calls old enough to judge. A call counts more toward the signal when it comes from a well-rated analyst.'],
+  ['Right or wrong, vs S&P 500', 'A bullish call is right when the stock then did better than the S&P 500 (an index of 500 large US companies: the usual yardstick for "the market"); a bearish call, when it did worse. "+4 pts" means it beat the market by 4 percentage points.'],
+  ['Wall Street rating', 'The consensus of professional analysts at banks and brokers, from TipRanks: Strong Buy, Moderate Buy, Hold, Moderate Sell or Strong Sell.'],
+  ['Price target', 'The price those analysts expect in about 12 months. "+18%" means 18% above today\u2019s price.'],
+  ['Smart Score', 'TipRanks\u2019 own 1 to 10 score from eight factors. 8 and above is good; 3 and below is poor.'],
+  ['52-week range', 'Where today\u2019s price sits between the lowest and the highest price of the past year.'],
+  ['P/E', 'Price divided by a year\u2019s profit per share. Higher usually means more growth is expected.'],
+  ['Market cap', 'What the whole company is worth at today\u2019s share price.'],
+  ['Dividend yield', 'The yearly dividend as a share of the price. 2% means 2 back each year for every 100 invested, on top of any price change.'],
+  ['Earnings', 'The day a company reports its results, four times a year. The price often moves a lot that day.'],
+];
+const FAQ = [
+  ['Where do the signals come from?', 'Every day we go through new videos on the main finance channels and note each call an analyst makes on a stock, with the reason and the moment it was said. We add Wall Street\u2019s rating from TipRanks and the price. Code, not opinion, turns that into the signal.'],
+  ['How fresh is it?', 'Videos are read through the day. Prices are daily closing prices. Wall Street\u2019s ratings are refreshed every few days, the stocks in people\u2019s lists first. The side menu shows when the last update ran.'],
+  ['Why does my stock say "Fetching\u2026" or show a dash?', 'A stock nobody followed before is picked up within the hour. A dash under Invest? means no analyst has made a call on it lately and there is no Wall Street rating yet; smaller and non-US companies are covered less.'],
+  ['Is this financial advice?', 'No. It sums up what analysts said, for everyone alike. Analysts are often wrong, and the reading of videos is automatic and can mishear. Use it to decide what to look at, then make your own decision or talk to a licensed adviser.'],
+  ['What do you know about me?', 'Your Google name and email, your list, and the shares and prices you choose to type. Nothing else, and it is never sold. You can download or delete it under Account.'],
+];
+export function help(root) {
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'How it works' }), el('.sub', { text: 'What every number on Market Digest means, in plain words.' }))),
+    el('.grid.g2', {}, el('.card', {}, el('h2', { text: 'Questions' }), FAQ.map(([q, a]) => el('.theme', {}, el('b', { text: q }), el('span', { text: a })))),
+      el('.card', {}, el('h2', { text: 'The words' }), WORDS.map(([w, d]) => el('.theme', {}, el('b', { text: w }), el('span', { text: d }))))));
+}
+export function setTheme(t) {
+  if (t) { document.documentElement.dataset.theme = t; localStorage.setItem('md.theme', t); }
+  else { delete document.documentElement.dataset.theme; localStorage.removeItem('md.theme'); }
+}
+
 // ---------------------------------------------------------------- how the engine is doing (for whoever runs the service)
 export async function status(root) {
   root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Service status' }), el('.sub', { text: 'How the last run of the engine went.' }))));
@@ -295,7 +335,11 @@ export function account(root, refresh) {
     el('.card', {}, el('h2', { text: 'Profile' }), el('.row', {}, u.photoURL ? el('img.avatar', { src: u.photoURL, alt: '', referrerpolicy: 'no-referrer', style: { width: '44px', height: '44px' } }) : el('.avatar', { style: { width: '44px', height: '44px' }, text: (p.name || p.email || '?')[0].toUpperCase() }),
       el('div', {}, el('b', { text: p.name || 'You' }), el('.small', { text: p.email }))),
       el('p.small', { style: { margin: '14px 0' }, text: `${p.stocks.length} stock${p.stocks.length === 1 ? '' : 's'} in your list. Free during the beta.` }),
-      el('button.btn', { onclick: () => data.signOut() }, icon('out'), 'Sign out')),
+      el('.eyebrow', { text: 'Appearance', style: { marginBottom: '8px' } }),
+      (() => { const now = localStorage.getItem('md.theme') || ''; const seg = el('.seg', { style: { marginBottom: '16px' } });
+        for (const [k, label] of [['', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']]) seg.append(el('button', { 'aria-pressed': String(k === now), onclick: e => { setTheme(k); seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === e.currentTarget))); } }, label));
+        return seg; })(),
+      el('div', {}, el('button.btn', { onclick: () => data.signOut() }, icon('out'), 'Sign out'))),
     el('.card', {}, el('h2', { text: 'Emails' }), el('p.small', { style: { marginBottom: '12px' }, text: `Sent to ${p.email}. Nothing else to set up.` }),
       el('.eyebrow', { text: 'Daily brief', style: { marginBottom: '8px' } }),
       daily.map(([k, label, hint]) => el('label.opt', {}, el('input', { type: 'radio', name: 'daily', checked: (p.prefs.daily || 'every') === k, onchange: () => save({ daily: k }) }), el('div', {}, el('b', { text: label }), el('span', { text: hint })))),
@@ -309,5 +353,5 @@ export function account(root, refresh) {
     el('.card', {}, el('h2', { text: 'How the signals work' }),
       el('p.small', { style: { lineHeight: 1.6 }, text: 'We read the finance channels every day and note each analyst call on a stock. A stock gets YES when the calls and Wall Street’s rating clearly favour it, NO when they are clearly against it, and WAIT when they are split. A call counts more from an analyst whose past calls beat the market. Confidence (5% to 95%) grows with how one-sided the views are, how many there are, and how earlier calls on that stock turned out.' }),
       el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. For decisions that matter, talk to a licensed adviser.' }),
-      el('p.small', { style: { marginTop: '10px' } }, el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }), ' · ', el('a', { href: '#/status', text: 'Service status' })))));
+      el('p.small', { style: { marginTop: '10px' } }, el('a', { href: '#/help', text: 'How it works, in full' }), ' · ', el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }), ' · ', el('a', { href: '#/status', text: 'Service status' })))));
 }

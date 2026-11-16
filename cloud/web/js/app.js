@@ -1,7 +1,7 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
 import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL_SAYS, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
-import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, tile, callsTable } from './pages.js';
+import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable } from './pages.js';
 
 const app = document.getElementById('app');
 const NAV = [['', 'My stocks', 'home'], ['ideas', 'Ideas', 'bulb'], ['analysts', 'Analysts', 'users'], ['calendar', 'Calendar', 'cal']];
@@ -57,7 +57,9 @@ function shell(active, page) {
       el('a', { href: '#/account', 'aria-label': 'Account', class: 'hide-desktop' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() })));
   const main = el('.main', {}, top, page);
   app.replaceChildren(el('.shell', {},
-    el('aside.side', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), nav('nav.nav'), el('.fill'), freshBox,
+    el('aside.side', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), nav('nav.nav'),
+      el('nav.nav', { style: { marginTop: '10px', borderTop: '1px solid var(--line-2)', paddingTop: '10px' } }, el('a', { href: '#/help', 'aria-current': active === 'help' ? 'page' : null }, icon('info'), el('span', { text: 'How it works' }))),
+      el('.fill'), freshBox,
       data.example ? el('button.btn.primary', { onclick: signIn }, 'Sign in to save') :
         el('a.me', { href: '#/account' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() }),
           el('.who', {}, el('b', { text: p.name || 'Account' }), el('span.small', { text: p.email || '' })))),
@@ -97,6 +99,30 @@ async function home(root) {
     el('span.dot.' + t.tone, {}, icon(t.icon)), el('span.tx', {}, el('b', { text: t.ticker + ' ' }), t.text), el('span.go', {}, icon('right')))))
     : el('p.small', { text: 'Nothing needs your attention today. Signals on your stocks are unchanged.' }));
 
+  // where the money is: by signal, by sector, and what Wall Street expects of it
+  let healthCard = null;
+  const owned = rows.filter(r => r.value != null);
+  if (pf.total && owned.length) {
+    const share = list => list.reduce((a, r) => a + r.value, 0) / pf.total * 100;
+    const yes = share(owned.filter(r => r.signal === 'yes')), no = share(owned.filter(r => r.signal === 'no')), wait = 100 - yes - no;
+    const sectors = {};
+    for (const r of owned) sectors[r.sector || 'Other'] = (sectors[r.sector || 'Other'] || 0) + r.value / pf.total * 100;
+    const withTarget = owned.filter(r => r.street && r.street.upside_pct != null), tv = withTarget.reduce((a, r) => a + r.value, 0);
+    const upside = tv ? withTarget.reduce((a, r) => a + r.value * r.street.upside_pct, 0) / tv : null;
+    const biggest = [...owned].sort((x, y) => y.value - x.value)[0];
+    const line = no >= 30 ? [`${Math.round(no)}% of your money is in stocks analysts are against`, 'down'] : yes >= 60 ? [`${Math.round(yes)}% of your money is in stocks analysts favour`, 'up']
+      : ['Your money is spread across mixed signals', ''];
+    healthCard = el('.card', {}, el('h2', { text: 'Portfolio health' }), el('p', { class: line[1], style: { fontWeight: 700, marginBottom: '8px' }, text: line[0] }),
+      meter([[yes, 'var(--green)'], [wait, 'var(--grey)'], [no, 'var(--red)']]),
+      el('.small', { style: { margin: '6px 0 12px' }, text: `By value: Yes ${Math.round(yes)}% · Wait ${Math.round(wait)}% · No ${Math.round(no)}%` }),
+      el('.grid.g2', { style: { gap: '4px 28px' } },
+        el('.kv.one', {}, kv('Wall Street expects, 12 months', upside == null ? null : pct(upside), tone(upside)), kv('Biggest position', `${biggest.ticker} · ${Math.round(biggest.weight)}%`, biggest.weight >= 35 ? 'down' : ''),
+          kv('Your gain so far', pf.gain_pct == null ? null : pct(pf.gain_pct), tone(pf.gain_pct))),
+        el('.mini', { style: { alignContent: 'start', paddingTop: '6px' } }, Object.entries(sectors).sort((x, y) => y[1] - x[1]).slice(0, 4).flatMap(([name, v]) =>
+          [el('span.small', { text: name }), meter([[v, 'var(--brand)'], [100 - v, 'transparent']]), el('b', { text: Math.round(v) + '%' })]))),
+      upside != null && withTarget.length < owned.length ? el('p.small', { style: { marginTop: '8px' }, text: `The 12-month figure covers ${withTarget.length} of your ${owned.length} holdings: the ones with a Wall Street price target.` }) : null);
+  }
+
   let filter = 'all';
   const tableCard = el('.card.flush');
   const drawTable = () => {
@@ -123,14 +149,14 @@ async function home(root) {
   }
   side.classList.add('f3'); tableCard.classList.add('f2');   // on a phone the table comes before the market cards
   hold.classList.add('flow');
-  hold.replaceChildren(tiles, el('.cols', {}, todoCard, side), tableCard,
+  hold.replaceChildren(tiles, el('.cols', {}, healthCard ? el('.stack', {}, todoCard, healthCard) : todoCard, side), tableCard,
     el('p.small', { class: 'f4', text: 'The signals sum up what analysts said; they are not personal financial advice and can be wrong.' }));
   if (!side.children.length) hold.querySelector('.cols').style.gridTemplateColumns = '1fr';
 }
 
 // ---------------------------------------------------------------- one stock
 const SCALE = ['Strong Sell', 'Moderate Sell', 'Hold', 'Moderate Buy', 'Strong Buy'];
-const kv = (label, value, cls) => el('div', {}, el('span', { text: label }), el('b', { class: cls || '', text: value == null || value === '' ? '—' : value }));
+function kv(label, value, cls) { return el('div', {}, el('span', { text: label }), el('b', { class: cls || '', text: value == null || value === '' ? '—' : value })); }
 async function stock(root, t) {
   t = cleanTicker(t);
   root.append(el('a.crumb', { href: '#/' }, icon('left'), 'My stocks'));
@@ -234,17 +260,19 @@ export function render() {
   const active = name === 's' ? '' : name === 'a' ? 'analysts' : name;
   shell(active, page);
   window.scrollTo(0, 0);
-  const titles = { '': 'My stocks', ideas: 'Ideas', analysts: 'Analysts', calendar: 'Calendar', account: 'Account' };
+  const titles = { '': 'My stocks', ideas: 'Ideas', analysts: 'Analysts', calendar: 'Calendar', account: 'Account', help: 'How it works', status: 'Service status' };
   document.title = `${titles[name] || arg || 'Market Digest'} · Market Digest`;
   const run = fn => Promise.resolve(fn()).catch(e => { console.error(e); page.append(el('.card.empty', {}, el('h3', { text: 'This page could not load' }), friendly(e), el('div', {}, el('button.btn', { onclick: render }, 'Try again')))); });
   if (name === 's') run(() => stock(page, arg));
   else if (name === 'account') run(() => account(page, render));
+  else if (name === 'help' && data.example) run(() => help(page));
   else if (data.example && name) gate(page, { ideas: 'ideas beyond this list', analysts: 'the analysts and their records', a: 'this analyst', calendar: 'the calendar' }[name] || 'this page');
   else if (name === 'ideas') run(() => ideas(page, render));
   else if (name === 'analysts') run(() => analysts(page));
   else if (name === 'a') run(() => analyst(page, arg));
   else if (name === 'calendar') run(() => calendar(page));
   else if (name === 'status') run(() => status(page));
+  else if (name === 'help') run(() => help(page));
   else run(() => home(page));
 }
 
