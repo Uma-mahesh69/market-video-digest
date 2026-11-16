@@ -177,7 +177,9 @@ export async function ideas(root, refresh) {
   if (!o) { hold.append(el('.card.empty', {}, el('h3', { text: 'Nothing here yet' }), 'This fills in after the first videos are read.')); return; }
   const tabs = [['yes', 'Strongest Yes'], ['no', 'Strongest No'], ['discussed', 'Most discussed'], ['split', 'Analysts split'], ['changed', 'Just changed']];
   let tab = sessionStorage.getItem('md.ideas') || 'yes';
+  if (!(o.lists[tab] || []).length) tab = (tabs.find(([k]) => (o.lists[k] || []).length) || tabs[0])[0];   // open on a list that has something
   const seg = el('.seg', { role: 'group', 'aria-label': 'Which ideas' }), card = el('.card.flush');
+  if (!o.videos) hold.append(el('.banner', { style: { marginBottom: '14px' } }, 'No videos have been read yet. For now the signals come from Wall Street’s ratings alone; analysts’ calls appear here as the videos are read.'));
   const draw = () => {
     seg.textContent = ''; card.textContent = '';
     for (const [k, label] of tabs) seg.append(el('button', { 'aria-pressed': String(k === tab), onclick: () => { tab = k; sessionStorage.setItem('md.ideas', k); draw(); } }, label, el('span.mut', { text: ' ' + (o.lists[k] || []).length })));

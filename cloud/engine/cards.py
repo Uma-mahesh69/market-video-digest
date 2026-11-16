@@ -131,7 +131,9 @@ def market_docs(cards, pairs, calls30, cache, sources, today, themes=None):
     covered = [c for c in cards.values() if c["signal"] != "none" and c["price"] is not None]
     by_conf = lambda c: (-(c["confidence_pct"] or 0), -c["mentions"], c["ticker"])
     lists = {
-        "yes": [c["ticker"] for c in sorted((c for c in covered if c["signal"] == "yes" and c["mentions"] >= 2 and (c["confidence_pct"] or 0) >= 50), key=by_conf)[:15]],
+        # two video calls, or Wall Street's rating alone when no video has covered it (the first days, the quieter stocks)
+        "yes": [c["ticker"] for c in sorted((c for c in covered if c["signal"] == "yes" and (c["mentions"] >= 2 or (not c["mentions"] and c.get("street")))
+                                             and (c["confidence_pct"] or 0) >= 50), key=by_conf)[:15]],
         "no": [c["ticker"] for c in sorted((c for c in covered if c["signal"] == "no" and (c["confidence_pct"] or 0) >= 50), key=by_conf)[:15]],
         "discussed": [c["ticker"] for c in sorted(covered, key=lambda c: (-c["mentions"], c["ticker"]))[:15]],
         "split": [c["ticker"] for c in sorted((c for c in covered if c["signal"] == "wait" and c["mentions"] >= 3), key=lambda c: (-c["mentions"], c["ticker"]))[:15]],

@@ -158,6 +158,17 @@ class Street(unittest.TestCase):
         have = {"AAA": {"at": "2026-11-10"}, "BBB": {"at": "2026-11-01"}, "MINE": {"at": "2026-11-12"}}
         self.assertEqual(street.order(["AAA", "BBB", "CCC", "MINE", "005930.KS"], ["MINE"], have), ["MINE", "CCC", "BBB", "AAA"])
 
+    def test_every_stock_gets_its_turn_however_many_there_are(self):
+        names = [a + b for a in "ABCDEFGHIJ" for b in "ABCDEFGHIJ"]   # 100 tickers
+        self.assertEqual(len(street.order(names + ["^GSPC", "RELIANCE.NS", "BRK-B"], [], {})), 101)   # the index and the Indian listing are not asked for
+        records = {t: {"ticker": t, "analystConsensus": "Hold", "priceTargetUpside": 0.1} for t in names}
+        have, day = {}, date(2026, 11, 2)
+        for _ in range(30):   # a month of weekdays, a few batches a day
+            client = demo_data.FakeTipRanks(records, remaining=48)
+            have = street.refresh("", {}, have, names, [], day, {**self.LIMITS, "tipranks_batch": 30}, log=lambda m: None, client=client)
+            day += timedelta(days=1)
+        self.assertEqual(len(have), 100)
+
     def test_a_refresh_asks_in_batches_and_stamps_what_it_read(self):
         _, _, records = demo_data.make(date(2026, 11, 16))
         client, state = demo_data.FakeTipRanks(records, remaining=48), {}

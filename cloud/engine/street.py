@@ -3,6 +3,7 @@
 A free TipRanks key gives 50 calls a month, and one call can ask about many stocks. So the engine makes a few calls a
 weekday, each for a batch of stocks: the ones users hold first, then whichever was looked up longest ago. Ratings move
 slowly, so a stock refreshed every few days is current enough; every card says when its rating was read."""
+import re
 from datetime import date, timedelta
 
 from . import ROOT  # noqa: F401
@@ -33,9 +34,10 @@ def allowance(usage, state, today, limits):
 
 
 def order(wanted, first, street):
-    """Users' stocks first, then the stalest."""
+    """Every stock TipRanks can be asked about (US listings, not indexes), users' stocks first, then the stalest."""
     first = set(first)
-    return sorted(tipranks.usable(wanted), key=lambda t: (t not in first, (street.get(t) or {}).get("at") or "", t))
+    known = [t for t in dict.fromkeys(str(t).upper() for t in wanted if t) if re.fullmatch(r"[A-Z]{1,5}(-[A-Z])?", t) and not tipranks.NON_US.search(t)]
+    return sorted(known, key=lambda t: (t not in first, (street.get(t) or {}).get("at") or "", t))
 
 
 def refresh(key, state, street, wanted, first, today, limits, log=print, client=None):
