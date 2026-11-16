@@ -1,7 +1,7 @@
 // Everything the pages know about the outside world: who is signed in, their list, and the shared stock data.
 // Signed in, it reads Firestore. Not signed in, it can show the public example (the first pack, as it stands today).
 import { initializeApp } from '../vendor/firebase-app.js';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signInWithCredential, signOut, deleteUser, connectAuthEmulator }
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signInWithCredential, reauthenticateWithPopup, signOut, deleteUser, connectAuthEmulator }
   from '../vendor/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, documentId, connectFirestoreEmulator }
   from '../vendor/firebase-firestore-lite.js';
@@ -63,7 +63,10 @@ export const data = {
   async deleteAccount() {
     await deleteDoc(doc(db, 'users', this.user.uid));
     try { await deleteUser(this.user); }
-    catch (e) { await signOut(auth); }   // Google asks for a fresh sign-in before deleting: the data is gone either way
+    catch (e) {   // Google wants a fresh sign-in before it removes the sign-in itself; the data is gone either way
+      try { await reauthenticateWithPopup(this.user, new GoogleAuthProvider()); await deleteUser(this.user); }
+      catch (again) { await signOut(auth); }
+    }
   },
 
   async loadProfile() {
@@ -85,8 +88,9 @@ export const data = {
       stocks: (p.stocks || []).slice(0, 60).map(tidy), prefs: { daily: p.prefs.daily || 'every', weekly: p.prefs.weekly !== false },
       onboarded: !!p.onboarded, created: p.created || new Date().toISOString(), updated: new Date().toISOString() };
     await setDoc(doc(db, 'users', this.user.uid), clean);
-    const missing = clean.stocks.map(s => s.t).filter(t => { const c = cache.cards.get(t); return !c || !c.card; });
-    for (const t of missing.slice(0, 20)) this.request(t);
+    // ask the engine to start covering any stock it does not know yet
+    const got = await this.cards(clean.stocks.map(s => s.t)).catch(() => ({}));
+    for (const t of Object.keys(got).filter(t => !got[t]).slice(0, 20)) this.request(t);
   },
 
   _example: null,
@@ -200,7 +204,7 @@ export function forYou(rows) {
   const W = { yes: 'YES', no: 'NO', wait: 'WAIT', none: '—' }, out = [];
   for (const r of rows) {
     const add = (pri, tone, icon, text) => out.push({ pri, tone, icon, text, ticker: r.ticker });
-    if (r.changed) add(100, r.changed.to === 'yes' ? 'good' : r.changed.to === 'no' ? 'bad' : 'warn', 'swap', `turned ${W[r.changed.to]} (was ${W[r.changed.from]})`);
+    if (r.changed && Date.now() - new Date(r.changed.on + 'T00:00:00Z') < 4 * 86400000) add(100, r.changed.to === 'yes' ? 'good' : r.changed.to === 'no' ? 'bad' : 'warn', 'swap', `turned ${W[r.changed.to]} (was ${W[r.changed.from]})`);
     if (r.owned && r.signal === 'no') add(90, 'bad', 'alert', 'You own it and analysts say No');
     if (r.days_to_earnings != null && r.days_to_earnings <= 7) {
       const d = Math.round(r.days_to_earnings);

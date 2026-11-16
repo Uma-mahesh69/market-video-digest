@@ -17,7 +17,7 @@
     "max_video_minutes": 20,
     "lookback_hours": 36,
     "video_fps": 0.2,
-    "tipranks_batch": 40,
+    "tipranks_batch": 30,
     "tipranks_calls_per_day": 3,
     "tipranks_reserve": 2
   },

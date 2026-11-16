@@ -41,6 +41,7 @@ export function ago(iso) {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
   return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 }
+export const safeUrl = u => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : null);   // links from data: https only
 export const SIGNAL = { yes: 'YES', no: 'NO', wait: 'WAIT', none: '—' };
 export const SIGNAL_SAYS = { yes: 'Analysts clearly favour it', no: 'Analysts are clearly against it', wait: 'Analysts are split', none: 'No analyst views yet' };
 export const COLOR = { yes: 'var(--green)', no: 'var(--red)', wait: 'var(--amber)', none: 'var(--grey)' };

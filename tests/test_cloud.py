@@ -294,10 +294,10 @@ class Emails(Globals):
     def test_who_gets_which_email(self):
         view = {"rows": [{"ticker": "A"}], "notes": [{"changed": True, "on": "2026-11-16", "text": "x", "tone": "good"}]}
         quiet = {"rows": [{"ticker": "A"}], "notes": []}
-        monday, saturday = self.TODAY, date(2026, 11, 21)
+        monday, saturday = self.TODAY, date(2026, 11, 21)   # the market day the email is about
         user = lambda **prefs: {"email": "a@b.c", "prefs": prefs}
         self.assertTrue(mail.wants(user(), "daily", quiet, monday))
-        self.assertFalse(mail.wants(user(), "daily", quiet, saturday))
+        self.assertFalse(mail.wants(user(), "daily", quiet, saturday))      # the market was closed: nothing new
         self.assertFalse(mail.wants(user(daily="off"), "daily", view, monday))
         self.assertTrue(mail.wants(user(daily="changes"), "daily", view, monday))
         self.assertFalse(mail.wants(user(daily="changes"), "daily", quiet, monday))
@@ -305,6 +305,22 @@ class Emails(Globals):
         self.assertFalse(mail.wants(user(weekly=False), "weekly", quiet, saturday))
         self.assertFalse(mail.wants({"prefs": {}}, "daily", quiet, monday))                         # no address
         self.assertFalse(mail.wants(user(), "daily", {"rows": [], "notes": []}, monday))             # no stocks
+
+    def test_a_change_is_news_once_for_the_daily_email_and_all_week_for_the_weekly(self):
+        _, all_cards = self.cards()
+        all_cards["KO"]["changed"] = {"from": "wait", "to": "yes", "on": "2026-11-16"}
+        user = {"email": "a@b.c", "stocks": [{"t": "KO"}]}
+        changed = lambda today, days: [n["text"] for n in mail.user_view(user, all_cards, today, days)["notes"] if n.get("changed")]
+        self.assertEqual(changed(date(2026, 11, 17), 1), ["KO turned YES (was WAIT)"])   # the morning after: reported, and first
+        self.assertEqual(changed(date(2026, 11, 18), 1), [])                              # not again
+        self.assertEqual(changed(date(2026, 11, 21), 7), ["KO turned YES (was WAIT)"])   # the weekly summary still has it
+
+    def test_an_account_with_broken_data_is_skipped_not_fatal(self):
+        _, all_cards = self.cards()
+        for stocks in ("not a list", [None, 5, {"t": 7}, {"t": "NVDA", "shares": "many"}, {"t": "AAPL", "shares": True}]):
+            view = mail.user_view({"email": "a@b.c", "stocks": stocks, "prefs": "x"}, all_cards, self.TODAY)
+            self.assertTrue(all(r["shares"] == 0 for r in view["rows"]))
+        self.assertTrue(mail.wants({"email": "a@b.c", "prefs": "x"}, "daily", {"rows": [1], "notes": []}, self.TODAY))
 
     def test_the_email_shows_signals_and_never_how_much_is_owned(self):
         _, all_cards = self.cards()
@@ -326,9 +342,10 @@ class Emails(Globals):
         sent = []
         sender = lambda settings, to, subject, page, text: sent.append(to)
         settings = {"smtp_user": "me@x.y", "smtp_password": "p", "site": "https://md.example/"}
-        self.assertEqual(mail.send_all(store, settings, users, all_cards, "daily", self.TODAY, lambda m: None, sender), 1)
-        self.assertEqual(mail.send_all(store, settings, users, all_cards, "daily", self.TODAY, lambda m: None, sender), 0)
-        self.assertEqual(sent, ["one@x.y"])
+        self.assertEqual(mail.send_all(store, settings, users, all_cards, "weekly", self.TODAY, lambda m: None, sender), 2)   # u2 only turned the daily off
+        self.assertEqual(mail.send_all(store, settings, users, all_cards, "daily", self.TODAY, lambda m: None, sender), 0)    # one email a day
+        self.assertEqual(mail.send_all(store, settings, users, all_cards, "daily", self.TODAY + timedelta(days=1), lambda m: None, sender), 1)
+        self.assertEqual(sent, ["one@x.y", "two@x.y", "one@x.y"])
         self.assertEqual(mail.send_all(store, {"site": "x"}, users, all_cards, "weekly", self.TODAY, lambda m: None, sender), 0)   # email not set up
 
     def test_the_run_sends_the_daily_email_at_its_hour_and_cleans_up_after_deleted_accounts(self):
@@ -346,8 +363,12 @@ class Emails(Globals):
         self.assertEqual(sent, [])                       # before the hour set in sources.json
         go(2)
         go(3)
-        self.assertEqual(sent, ["you@example.com"])      # once
+        self.assertEqual(sent, ["you@example.com"])      # once: Tuesday 02:00 UTC, about Monday's market
         self.assertNotIn("someone-who-left", store.all("mail"))
+        sent.clear()
+        engine.run(store, settings, sources=sources, now=datetime(2026, 11, 23, 2, tzinfo=timezone.utc), log=lambda m: None, work=self.work,
+                   read_videos=False, price_fetcher=lambda s: closes[s], mail_sender=lambda st, to, *a: sent.append(to))
+        self.assertEqual(sent, [])                       # Monday 02:00 UTC would be about Sunday: no email
 
     def test_the_site_address_comes_from_the_project_when_none_is_set(self):
         import os

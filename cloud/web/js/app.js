@@ -1,5 +1,5 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
-import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, SIGNAL_SAYS, COLOR } from './ui.js';
+import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL_SAYS, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
 import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, tile, callsTable } from './pages.js';
 
@@ -187,7 +187,7 @@ async function stock(root, t) {
   const at = SCALE.indexOf(st.consensus);
   const colors = ['var(--red)', 'var(--red)', 'var(--grey)', 'var(--green)', 'var(--green)'];
   const bar01 = (label, v) => v == null ? null : [el('span.small', { text: label }), meter([[v, v >= 0.6 ? 'var(--green)' : v <= 0.4 ? 'var(--red)' : 'var(--grey)'], [1 - v, 'transparent']]), el('b', { text: Math.round(v * 100) })];
-  const streetCard = el('.card', {}, el('h2', {}, 'Wall Street', el('span.sp'), st.url ? el('a.small', { href: st.url, target: '_blank', rel: 'noopener', text: 'TipRanks' }) : null),
+  const streetCard = el('.card', {}, el('h2', {}, 'Wall Street', el('span.sp'), safeUrl(st.url) ? el('a.small', { href: safeUrl(st.url), target: '_blank', rel: 'noopener', text: 'TipRanks' }) : null),
     st.consensus ? el('div', {},
       el('.row', { style: { justifyContent: 'space-between', alignItems: 'baseline' } }, el('b.big', { class: at > 2 ? 'up' : at >= 0 && at < 2 ? 'down' : '', text: st.consensus }), st.best_consensus && st.best_consensus !== st.consensus ? el('span.small', { text: `Top analysts: ${st.best_consensus}` }) : null),
       at >= 0 ? [el('.scale', {}, SCALE.map((_, i) => el('i', { class: i === at ? 'on' : '', style: { background: i === at ? colors[i] : null } }))), el('.scale-l', {}, el('span', { text: 'Strong Sell' }), el('span', { text: 'Hold' }), el('span', { text: 'Strong Buy' }))] : null,

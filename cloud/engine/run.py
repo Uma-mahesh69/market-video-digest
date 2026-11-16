@@ -4,6 +4,7 @@ import json
 import os
 import re
 import traceback
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -139,7 +140,7 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
                     store.delete("mail", uid)
     requests = step("Requests", lambda: store.all("requests"), {}) or {}
     asked = [t for t in (prices.clean(k.replace("_", "^")) for k in requests) if t]
-    called = [t for t, _ in __import__("collections").Counter(c["ticker"] for c in cards_mod.insights.calls_in(
+    called = [t for t, _ in Counter(c["ticker"] for c in cards_mod.insights.calls_in(
         [(v, n) for v, n in pairs if cards_mod.local_day(v) >= today - timedelta(days=90)])).most_common(400)]
     packs = [t for p in sources.get("packs") or [] for t in p["tickers"]]
     mine = list(dict.fromkeys([*(state.get("user_tickers") or []), *asked]))
@@ -201,9 +202,12 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
 
         # 6. the emails, once a day
         if mail_due and users is not None:
-            kinds = [force_mail] if force_mail else ["daily"] + (["weekly"] if today.weekday() == sources.get("email", {}).get("weekly_weekday", 5) else [])
+            # an email sent in the small hours (UTC) is about the market day before
+            session = today - timedelta(days=1) if mail_hour < 12 else today
+            weekly_day = today.weekday() == sources.get("email", {}).get("weekly_weekday", 5)
+            kinds = [force_mail] if force_mail else (["weekly"] if weekly_day else []) + ["daily"]
             for kind in kinds:
-                step("Email", lambda k=kind: mail.send_all(store, settings, users, new_cards, k, today, log, sender=mail_sender))
+                step("Email", lambda k=kind: mail.send_all(store, settings, users, new_cards, k, today, log, sender=mail_sender, session=session))
             state["mail_day"] = today.isoformat()
 
     state["last_run"] = now.isoformat(timespec="seconds")

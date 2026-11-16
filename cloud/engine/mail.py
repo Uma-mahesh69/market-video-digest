@@ -7,6 +7,7 @@ import json
 import os
 import smtplib
 import ssl
+from datetime import date
 from email.message import EmailMessage
 from email.utils import formataddr
 
@@ -25,14 +26,16 @@ def money(x, cur="USD"):
     return f"{sym}{x:,.0f}" if abs(x) >= 1000 else f"{sym}{x:,.2f}"
 
 
-def user_view(user, cards):
-    """The user's stocks with their cards, what they hold, and the short notes worth their attention."""
+def user_view(user, cards, today=None, days=1):
+    """The user's stocks with their cards, what they hold, and the short notes worth their attention.
+    A signal change is news for `days` days (1 for the daily email, 7 for the weekly one)."""
     rows, total = [], 0.0
-    for s in user.get("stocks") or []:
-        card = cards.get(s.get("t"))
+    stocks = user.get("stocks") if isinstance(user.get("stocks"), list) else []
+    for s in stocks[:80]:
+        card = cards.get(s.get("t")) if isinstance(s, dict) and isinstance(s.get("t"), str) else None
         if not card or card.get("unknown"):
             continue
-        shares = s.get("shares") or 0
+        shares = s.get("shares") if isinstance(s.get("shares"), (int, float)) and not isinstance(s.get("shares"), bool) and s["shares"] > 0 else 0
         value = shares * card["price"] if shares and card.get("price") else None
         total += value or 0
         rows.append({**card, "shares": shares, "value": value})
@@ -40,6 +43,8 @@ def user_view(user, cards):
     for r in rows:
         r["weight"] = round(100 * r["value"] / total) if r["value"] and total else None
         ch = r.get("changed")
+        if ch and today and (today - date.fromisoformat(ch["on"])).days > days:
+            ch = None   # already reported
         if ch:
             notes.append({"tone": "good" if ch["to"] == "yes" else "bad" if ch["to"] == "no" else "warn", "changed": True, "on": ch["on"],
                           "text": f"{r['ticker']} turned {SIGNAL[ch['to']][0]} (was {SIGNAL[ch['from']][0]})"})
@@ -55,19 +60,19 @@ def user_view(user, cards):
     return {"rows": rows, "total": total or None, "notes": notes}
 
 
-def wants(user, kind, view, today):
-    """Should this user get this email today?"""
-    prefs = user.get("prefs") or {}
+def wants(user, kind, view, session):
+    """Should this user get this email? `session` is the market day the email is about."""
+    prefs = user.get("prefs") if isinstance(user.get("prefs"), dict) else {}
     if not user.get("email") or not view["rows"]:
         return False
     if kind == "weekly":
         return prefs.get("weekly", True) is not False
     choice = prefs.get("daily", "every")
-    if choice == "off" or today.weekday() >= 5 and choice != "changes":
+    if choice == "off":
         return False
     if choice == "changes":
-        return any(n.get("changed") and n.get("on") == today.isoformat() for n in view["notes"])
-    return True
+        return any(n.get("changed") for n in view["notes"])
+    return session.weekday() < 5   # nothing new to say after a day the market was closed
 
 
 def compose(user, view, kind, today, site):
@@ -125,21 +130,23 @@ def send(settings, to, subject, html_body, text_body):
         smtp.send_message(msg)
 
 
-def send_all(store, settings, users, cards, kind, today, log=print, sender=send):
-    """Send this kind of email to every user who wants it and has not had it today. Returns how many went out."""
+def send_all(store, settings, users, cards, kind, today, log=print, sender=send, session=None):
+    """Send this kind of email to every user who wants it and has not had one today. Returns how many went out.
+    `session` is the market day it is about (yesterday, for an email sent in the small hours)."""
     if not settings.get("smtp_user") or not settings.get("smtp_password"):
         log("Email: not set up (SMTP_USER and SMTP_PASSWORD), so none sent")
         return 0
+    session = session or today
     sent = failed = 0
     for uid, user in users.items():
-        view = user_view(user, cards)
-        if not wants(user, kind, view, today):
-            continue
-        record = store.get("mail", uid) or {}
-        if record.get(kind) == today.isoformat():
-            continue
         try:
-            sender(settings, user["email"], *compose(user, view, kind, today, settings["site"]))
+            view = user_view(user, cards, today, days=7 if kind == "weekly" else 1)
+            if not wants(user, kind, view, session):
+                continue
+            record = store.get("mail", uid) or {}
+            if today.isoformat() in (record.get("daily"), record.get("weekly")):
+                continue   # one email a day: on the weekly day, the weekly one stands in for the daily
+            sender(settings, user["email"], *compose(user, view, kind, session, settings["site"]))
             store.set("mail", uid, {kind: today.isoformat()}, merge=True)
             sent += 1
         except Exception as err:
