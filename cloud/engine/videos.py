@@ -81,7 +81,8 @@ def discover(sources, state, now, log=print, fetch_feed=feed):
                 continue
             v["channel"] = v["channel"] or ch["name"]
             v["rank"] = rank(v, sources["analysts"])
-            found.append(v)
+            if v["rank"] > 0:   # nothing in the title or description says markets: not worth one of the day's readings
+                found.append(v)
     found.sort(key=lambda v: v["published"], reverse=True)   # newest first...
     found.sort(key=lambda v: -v["rank"])                      # ...within the same worth (the sort keeps that order)
     return found

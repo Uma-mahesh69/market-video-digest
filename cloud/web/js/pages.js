@@ -271,6 +271,19 @@ export async function calendar(root) {
     el('.card', { style: { marginTop: '14px' } }, el('h2', { text: 'Latest videos read' }), videos));
 }
 
+// ---------------------------------------------------------------- how the engine is doing (for whoever runs the service)
+export async function status(root) {
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Service status' }), el('.sub', { text: 'How the last run of the engine went.' }))));
+  const s = await data.market('status');
+  if (!s) { root.append(el('.card.empty', {}, el('h3', { text: 'The engine has not run yet' }), 'It runs every hour once it is set up.')); return; }
+  const tr = s.tipranks || {};
+  root.append(el('.grid.g4', {}, tile('Last run', new Date(s.last_run).toLocaleString(), s.ok ? 'Finished without errors' : 'Finished with errors', s.ok ? 'up' : 'down'),
+    tile('Videos read today', s.videos_today, `${s.videos_kept} kept from the last four months`), tile('Stocks covered', s.stocks, `prices as of ${day(s.prices_as_of)}`),
+    tile('TipRanks calls left', tr.remaining == null ? '—' : tr.remaining, tr.limit ? `of ${tr.limit} this month · ${tr.today || 0} used today` : 'No key, or not read yet')),
+    el('.card', { style: { marginTop: '14px' } }, el('h2', { text: 'Problems in the last run' }), s.errors && s.errors.length ? el('.list', {}, s.errors.map(e => el('div', {}, el('span.body', { text: e })))) : el('p.small', { text: 'None.' })),
+    el('p.small', { style: { marginTop: '10px' }, text: `${s.users} account${s.users === 1 ? '' : 's'}.` }));
+}
+
 // ---------------------------------------------------------------- account
 export function account(root, refresh) {
   const p = data.profile, u = data.user;
@@ -295,5 +308,6 @@ export function account(root, refresh) {
         done => [el('button.btn', { onclick: done }, 'Keep my account'), el('button.btn.danger', { onclick: async () => { try { await data.deleteAccount(); done(); } catch (e) { toast(friendly(e)); } } }, 'Delete everything')]) }, 'Delete my account'))),
     el('.card', {}, el('h2', { text: 'How the signals work' }),
       el('p.small', { style: { lineHeight: 1.6 }, text: 'We read the finance channels every day and note each analyst call on a stock. A stock gets YES when the calls and Wall Street’s rating clearly favour it, NO when they are clearly against it, and WAIT when they are split. A call counts more from an analyst whose past calls beat the market. Confidence (5% to 95%) grows with how one-sided the views are, how many there are, and how earlier calls on that stock turned out.' }),
-      el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. For decisions that matter, talk to a licensed adviser.' }))));
+      el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. For decisions that matter, talk to a licensed adviser.' }),
+      el('p.small', { style: { marginTop: '10px' } }, el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }), ' · ', el('a', { href: '#/status', text: 'Service status' })))));
 }

@@ -3,6 +3,7 @@
 Two kinds: the daily brief (every weekday, or only when a signal changed, as each user chose) and the weekly summary.
 Each is a short table of the user's own stocks with what changed, never a wall of text."""
 import html
+import json
 import os
 import smtplib
 import ssl
@@ -149,7 +150,18 @@ def send_all(store, settings, users, cards, kind, today, log=print, sender=send)
     return sent
 
 
+def site_from_env():
+    """Where the web app lives: SITE_URL when set (a custom domain), else the Firebase project's own address."""
+    site = os.environ.get("SITE_URL", "").strip()
+    if not site:
+        try:
+            site = f"https://{json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT') or '{}')['project_id']}.web.app"
+        except (ValueError, KeyError):
+            site = ""
+    return site.rstrip("/") + "/"
+
+
 def settings_from_env():
     env = os.environ.get
-    return {"smtp_user": env("SMTP_USER", ""), "smtp_password": env("SMTP_PASSWORD", ""), "smtp_host": env("SMTP_HOST", ""),
-            "smtp_port": env("SMTP_PORT", ""), "mail_from_name": env("MAIL_FROM_NAME", ""), "site": env("SITE_URL", "").rstrip("/") + "/"}
+    return {"smtp_user": env("SMTP_USER", "").strip(), "smtp_password": env("SMTP_PASSWORD", "").replace(" ", ""), "smtp_host": env("SMTP_HOST", ""),
+            "smtp_port": env("SMTP_PORT", ""), "mail_from_name": env("MAIL_FROM_NAME", ""), "site": site_from_env()}

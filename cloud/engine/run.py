@@ -134,6 +134,9 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
         users = step("Users", lambda: store.all("users"), None)
         if users is not None:
             state.update(users_day=today.isoformat(), user_tickers=user_tickers(users), users=len(users))
+            for uid in step("Mail records", lambda: store.all("mail"), {}) or {}:
+                if uid not in users:   # an account that was deleted: nothing of it is kept
+                    store.delete("mail", uid)
     requests = step("Requests", lambda: store.all("requests"), {}) or {}
     asked = [t for t in (prices.clean(k.replace("_", "^")) for k in requests) if t]
     called = [t for t, _ in __import__("collections").Counter(c["ticker"] for c in cards_mod.insights.calls_in(

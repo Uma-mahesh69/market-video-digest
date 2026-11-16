@@ -1,7 +1,7 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
 import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, SIGNAL_SAYS, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
-import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, tile, callsTable } from './pages.js';
+import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, tile, callsTable } from './pages.js';
 
 const app = document.getElementById('app');
 const NAV = [['', 'My stocks', 'home'], ['ideas', 'Ideas', 'bulb'], ['analysts', 'Analysts', 'users'], ['calendar', 'Calendar', 'cal']];
@@ -18,14 +18,15 @@ async function landing() {
       el('div', {}, el('h1', {}, 'Yes or No on your stocks, ', el('em', { text: 'from what the analysts say.' })),
         el('p.lede', { text: 'We watch the finance channels and Wall Street’s ratings every day, and turn them into one clear signal for each stock you follow, with the numbers behind it.' }),
         el('.cta', {}, el('button.btn.primary.lg.gbtn', { onclick: signIn }, el('span', { style: { background: '#fff', borderRadius: '4px', padding: '2px', display: 'grid' } }, googleMark()), 'Continue with Google'), example),
-        el('p.fine', { text: 'Free during the beta · No card · Nothing to install · Ready in 30 seconds' })),
+        el('p.fine', {}, 'Free during the beta · No card · Nothing to install · Ready in 30 seconds', el('br'), 'By continuing you agree to the ', el('a', { href: '/terms.html', text: 'terms' }), ' and the ', el('a', { href: '/privacy.html', text: 'privacy policy' }), '.')),
       peek),
     el('.how', {},
       ...[['Pick your stocks', 'Choose a starter list, search, or paste your Google Finance watchlist. That is the whole setup.'],
         ['We do the reading', 'Every day we go through the analysts’ videos and Wall Street’s ratings, so you do not have to.'],
         ['You get a clear signal', 'Yes, No or Wait for each stock, how confident it is, and what changed, on one page and by email.']]
         .map(([h, p], i) => el('.card', {}, el('.n', { text: i + 1 }), el('h3', { text: h }), el('p', { text: p })))),
-    el('footer', { text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong.' })));
+    el('footer', {}, 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong.', el('br'),
+      el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }))));
   try {
     const d = await data.publicExample();
     peek.replaceChildren(el('.bar-t', {}, el('i'), el('i'), el('i')), stockTable('peek', d.cards.slice(0, 6), () => el('span')));
@@ -243,6 +244,7 @@ export function render() {
   else if (name === 'analysts') run(() => analysts(page));
   else if (name === 'a') run(() => analyst(page, arg));
   else if (name === 'calendar') run(() => calendar(page));
+  else if (name === 'status') run(() => status(page));
   else run(() => home(page));
 }
 
