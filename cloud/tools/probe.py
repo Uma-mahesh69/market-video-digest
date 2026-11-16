@@ -30,7 +30,8 @@ def main():
             except Exception as err:
                 print(f"     feed failed for {h}: {type(err).__name__}: {str(err)[:120]}", flush=True)
                 ups, how = digest.ytdlp_uploads(cid, count=5), "yt-dlp"
-            found[h] = [u for u in ups if not u.get("short")][:2]
+            longer = [u for u in ups if not u.get("short")]
+            found[h] = [longer[i] for i in (5, 9, 13) if i < len(longer)]   # hours old: their captions exist by now
             return f"{len(ups)} uploads via {how}; newest: {ups[0]['title'][:60]!r}"
         check(f"uploads {handle}", uploads)
     good = 0
@@ -40,7 +41,12 @@ def main():
                 text = digest.transcript(v)
                 return f"{len(text)} characters, {v.get('duration')}s, captions={v.get('captions')}"
             good += check(f"captions {handle} {v['id']}", captions)
-    for symbol in ("NVDA", "^GSPC", "RELIANCE.NS"):
+    import subprocess
+    first = next((v[0] for v in found.values() if v), None)
+    if first:   # what YouTube itself answers this runner, unfiltered
+        run = subprocess.run([sys.executable, "-m", "yt_dlp", "--skip-download", "--list-subs", first["url"]], capture_output=True, text=True, timeout=120)
+        print("RAW  " + first["published"] + " | " + " | ".join((run.stderr + run.stdout).strip().splitlines()[-6:])[:900], flush=True)
+    for symbol in ("NVDA", "^GSPC"):
         check(f"price yahoo {symbol}", lambda s=symbol: f"{len(prices.from_yahoo(s)['closes'])} closes")
         check(f"price stooq {symbol}", lambda s=symbol: f"{len(prices.from_stooq(s)['closes'])} closes")
     print(f"\ncaptions read: {good} of {sum(len(v) for v in found.values())}")
