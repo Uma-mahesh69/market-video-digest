@@ -1,5 +1,12 @@
 # Market Digest
 
+> **Two versions live in this repository.**
+> - **The cloud version** (`cloud/`): one hosted website for every customer. Sign in with Google, pick your stocks,
+>   done. This is the product going forward. Start at **[cloud/README.md](cloud/README.md)**; to put it online,
+>   **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+> - **The desktop version** (`app/`, described below): runs on one person's own computer with their own keys.
+
+
 **Should I invest? A Yes / No signal for each of your own stocks, every morning, from what the analysts are saying.** Market Digest reads the finance
 YouTube channels you follow, checks each of your stocks against what the analysts said, how good their calls have
 been, Wall Street's rating (TipRanks) and the price from **Google Finance**, and shows it all on one clear page that

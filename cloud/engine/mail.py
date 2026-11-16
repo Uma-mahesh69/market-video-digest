@@ -50,6 +50,8 @@ def user_view(user, cards):
             notes.append({"tone": "warn", "text": f"{r['ticker']} reports earnings {'today' if d == 0 else 'tomorrow' if d == 1 else f'in {d} days'}"})
         if r["weight"] and r["weight"] >= 35:
             notes.append({"tone": "warn", "text": f"{r['ticker']} is {r['weight']}% of your portfolio"})
+    order = {"bad": 1, "good": 1, "warn": 2}
+    notes.sort(key=lambda n: (not n.get("changed"), order.get(n["tone"], 3)))   # what changed first, then what needs care
     return {"rows": rows, "total": total or None, "notes": notes}
 
 

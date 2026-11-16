@@ -2,6 +2,19 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
+## Cloud version (in `cloud/`, not yet deployed)
+
+- **A hosted product**: customers open a website, sign in with Google, pick their stocks (a starter list, search, or
+  paste) and see their dashboard. No install, no keys, no settings.
+- **One shared engine** reads the videos once for everyone (Gemini watches the YouTube link), fetches prices and
+  TipRanks ratings within the free allowance, and writes a card for each stock.
+- **Pages**: My stocks (signals, "For you today", portfolio value), a stock page (price chart with analyst calls
+  marked, signal and its history, Wall Street's rating, target and Smart Score, key numbers, bulls and bears, every
+  call with its result), Ideas, Analysts with ratings, Calendar, Account.
+- **Emails** from one address to the address signed in with: a daily brief (every weekday, or only when a signal
+  changes) and a weekly summary.
+- Free tiers only: Firebase (hosting, sign-in, database) and GitHub Actions.
+
 ## 1.4.0 (first release)
 
 - **Your own Google Finance data.** "Connect Google" keeps your stocks in a Google Sheet in your own Drive, priced

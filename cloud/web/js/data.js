@@ -1,7 +1,7 @@
 // Everything the pages know about the outside world: who is signed in, their list, and the shared stock data.
 // Signed in, it reads Firestore. Not signed in, it can show the public example (the first pack, as it stands today).
 import { initializeApp } from '../vendor/firebase-app.js';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithCredential, signOut, deleteUser, connectAuthEmulator }
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signInWithCredential, signOut, deleteUser, connectAuthEmulator }
   from '../vendor/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, documentId, connectFirestoreEmulator }
   from '../vendor/firebase-firestore-lite.js';
@@ -24,6 +24,9 @@ export const data = {
     try {
       const config = LOCAL ? { apiKey: 'demo-key', projectId: 'demo-md', authDomain: 'demo-md.firebaseapp.com' }
         : await (await fetch('/__/firebase/init.json')).json();
+      // Sign-in runs on this site's own address (Firebase Hosting serves the sign-in helper here too), so browsers
+      // that block third-party storage, like Safari, do not break it.
+      if (/\.(web\.app|firebaseapp\.com)$/.test(location.hostname)) config.authDomain = location.hostname;
       const app = initializeApp(config);
       auth = getAuth(app); db = getFirestore(app);
       if (LOCAL) {
@@ -50,7 +53,11 @@ export const data = {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try { await signInWithPopup(auth, provider); }
-    catch (e) { if (!/popup-closed|cancelled-popup/.test(e.code || '')) throw new Error(friendly(e)); }
+    catch (e) {
+      if (/popup-closed|cancelled-popup/.test(e.code || '')) return;
+      if (/popup-blocked|operation-not-supported/.test(e.code || '')) { await signInWithRedirect(auth, provider); return; }   // no pop-ups here: use the whole page
+      throw new Error(friendly(e));
+    }
   },
   async signOut() { cache.cards.clear(); cache.market.clear(); cache.charts.clear(); await signOut(auth); },
   async deleteAccount() {
