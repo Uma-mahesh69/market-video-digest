@@ -30,7 +30,7 @@ and this GitHub repository. Do the steps in order; each says exactly where to cl
    key > Generate key**. A `.json` file downloads. Keep it private; you paste its contents into GitHub in step 3.
 5. **Let that key publish the website:** open https://console.cloud.google.com/iam-admin/iam and pick your project at
    the top. Find the row whose name starts with `firebase-adminsdk`, click its pencil, then **Add another role**
-   twice and add **Firebase Admin** and **Service Usage Consumer**. **Save**.
+   three times and add **Firebase Admin**, **Service Usage Consumer** and **API Keys Viewer**. **Save**.
 
 ## Step 2. Get the three other keys (10 minutes)
 
@@ -112,7 +112,7 @@ pick your stocks, and you are on your dashboard.
 | Check setup: Firebase FAILED | The secret is not the whole `.json` file. Paste it again, from the first `{` to the last `}`. |
 | Check setup: Gemini FAILED with 400 or 403 | The key is wrong or was copied with a space. Create a new one and replace the secret. |
 | Check setup: Gemini FAILED with 429 | The day's free allowance is used up. Try again tomorrow; nothing is broken. |
-| Deploy website fails with "permission" or "403" | Step 1.5 was missed or needs a few minutes to take effect. Check the two roles, wait five minutes, run again. |
+| Deploy website fails with "permission" or "403" | Step 1.5 was missed or needs a few minutes to take effect. Check the three roles, wait five minutes, run again. If it still fails, add the role **Editor** to the same row and run again. |
 | Sign-in window says the domain is not authorised | Firebase console > Authentication > Settings > Authorized domains: add the address you are opening. |
 | The dashboard says "Fetching…" for a stock | It is new to the engine. It appears after the next hourly run. |
 | No emails arrive | Check setup's Email line; then Account > Emails in the app; then the spam folder. |
