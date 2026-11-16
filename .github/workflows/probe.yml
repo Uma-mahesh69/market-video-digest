@@ -1,0 +1,20 @@
+# A one-off check: can a free GitHub runner read YouTube captions and stock prices? No secrets used.
+name: Probe (YouTube and prices from the cloud)
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/cloud]
+    paths: [cloud/tools/probe.py, .github/workflows/probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet yt-dlp
+      - run: python cloud/tools/probe.py
