@@ -66,8 +66,9 @@ The engine's hourly timer only works from the `master` branch, so the new code h
 1. Open https://github.com/Uma-mahesh69/market-video-digest/compare/master...feature/cloud?expand=1
 2. Click **Create pull request**, then **Merge pull request**, then **Confirm merge**.
 
-This also makes version 1.4 of the old desktop app available to copies that are installed: they will offer
-"Update now". Nothing happens to them unless someone clicks it.
+Copies of the old desktop app that are already installed keep working exactly as they are. They will not be offered
+this version as an update, because the program's files moved to the `app/` folder; to move one to the newest desktop
+version, run its installer again from a fresh download.
 
 ## Step 5. Check, publish, start (10 minutes, mostly waiting)
 

@@ -6,6 +6,11 @@ a Yes / No / Wait signal for each, with the numbers behind it. No install, no ke
 To put it online, follow **[docs/DEPLOY.md](../docs/DEPLOY.md)**. Before charging customers, read
 **[docs/BEFORE_LAUNCH.md](../docs/BEFORE_LAUNCH.md)**.
 
+![My stocks: signals, what needs attention today, portfolio health](../docs/img/cloud-home.png)
+
+*(Example data: invented analysts and prices.)* More: [the front page](../docs/img/cloud-front.png),
+[a stock page](../docs/img/cloud-stock.png), [on a phone](../docs/img/cloud-phone.png).
+
 ## How it works
 
 ```

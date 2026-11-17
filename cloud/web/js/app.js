@@ -226,7 +226,7 @@ async function stock(root, t) {
 
   const stats = el('.card', {}, el('h2', { text: 'Key numbers' }), el('.kv', {},
     kv('Market cap', st.market_cap ? money(st.market_cap, c.currency, true) : null), kv('P/E', c.pe != null ? num(c.pe) : null),
-    kv('Dividend yield', st.dividend_yield_pct != null ? st.dividend_yield_pct + '%' : null), kv('Sector', c.sector),
+    kv('Dividend yield', st.dividend_yield_pct != null ? (st.dividend_yield_pct >= 0.05 ? st.dividend_yield_pct + '%' : 'None') : null), kv('Sector', c.sector),
     kv('Week', pct(c.change_pct_week), tone(c.change_pct_week)), kv('Month', pct(c.change_pct_month), tone(c.change_pct_month)),
     kv('This year', pct(st.ytd_pct), tone(st.ytd_pct)), kv('12 months', pct(st.year_pct), tone(st.year_pct)),
     kv('1-year low', money(c.low_52w, c.currency)), kv('1-year high', money(c.high_52w, c.currency)),
