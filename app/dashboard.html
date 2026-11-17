@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Digest</title>
+<style>
+:root{--paper:#F4F6F9;--surface:#FFFFFF;--ink:#16202E;--muted:#5C6878;--line:#DCE2EA;--blue:#2447C5;--blue-soft:#E8EDFB;
+  --red:#B42318;--red-soft:#FDECEA;--green:#1A7F37;--green-soft:#E6F4EA;--amber:#8A5A00;--amber-soft:#FFF4D6;--grey:#AEB7C4;--hover:#F7F9FC;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--paper:#111822;--surface:#18212E;--ink:#E6EBF2;--muted:#94A1B3;--line:#2A3646;--blue:#9DB2FF;--blue-soft:#222E4A;
+  --red:#FF8A80;--red-soft:#3A1F22;--green:#7EE2A0;--green-soft:#173326;--amber:#F5C76B;--amber-soft:#3A2F17;--grey:#56637A;--hover:#1D2838;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 var(--sans)}
+a{color:var(--blue)}
+button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+[hidden]{display:none!important}
+.bar{position:sticky;top:0;z-index:5;display:flex;gap:18px;align-items:center;padding:10px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;font-size:17px;color:var(--ink);text-decoration:none;letter-spacing:-.01em}
+nav{display:flex;gap:4px}
+nav a{padding:6px 12px;border-radius:6px;text-decoration:none;color:var(--muted)}
+nav a:hover{background:var(--blue-soft)}
+nav a[aria-current=page]{background:var(--blue-soft);color:var(--blue);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+h2{font-size:15px;font-weight:700;margin:0 0 10px}
+.head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.head .sp{flex:1}
+.lead{color:var(--muted);font-size:13px;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 16px}
+.card.flush{padding:0;overflow:hidden}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.tile .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.tile .v{font-size:26px;font-weight:700;line-height:1.2;margin:6px 0 2px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tile .s{font-size:12px;color:var(--muted)}
+.counts{display:flex;gap:14px;align-items:baseline}
+.counts b{font-size:26px;font-weight:700}.counts span{font-size:12px;font-weight:600;margin-left:3px}
+.alerts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:var(--surface);border:1px solid var(--line);white-space:nowrap}
+.chip.good{background:var(--green-soft);color:var(--green);border-color:transparent}.chip.bad{background:var(--red-soft);color:var(--red);border-color:transparent}
+.chip.warn{background:var(--amber-soft);color:var(--amber);border-color:transparent}.chip.info{color:var(--muted)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 14px;overflow-x:auto}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:9px 14px;color:var(--muted);font-weight:600;white-space:nowrap}
+.tabs button[aria-selected=true]{color:var(--blue);border-bottom-color:var(--blue)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;border-radius:0;padding:5px 11px;font-size:13px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface)}
+th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--ink)}
+th[aria-sort=ascending]::after{content:" \25B2";font-size:9px}th[aria-sort=descending]::after{content:" \25BC";font-size:9px}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.c,th.c{text-align:center}
+tr.row{cursor:pointer}tr.row:hover td{background:var(--hover)}
+tr.row[aria-expanded=true] td{background:var(--hover);border-bottom-color:transparent}
+.up{color:var(--green)}.down{color:var(--red)}.mut{color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
+.sym{display:flex;align-items:center;gap:10px;min-width:150px}
+.badge{flex:none;min-width:52px;text-align:center;font-size:11px;font-weight:700;letter-spacing:.02em;border-radius:5px;padding:3px 6px;background:var(--blue-soft);color:var(--blue)}
+.sym .n{font-weight:600;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.own{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
+.nowrap{white-space:nowrap}
+.day2{display:none;font-size:11px}
+.sig{display:inline-block;min-width:54px;text-align:center;font-size:12px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:4px 10px}
+.sig.yes{background:var(--green);color:var(--surface)}.sig.no{background:var(--red);color:var(--surface)}
+.sig.wait{background:var(--amber-soft);color:var(--amber)}.sig.none{background:var(--paper);color:var(--muted);font-weight:600}
+.conf{display:flex;align-items:center;gap:8px;min-width:104px}
+.conf .track{flex:1;height:6px;border-radius:3px;background:var(--paper);overflow:hidden}
+.conf .track i{display:block;height:100%;border-radius:3px;background:var(--blue)}
+.conf b{font-size:13px;font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.split{min-width:96px}
+.split .bar2{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--paper);margin-top:4px}
+.split .bar2 i{display:block;height:100%}
+.split .t{font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.range{position:relative;width:88px;height:6px;border-radius:3px;background:var(--paper);margin:0 auto}
+.range i{position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--surface);transform:translateX(-50%)}
+.chev{color:var(--muted);transition:transform .15s;display:inline-block}
+tr.row[aria-expanded=true] .chev{transform:rotate(90deg)}
+tr.detail td{padding:0 12px 16px;background:var(--hover)}
+.dgrid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(260px,1.2fr) minmax(240px,1.1fr);gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.panel h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.kv div{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv div span{color:var(--muted)}.kv div b{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.factors{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.call{display:flex;gap:8px;align-items:baseline;font-size:13px;padding:4px 0}
+.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap;text-transform:capitalize}
+.pill.bullish{background:var(--green-soft);color:var(--green)}.pill.bearish{background:var(--red-soft);color:var(--red)}
+.pill.neutral,.pill.mixed,.pill.split,.pill.no{background:var(--paper);color:var(--muted)}
+.empty{color:var(--muted);margin:0;padding:18px}
+.star{color:#D29922}
+.note{background:var(--amber-soft);color:var(--amber);border-radius:8px;padding:10px 12px;margin:0 0 14px}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.cta a.btn{display:inline-block;padding:8px 14px;border-radius:6px;text-decoration:none;border:1px solid var(--line)}
+.cta a.btn.primary{background:var(--blue);border-color:var(--blue);color:var(--surface);font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid2 .card{margin:0 0 16px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+svg text{font:11px var(--sans);fill:var(--muted)}
+dl.gloss{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:8px 16px;margin:12px 0 0;font-size:13px}
+dl.gloss dt{font-weight:600}dl.gloss dd{margin:0;color:var(--muted)}
+.row2{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.row2:last-child{border-bottom:0}
+@media (max-width:1000px){.dgrid{grid-template-columns:1fr 1fr}.dgrid .panel:first-child{grid-column:1/-1}}
+@media (max-width:820px){.tiles{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.bar{padding:10px 16px;gap:10px}main{padding:16px 12px 50px}
+  .opt{display:none}.dgrid{grid-template-columns:1fr}.sym{min-width:120px}.sym .n{max-width:110px}td,th{padding:9px 8px}}
+@media (max-width:640px){.bar{flex-wrap:wrap;row-gap:6px;padding:8px 12px}.bar nav{order:3;width:100%;overflow-x:auto}.bar nav a{padding:5px 9px}.opt2{display:none}.tile .v,.counts b{font-size:21px}}
+@media (max-width:520px){.opt3{display:none}.day2{display:block}td,th{padding:9px 6px}.sym{min-width:0;gap:7px}.badge{min-width:44px;padding:3px 4px}
+  .conf{min-width:0;gap:4px}.conf .track{min-width:22px}.conf b{min-width:30px;font-size:12px}th{letter-spacing:0;font-size:10px}.sym .n{max-width:calc(100vw - 300px)}.sig{min-width:46px;padding:4px 6px}tr.detail td{padding:0 6px 12px}.kv{gap:0 12px}.kv div{font-size:12px}.panel{padding:10px}}
+</style></head>
+<body>
+<header class="bar">
+  <a class="brand" href="/">Market Digest</a>
+  <nav><a href="/" aria-current="page">Overview</a><a href="/digests">Digests</a><a href="/chat">Chat</a><a href="/settings">Settings</a></nav>
+  <span style="flex:1"></span>
+  <button type="button" id="quit" style="border:0;background:none;color:var(--blue);text-decoration:underline;padding:0" title="Close Market Digest. The daily digest still runs.">Quit</button>
+</header>
+<main>
+  <div class="head">
+    <div><h1>Overview</h1><p class="lead" id="lead">Loading…</p></div>
+    <span class="sp"></span>
+    <div class="seg" role="group" aria-label="Period" id="periods">
+      <button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button>
+    </div>
+  </div>
+
+  <div class="tiles" id="tiles" hidden>
+    <div class="tile"><div class="k" id="tWorthK">Portfolio</div><div class="v" id="tWorth"></div><div class="s" id="tWorthS"></div></div>
+    <div class="tile"><div class="k">Should I invest?</div><div class="counts" id="tSignals" style="margin:6px 0 2px"></div><div class="s">analyst signal on your stocks</div></div>
+    <div class="tile"><div class="k">Analyst mood</div><div class="v" id="tMood"></div><div class="s" id="tMoodS"></div></div>
+    <div class="tile"><div class="k">Next earnings</div><div class="v" id="tEarn"></div><div class="s" id="tEarnS"></div></div>
+  </div>
+  <div class="alerts" id="alerts"></div>
+  <p class="note" id="noDigest" hidden>No digest yet, so there are no analyst signals. Make one on the <a href="/digests">Digests page</a> ("Make today's digest now"); this page then fills in.</p>
+
+  <div class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="mine" aria-selected="true">My stocks</button>
+    <button role="tab" data-tab="ideas">Ideas</button>
+    <button role="tab" data-tab="analysts">Analysts</button>
+    <button role="tab" data-tab="activity">Calendar &amp; videos</button>
+  </div>
+
+  <section id="tab-mine">
+    <div class="card" id="mineEmpty" hidden>
+      <h2>Add your stocks</h2>
+      <p class="lead">Paste your Google Finance watchlist, and each stock gets a Yes / No signal with the numbers behind it.</p>
+      <div class="cta"><a class="btn primary" href="/settings#stocks">Add my stocks</a><a class="btn" id="ctaGoogle" href="/settings#google" hidden>Connect Google Finance</a></div>
+    </div>
+    <div class="card flush" id="mineCard"><div class="scroll"><table id="mineTable"></table></div></div>
+  </section>
+
+  <section id="tab-ideas" hidden>
+    <p class="lead" style="margin:0 0 10px">Stocks the analysts talked about most that are not on your list.</p>
+    <div class="card flush"><div class="scroll"><table id="ideasTable"></table></div><p class="empty" id="ideasEmpty" hidden>Nothing yet: this fills in as digests are made.</p></div>
+  </section>
+
+  <section id="tab-analysts" hidden>
+    <div class="tiles" style="grid-template-columns:repeat(3,1fr)">
+      <div class="tile"><div class="k">Videos read</div><div class="v" id="tVideos"></div><div class="s" id="tVideosS"></div></div>
+      <div class="tile"><div class="k">Bullish calls that beat the market</div><div class="v" id="tBull"></div><div class="s" id="tBullS"></div></div>
+      <div class="tile"><div class="k">Bearish calls that proved right</div><div class="v" id="tBear"></div><div class="s" id="tBearS"></div></div>
+    </div>
+    <div class="card flush"><div class="scroll"><table>
+      <thead><tr><th>Analyst</th><th class="num">Calls</th><th>Bull / bear</th><th class="num">Right</th><th class="num">vs S&amp;P 500</th><th class="opt">Stocks</th></tr></thead>
+      <tbody id="analysts"></tbody></table></div></div>
+    <div class="card"><h2>Best and worst calls</h2><div id="extremes"></div></div>
+  </section>
+
+  <section id="tab-activity" hidden>
+    <div class="grid2">
+      <div class="card"><h2>Coming up</h2><div id="upcoming"></div></div>
+      <div class="card"><h2>Mood, day by day</h2><div id="mood"></div>
+        <div class="legend"><span><i style="background:var(--green)"></i>Bullish calls</span><span><i style="background:var(--red)"></i>Bearish calls</span></div></div>
+    </div>
+    <div class="card"><h2>Latest videos</h2><div id="videos"></div></div>
+  </section>
+
+  <div class="card">
+    <details>
+      <summary><b>How to read this page</b></summary>
+      <dl class="gloss">
+        <dt>Invest? Yes / No / Wait</dt><dd>What the analysts' views add up to for that stock: <b>Yes</b> when they clearly favour it, <b>No</b> when they are clearly against it, <b>Wait</b> when they are split. It combines the bullish and bearish calls in your channels' videos (a call counts more from an analyst whose past calls beat the market) with Wall Street's rating from TipRanks. "—" means nobody has given a view yet.</dd>
+        <dt>Confidence</dt><dd>How much stands behind the signal, from 5% to 95%: how one-sided the views are, how many calls there are, whether the videos and Wall Street agree, and how earlier calls on that stock turned out.</dd>
+        <dt>Analysts</dt><dd>Bullish calls (expect it to rise) against bearish calls (expect it to fall) in the videos.</dd>
+        <dt>Wall St</dt><dd>The consensus of professional analysts at banks and brokers, from TipRanks: Strong Buy, Moderate Buy, Hold, Moderate Sell or Strong Sell.</dd>
+        <dt>Target</dt><dd>How far above (+) or below (−) today's price those analysts expect the stock in about 12 months.</dd>
+        <dt>Smart Score</dt><dd>TipRanks' own 1 to 10 score from eight factors. 8 and above is good; 3 and below is poor.</dd>
+        <dt>52-week range</dt><dd>Where today's price sits between the lowest (left) and highest (right) price of the past year.</dd>
+        <dt>P/E</dt><dd>Price divided by a year's profit per share. Higher usually means more growth is expected.</dd>
+        <dt>Past calls right</dt><dd>A call counts as right when the stock then did better than the S&amp;P 500 (bullish) or worse (bearish).</dd>
+        <dt>Earnings</dt><dd>The day a company reports its results. The price often moves a lot that day.</dd>
+      </dl>
+    </details>
+  </div>
+  <p class="small" id="foot"></p>
+  <p class="small">The signals sum up what analysts said; they are not personal financial advice and can be wrong. For decisions that matter, talk to a licensed adviser.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const pct = (x, sign = true) => x == null ? '—' : `${sign && x > 0 ? '+' : ''}${Number(x).toFixed(Math.abs(x) >= 100 ? 0 : 1)}%`;
+const tone = x => x == null ? '' : x > 0 ? 'up' : x < 0 ? 'down' : '';
+const short = d => d ? new Date(d + 'T12:00:00').toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
+const money = (x, cur) => x == null ? '—' : x.toLocaleString(undefined, { style: cur && cur.length === 3 ? 'currency' : 'decimal', currency: cur && cur.length === 3 ? cur : undefined, maximumFractionDigits: x >= 1000 ? 0 : 2, minimumFractionDigits: x >= 1000 ? 0 : 2 });
+const NS = 'http://www.w3.org/2000/svg';
+const SIGNAL = { yes: 'YES', no: 'NO', wait: 'WAIT', none: '—' };
+let days = Number(localStorage.getItem('mdDays') || 30) || 30;
+let tab = ['mine', 'ideas', 'analysts', 'activity'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'mine';
+const sorts = {}, opened = new Set();
+
+function link(text, href, cls) { const a = el('a', cls, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+function cell(tr, content, cls) { const td = el('td', cls); if (content instanceof Node) td.append(content); else td.textContent = content == null ? '—' : content; tr.append(td); return td; }
+
+function spark(values, w, h, labels) {
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('width', labels ? '100%' : w); svg.setAttribute('height', labels ? h : h); svg.setAttribute('preserveAspectRatio', 'none');
+  if (!values || values.length < 2) return svg;
+  const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, pad = 3;
+  const pts = values.map((v, i) => [pad + i * (w - 2 * pad) / (values.length - 1), pad + (h - 2 * pad) * (1 - (v - min) / span)]);
+  const color = values[values.length - 1] >= values[0] ? 'var(--green)' : 'var(--red)';
+  if (labels) {
+    const area = document.createElementNS(NS, 'path');
+    area.setAttribute('d', `M${pts[0][0]},${h} ` + pts.map(p => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ') + ` L${pts[pts.length - 1][0]},${h} Z`);
+    area.setAttribute('fill', color); area.setAttribute('opacity', '.10'); svg.append(area);
+  }
+  const line = document.createElementNS(NS, 'polyline');
+  line.setAttribute('points', pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '));
+  line.setAttribute('fill', 'none'); line.setAttribute('stroke', color); line.setAttribute('stroke-width', labels ? 2 : 1.5);
+  line.setAttribute('stroke-linejoin', 'round'); line.setAttribute('vector-effect', 'non-scaling-stroke'); svg.append(line);
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `Price over the last three months: ${pct((values[values.length - 1] / values[0] - 1) * 100)}`);
+  return svg;
+}
+function confidence(s) {
+  if (s.confidence_pct == null) return el('span', 'mut', '—');
+  const box = el('div', 'conf'), track = el('div', 'track'), fill = el('i');
+  fill.style.width = s.confidence_pct + '%';
+  fill.style.background = s.signal === 'yes' ? 'var(--green)' : s.signal === 'no' ? 'var(--red)' : 'var(--grey)';
+  track.append(fill); box.append(track, el('b', null, s.confidence_pct + '%')); return box;
+}
+function split(s) {
+  const bull = s.calls.bullish, bear = s.calls.bearish, other = s.calls.neutral + s.calls.mixed, total = bull + bear + other;
+  if (!total) return el('span', 'mut', '—');
+  const box = el('div', 'split'), t = el('div', 't'), bar = el('div', 'bar2');
+  t.append(el('span', 'up', `${bull} ▲`), '  ', el('span', 'down', `${bear} ▼`));
+  for (const [n, color] of [[bull, 'var(--green)'], [other, 'var(--grey)'], [bear, 'var(--red)']]) { if (!n) continue; const i = el('i'); i.style.width = (100 * n / total) + '%'; i.style.background = color; bar.append(i); }
+  box.append(t, bar); box.title = `${bull} bullish, ${bear} bearish${other ? `, ${other} neutral or mixed` : ''} calls in the videos`; return box;
+}
+function range(s) {
+  if (s.price == null || s.low_52w == null || s.high_52w == null || s.high_52w <= s.low_52w) return el('span', 'mut', '—');
+  const r = el('div', 'range'), dot = el('i');
+  dot.style.left = Math.max(0, Math.min(100, 100 * (s.price - s.low_52w) / (s.high_52w - s.low_52w))) + '%';
+  r.append(dot); r.title = `Past year: low ${money(s.low_52w, s.currency)}, high ${money(s.high_52w, s.currency)}`; return r;
+}
+function kv(box, label, value, cls) { const d = el('div'); d.append(el('span', null, label), el('b', cls || null, value == null ? '—' : value)); box.append(d); }
+
+function detail(s) {
+  const grid = el('div', 'dgrid');
+  // 1. the price
+  const p1 = el('div', 'panel'); p1.append(el('h3', null, 'Price, last 3 months'));
+  if (s.spark && s.spark.length > 1) {
+    const move = (s.spark[s.spark.length - 1] / s.spark[0] - 1) * 100;
+    const top = el('div'); top.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px';
+    top.append(el('b', null, money(s.price, s.currency)), el('span', tone(move), pct(move)));
+    p1.append(top, spark(s.spark, 300, 150, true));
+    const ax = el('div', 'small'); ax.style.cssText = 'display:flex;justify-content:space-between'; ax.append(el('span', null, short(s.spark_from)), el('span', null, short(s.as_of))); p1.append(ax);
+  } else p1.append(el('p', 'small', 'No prices yet. They are fetched with each digest.'));
+  // 2. the numbers
+  const p2 = el('div', 'panel'); p2.append(el('h3', null, 'Key numbers'));
+  const k = el('div', 'kv'), st = s.street || {};
+  kv(k, 'Today', pct(s.change_pct_day), tone(s.change_pct_day)); kv(k, 'Week', pct(s.change_pct_week), tone(s.change_pct_week));
+  kv(k, 'Month', pct(s.change_pct_month), tone(s.change_pct_month)); kv(k, 'From 1-yr high', pct(s.from_high_pct), tone(s.from_high_pct));
+  kv(k, '1-yr low', money(s.low_52w, s.currency)); kv(k, '1-yr high', money(s.high_52w, s.currency));
+  kv(k, 'Wall St rating', st.consensus || null); kv(k, 'Price target', st.price_target != null ? money(st.price_target, s.currency) : null);
+  kv(k, 'Target vs price', st.upside_pct != null ? pct(st.upside_pct) : null, tone(st.upside_pct)); kv(k, 'Smart Score', st.smart_score != null ? `${st.smart_score} / 10` : null);
+  kv(k, 'P/E', s.pe != null ? Number(s.pe).toFixed(1) : null); kv(k, 'Next earnings', st.next_earnings ? short(st.next_earnings) : null);
+  kv(k, 'Past calls right', s.track ? `${s.track.right} of ${s.track.scored}` : null); kv(k, 'Analysts heard', s.calls.analysts.length || null);
+  if (s.owned) {
+    kv(k, 'Shares', s.shares != null ? s.shares.toLocaleString() : null); kv(k, 'Value', money(s.value, s.currency));
+    kv(k, 'Your gain', pct(s.gain_pct), tone(s.gain_pct)); kv(k, 'Share of portfolio', s.weight_pct != null ? s.weight_pct + '%' : null);
+  }
+  p2.append(k);
+  // 3. why, and who said it
+  const p3 = el('div', 'panel'); p3.append(el('h3', null, 'Behind the signal'));
+  const f = el('div', 'factors');
+  for (const x of s.factors) f.append(el('span', 'chip ' + x.tone, x.text));
+  if (!s.factors.length) f.append(el('span', 'small', 'No analyst views yet.'));
+  p3.append(f);
+  if (s.latest.length) p3.append(el('h3', null, 'Latest calls'));
+  for (const l of s.latest) {
+    const c = el('div', 'call'); c.append(el('span', 'pill ' + l.view, l.view), link(l.analyst || l.channel, l.link), el('span', 'small', short(l.day)));
+    if (l.reason) c.title = l.reason;
+    p3.append(c);
+  }
+  grid.append(p1, p2, p3); return grid;
+}
+
+const COLS = [
+  ['Stock', null, s => s.ticker], ['Price', 'num', s => s.price], ['Today', 'num opt3', s => s.change_pct_day],
+  ['Invest?', 'c', s => ({ yes: 3, wait: 2, no: 1, none: 0 })[s.signal]], ['Confidence', '', s => s.confidence_pct],
+  ['Analysts', 'opt2', s => s.calls.bullish - s.calls.bearish], ['Wall St', 'opt', s => (s.street || {}).consensus || ''],
+  ['Target', 'num opt2', s => (s.street || {}).upside_pct], ['3 months', 'c opt', s => s.spark && s.spark.length > 1 ? s.spark[s.spark.length - 1] / s.spark[0] : null],
+  ['52-week range', 'c opt', s => s.high_52w > s.low_52w ? (s.price - s.low_52w) / (s.high_52w - s.low_52w) : null], ['', 'opt3', null]];
+
+function stockTable(id, rows) {
+  const table = $(id); table.textContent = '';
+  const sort = sorts[id];
+  if (sort) {
+    const get = COLS[sort.col][2];
+    rows = [...rows].sort((a, b) => { const x = get(a), y = get(b); if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * sort.dir; });
+  }
+  const head = el('tr');
+  COLS.forEach(([label, cls, get], i) => {
+    const th = el('th', (cls || '') + (get ? ' sort' : ''), label);
+    if (get) {
+      if (sort && sort.col === i) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending');
+      th.onclick = () => { sorts[id] = sort && sort.col === i ? (sort.dir < 0 ? { col: i, dir: 1 } : null) : { col: i, dir: -1 }; if (!sorts[id]) delete sorts[id]; draw(); };
+    }
+    head.append(th);
+  });
+  const thead = el('thead'); thead.append(head); const body = el('tbody'); table.append(thead, body);
+  for (const s of rows) {
+    const key = id + s.ticker, tr = el('tr', 'row'); tr.tabIndex = 0; tr.setAttribute('role', 'button'); tr.setAttribute('aria-expanded', String(opened.has(key)));
+    const sym = el('div', 'sym'), names = el('div');
+    names.append(el('div', 'n', s.name || s.ticker)); names.firstChild.title = s.name || '';
+    if (s.owned) { const o = el('div', 'own', 'You own'); if (s.weight_pct) o.append(el('span', 'opt3', ` · ${s.weight_pct}%`)); names.append(o); }
+    sym.append(el('span', 'badge', s.ticker), names); cell(tr, sym);
+    const px = el('div', null, s.price == null ? '—' : money(s.price, s.currency));
+    if (s.change_pct_day != null) px.append(el('div', 'day2 ' + tone(s.change_pct_day), pct(s.change_pct_day)));   // on a phone, under the price
+    cell(tr, px, 'num');
+    cell(tr, pct(s.change_pct_day), 'num opt3 ' + tone(s.change_pct_day));
+    const sig = el('span', 'sig ' + s.signal, SIGNAL[s.signal]); sig.title = s.verdict_text + '. Based on ' + s.basis + '.'; cell(tr, sig, 'c');
+    cell(tr, confidence(s)); cell(tr, split(s), 'opt2');
+    cell(tr, (s.street || {}).consensus || '—', 'opt nowrap' + ((s.street || {}).consensus ? '' : ' mut'));
+    const up = (s.street || {}).upside_pct; cell(tr, pct(up), 'num opt2 ' + tone(up));
+    cell(tr, s.spark && s.spark.length > 1 ? spark(s.spark, 84, 26) : '—', 'c opt'); cell(tr, range(s), 'c opt');
+    cell(tr, el('span', 'chev', '›'), 'c opt3');
+    const dr = el('tr', 'detail'), dc = el('td'); dc.colSpan = COLS.length; dr.append(dc); dr.hidden = !opened.has(key);
+    if (opened.has(key)) dc.append(detail(s));
+    const toggle = () => {
+      const open = dr.hidden; dr.hidden = !open; tr.setAttribute('aria-expanded', String(open));
+      if (open) { opened.add(key); if (!dc.firstChild) dc.append(detail(s)); } else opened.delete(key);
+    };
+    tr.onclick = toggle; tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } };
+    body.append(tr, dr);
+  }
+}
+
+let D = null;
+function draw() {
+  const d = D, c = d.checkup, n = c.stocks.length;
+  $('lead').textContent = d.videos
+    ? `From ${d.videos} videos and ${d.calls} analyst calls, ${short(d.start)} to ${short(d.end)}` + (d.prices_as_of ? ` · prices ${short(d.prices_as_of)}` : '')
+    : 'Your stocks and their prices. Analyst signals appear after the first digest.';
+  $('noDigest').hidden = d.videos > 0 || !n;
+  $('tiles').hidden = !n; $('mineEmpty').hidden = n > 0; $('mineCard').hidden = !n;
+  $('ctaGoogle').hidden = !(d.google && d.google.available && !d.google.connected);
+  if (n) {
+    $('tWorthK').textContent = c.total_value != null ? 'Portfolio value' : 'Your list';
+    $('tWorth').textContent = c.total_value != null ? money(c.total_value, c.currency) : `${n} stock${n === 1 ? '' : 's'}`;
+    const ws = $('tWorthS'); ws.textContent = '';
+    if (c.day_change_pct != null) ws.append(el('span', tone(c.day_change_pct), pct(c.day_change_pct)), ' today');
+    else ws.textContent = c.owned ? `${c.owned} owned, ${c.watched} watched` : 'Add shares in Settings to see their value';
+    const sg = $('tSignals'); sg.textContent = '';
+    for (const [k, label, cls] of [['yes', 'Yes', 'up'], ['wait', 'Wait', ''], ['no', 'No', 'down']]) {
+      const w = el('div'); w.append(el('b', cls, c.signals[k]), el('span', cls || 'mut', label)); sg.append(w);
+    }
+    const bull = c.stocks.reduce((a, s) => a + s.calls.bullish, 0), bear = c.stocks.reduce((a, s) => a + s.calls.bearish, 0);
+    $('tMood').textContent = bull + bear ? Math.round(100 * bull / (bull + bear)) + '% bullish' : '—';
+    $('tMood').className = 'v ' + (bull + bear ? (bull > bear ? 'up' : bear > bull ? 'down' : '') : '');
+    $('tMoodS').textContent = bull + bear ? `${bull} bullish, ${bear} bearish calls on your stocks` : 'No calls on your stocks yet';
+    const e = c.next_earnings;
+    $('tEarn').textContent = e ? e.ticker : '—';
+    $('tEarnS').textContent = e ? `${e.date ? short(e.date) + ' · ' : ''}${e.days === 0 ? 'today' : `in ${e.days} day${e.days === 1 ? '' : 's'}`}` : 'None known for your stocks';
+  }
+  const al = $('alerts'); al.textContent = '';
+  for (const a of c.alerts) al.append(el('span', 'chip ' + a.tone, a.text));
+  stockTable('mineTable', c.stocks);
+  stockTable('ideasTable', c.ideas); $('ideasTable').hidden = !c.ideas.length; $('ideasEmpty').hidden = c.ideas.length > 0;
+
+  $('tVideos').textContent = d.videos; $('tVideosS').textContent = `${d.channels} channel${d.channels === 1 ? '' : 's'}, ${d.calls} calls`;
+  for (const [id, v] of [['Bull', d.scorecard.bullish], ['Bear', d.scorecard.bearish]]) {
+    $('t' + id).textContent = v.hit_pct == null ? '—' : v.hit_pct + '%';
+    $('t' + id + 'S').textContent = v.scored ? `${v.right} of ${v.scored} calls · ${v.edge > 0 ? '+' : ''}${v.edge} pts vs S&P 500` : 'Scored after 3 trading days';
+  }
+  const ab = $('analysts'); ab.textContent = '';
+  if (!d.analysts.length) { const tr = el('tr'); const td = cell(tr, 'No named analysts in this period.', 'mut'); td.colSpan = 6; ab.append(tr); }
+  for (const a of d.analysts.slice(0, 25)) {
+    const tr = el('tr'), nm = el('b', null, a.analyst); if (a.followed) nm.append(el('span', 'star', ' ★'));
+    cell(tr, nm); cell(tr, a.calls, 'num');
+    cell(tr, split({ calls: { bullish: a.bullish, bearish: a.bearish, neutral: Math.max(0, a.calls - a.bullish - a.bearish), mixed: 0 } }));
+    cell(tr, a.scored ? `${a.hit_pct}% (${a.right}/${a.scored})` : '—', 'num');
+    cell(tr, a.edge == null ? '—' : `${a.edge > 0 ? '+' : ''}${a.edge} pts`, 'num ' + tone(a.edge));
+    cell(tr, a.stocks.slice(0, 6).join(', '), 'small opt');
+    ab.append(tr);
+  }
+  const ex = $('extremes'); ex.textContent = '';
+  const xs = [...d.extremes.best.map(x => ['Best', x]), ...d.extremes.worst.map(x => ['Worst', x])];
+  if (!xs.length) ex.append(el('p', 'small', 'Calls are scored once prices and 3 trading days are in.'));
+  for (const [kind, x] of xs) {
+    const p = el('div', 'row2');
+    p.append(el('span', 'chip ' + (kind === 'Best' ? 'good' : 'bad'), kind), el('span', 'badge', x.ticker), el('span', 'pill ' + x.view, x.view), link(`${x.analyst || x.channel}, ${short(x.day)}`, x.link));
+    const r = el('span', 'small', `stock ${pct(x.stock_pct)} · S&P 500 ${pct(x.sp500_pct)} · `); r.style.marginLeft = 'auto'; r.append(el('b', tone(x.edge), `${x.edge > 0 ? '+' : ''}${x.edge} pts`)); p.append(r);
+    ex.append(p);
+  }
+  const up = $('upcoming'); up.textContent = '';
+  if (!d.upcoming.length) up.append(el('p', 'small', 'Nothing with a date was mentioned.'));
+  for (const e of d.upcoming) { const p = el('div', 'row2'); const b = el('b', null, e.date ? short(e.date) : (e.when || 'Soon')); b.style.minWidth = '52px'; p.append(b, link(e.event, e.link)); up.append(p); }
+  const vb = $('videos'); vb.textContent = '';
+  if (!d.recent_videos.length) vb.append(el('p', 'small', 'No videos yet.'));
+  for (const v of d.recent_videos) { const p = el('div', 'row2'); const b = el('span', 'small', short(v.day)); b.style.minWidth = '52px'; p.append(b, link(v.title, v.link), el('span', 'small', v.channel)); vb.append(p); }
+  if (tab === 'activity') drawMood(d.mood_by_day);
+  const src = (c.stocks.find(s => s.source) || {}).source;
+  $('foot').textContent = (src ? `Prices: ${src}. ` : '') + (c.stocks.some(s => s.street) ? 'Wall Street ratings: TipRanks. ' : '');
+}
+
+function showTab(t) {
+  tab = t;
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  for (const k of ['mine', 'ideas', 'analysts', 'activity']) $('tab-' + k).hidden = k !== t;
+  try { history.replaceState(null, '', t === 'mine' ? location.pathname : '#' + t); } catch (e) {}
+  if (t === 'activity' && D) drawMood(D.mood_by_day);
+}
+
+async function load() {
+  document.querySelectorAll('#periods button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days)));
+  let d;
+  try { const r = await fetch('/api/dashboard?days=' + days); d = await r.json(); if (!r.ok) throw new Error(d.error); }
+  catch (e) { $('lead').textContent = 'Market Digest stopped. Start it again with Market Digest on the desktop.'; return; }
+  if (!d.configured) { location.href = '/settings'; return; }
+  D = d; draw();
+}
+
+function drawMood(series) {
+  const box = $('mood'); box.textContent = '';
+  const w = Math.max(box.clientWidth || 500, 280), h = 150, mid = h / 2, n = series.length || 1;
+  const max = Math.max(1, ...series.map(s => Math.max(s.bullish, s.bearish)));
+  const bw = Math.max(2, (w - 30) / n - 2);
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h + 18}`); svg.setAttribute('width', '100%'); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Bullish and bearish calls per day');
+  const line = document.createElementNS(NS, 'line'); line.setAttribute('x1', 0); line.setAttribute('x2', w); line.setAttribute('y1', mid); line.setAttribute('y2', mid);
+  line.setAttribute('stroke', 'var(--line)'); svg.append(line);
+  series.forEach((s, i) => {
+    const x = 15 + i * ((w - 30) / n);
+    for (const [v, up] of [[s.bullish, true], [s.bearish, false]]) {
+      if (!v) continue;
+      const r = document.createElementNS(NS, 'rect'), bh = (mid - 6) * v / max;
+      r.setAttribute('x', x); r.setAttribute('width', bw); r.setAttribute('y', up ? mid - bh : mid); r.setAttribute('height', bh); r.setAttribute('rx', 1.5);
+      r.setAttribute('fill', up ? 'var(--green)' : 'var(--red)');
+      const t = document.createElementNS(NS, 'title'); t.textContent = `${short(s.day)}: ${s.bullish} bullish, ${s.bearish} bearish`; r.append(t);
+      svg.append(r);
+    }
+    if (n <= 14 || i % Math.ceil(n / 8) === 0) {
+      const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x + bw / 2); t.setAttribute('y', h + 14); t.setAttribute('text-anchor', 'middle');
+      t.textContent = short(s.day); svg.append(t);
+    }
+  });
+  box.append(svg);
+}
+
+$('quit').onclick = async () => {
+  try { await fetch('/api/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) {}
+  document.querySelector('main').innerHTML = '<div class="card"><h1>Market Digest is closed</h1><p class="lead">The daily digest still runs at its time. To open this page again, double-click Market Digest on the desktop.</p></div>';
+};
+document.querySelectorAll('#periods button').forEach(b => b.onclick = () => { days = Number(b.dataset.days); try { localStorage.setItem('mdDays', days); } catch (e) {} load(); });
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+showTab(tab);
+load();
+</script>
+</body></html>

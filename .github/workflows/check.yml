@@ -1,0 +1,27 @@
+# Run this once after adding the secrets: it tries each thing the engine needs and says what works.
+name: Check setup
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet -r cloud/requirements.txt
+      - name: Check everything
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TIPRANKS_API_KEY: ${{ secrets.TIPRANKS_API_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          MAIL_FROM_NAME: ${{ vars.MAIL_FROM_NAME }}
+          GEMINI_MODELS: ${{ vars.GEMINI_MODELS }}
+        run: python -m cloud.tools.check

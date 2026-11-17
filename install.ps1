@@ -6,7 +6,7 @@ param(
     [switch]$Unattended   # an update: keep the settings and the daily time, open no page
 )
 $ErrorActionPreference = "Stop"
-$src = $PSScriptRoot
+$src = Join-Path $PSScriptRoot "app"   # the program's files are in the app folder next to install.bat
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host ""; Write-Host "STOPPED: $text" -ForegroundColor Red; exit 1 }
@@ -25,9 +25,9 @@ function Find-Python {
 }
 
 # MANIFEST lists the program's files, one a line (the same list the app's own updater uses).
-if (-not (Test-Path (Join-Path $src "MANIFEST"))) { Fail "MANIFEST is missing next to install.bat. Unzip the whole folder first, then run install.bat from it." }
+if (-not (Test-Path (Join-Path $src "MANIFEST"))) { Fail "The app folder is missing next to install.bat. Unzip the whole folder first, then run install.bat from it." }
 $files = @(Get-Content (Join-Path $src "MANIFEST") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-foreach ($f in $files) { if (-not (Test-Path (Join-Path $src $f))) { Fail "$f is missing next to install.bat. Unzip the whole folder first, then run install.bat from it." } }
+foreach ($f in $files) { if (-not (Test-Path (Join-Path $src $f))) { Fail "app\$f is missing next to install.bat. Unzip the whole folder first, then run install.bat from it." } }
 
 Step "1. Python"
 $py = Find-Python

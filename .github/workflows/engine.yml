@@ -1,0 +1,71 @@
+# The shared engine: every hour it reads the new videos once for all users, refreshes prices and ratings,
+# rewrites the stock cards that changed, and sends the emails when they are due. See cloud/engine/.
+name: Engine
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      mail:
+        description: "Also send this email now, to everyone who wants it"
+        type: choice
+        options: ["no", "daily", "weekly"]
+        default: "no"
+concurrency:
+  group: engine
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is it set up?
+        id: ready
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::notice::Not set up yet: add the secret FIREBASE_SERVICE_ACCOUNT (docs/DEPLOY.md, step 2). Nothing was run."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: cloud/requirements.txt
+      - name: Install
+        if: steps.ready.outputs.ok == 'true'
+        run: pip install --quiet -r cloud/requirements.txt
+      - name: Bring back the engine's scratch folder
+        if: steps.ready.outputs.ok == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: .engine-cache
+          key: engine-${{ github.run_id }}
+          restore-keys: engine-
+      - name: Run the engine
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TIPRANKS_API_KEY: ${{ secrets.TIPRANKS_API_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          MAIL_FROM_NAME: ${{ vars.MAIL_FROM_NAME }}
+          GEMINI_MODELS: ${{ vars.GEMINI_MODELS }}
+          MAIL: ${{ inputs.mail }}
+        run: |
+          if [ "$MAIL" = "daily" ] || [ "$MAIL" = "weekly" ]; then python -m cloud.engine --mail "$MAIL"; else python -m cloud.engine; fi
+      - name: Keep the scratch folder for the next run
+        if: always() && steps.ready.outputs.ok == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .engine-cache
+          key: engine-${{ github.run_id }}

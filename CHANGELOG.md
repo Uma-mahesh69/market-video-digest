@@ -2,7 +2,40 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
-## 1.3.0 (first release)
+## Cloud version (in `cloud/`, not yet deployed)
+
+- **A hosted product**: customers open a website, sign in with Google, pick their stocks (a starter list, search, or
+  paste) and see their dashboard. No install, no keys, no settings.
+- **One shared engine** reads the videos once for everyone (Gemini watches the YouTube link), fetches prices and
+  TipRanks ratings within the free allowance, and writes a card for each stock.
+- **Pages**: My stocks (signals, "For you today", portfolio value), a stock page (price chart with analyst calls
+  marked, signal and its history, Wall Street's rating, target and Smart Score, key numbers, bulls and bears, every
+  call with its result), Ideas, Analysts with ratings, Calendar, Account.
+- **Emails** from one address to the address signed in with: a daily brief (every weekday, or only when a signal
+  changes) and a weekly summary.
+- Free tiers only: Firebase (hosting, sign-in, database) and GitHub Actions.
+
+## 1.4.0 (first release)
+
+- **Your own Google Finance data.** "Connect Google" keeps your stocks in a Google Sheet in your own Drive, priced
+  live by Google Finance. Edit it in Google Sheets (on your phone too) or in Market Digest; both stay the same.
+  Market Digest can see only that one file. No server: your computer talks to Google directly.
+- **A check-up of every stock you own or watch**, on the new Overview page: are the analysts positive, mixed or
+  cautious, and why, in plain words (points for and against, whose calls have been good, Wall Street's rating, the
+  price), what to watch (earnings, disagreements), and notes on your portfolio as a whole (too much in one stock).
+- The Overview is the first page; the old home page is now **Digests**. A glossary explains the terms.
+- Import your stocks from an existing tracker (CSV or Excel), with the price you paid, to see your gain.
+- **The Overview is a table, like a Google Finance watchlist**: for each of your stocks, **Invest? Yes / No / Wait**,
+  a **confidence** percentage, the analysts' calls, Wall Street's rating and target, a price chart and the 52-week
+  range. Click a stock for its key numbers and the facts behind the signal. Tabs: Ideas, Analysts, Calendar & videos.
+  Far less text. The weekly digest and Claude's `my_stocks` carry the same signal.
+- **Simpler first run**, about two minutes: **Get my free key** and **Paste my key** (checked by itself), then
+  paste your stocks straight from google.com/finance; three popular channels are already chosen. No links, no other keys.
+- On a Mac with no Python, the installer sets up a private copy by itself.
+- Google Finance without signing in (Settings > Extras): copy the Market Digest template sheet, publish it, paste its link; your shares stay in the app.
+- The weekly digest starts with your stocks' check-up; Claude gets a `my_stocks` tool.
+
+## 1.3.0
 
 - **Dashboard**: a Dashboard page in Market Digest that fills itself from your own digests: what matters now, the
   stocks the analysts talked about (and which way they lean), how their calls did against the S&P 500, each

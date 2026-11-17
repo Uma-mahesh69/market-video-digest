@@ -1,0 +1,60 @@
+# Publishes the website (cloud/web) and the database's security rules to Firebase.
+name: Deploy website
+on:
+  push:
+    branches: [master]
+    paths: ["cloud/web/**", "cloud/firestore.rules", "cloud/firebase.json", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is it set up?
+        id: ready
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::notice::Not set up yet: add the secret FIREBASE_SERVICE_ACCOUNT (docs/DEPLOY.md, step 2). Nothing was run."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+      - name: Build the search list (every US-listed stock)
+        if: steps.ready.outputs.ok == 'true'
+        run: python cloud/tools/make_symbols.py
+      - name: Put the contact address on the privacy and terms pages
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CONTACT: ${{ vars.CONTACT_EMAIL || secrets.SMTP_USER }}
+        run: |
+          if [ -n "$CONTACT" ]; then sed -i "s/CONTACT_EMAIL/$CONTACT/g" cloud/web/privacy.html cloud/web/terms.html; fi
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          node-version: "22"
+      - name: Deploy to Firebase
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          PROJECT=$(python -c "import json,os; print(json.loads(os.environ['SA'])['project_id'])")
+          cd cloud
+          npx --yes firebase-tools@15 deploy --only hosting,firestore:rules --project "$PROJECT" --non-interactive
+          echo "### Published: https://$PROJECT.web.app" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

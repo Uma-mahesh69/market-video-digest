@@ -1,0 +1,1242 @@
+"""Daily market video digest.
+
+Every run: check the channels you follow for new uploads, read each new video's captions,
+have Gemini pull out what matters (levels, stocks, the channel's view, predictions, risks),
+then email one digest with a link to the exact moment for every point.
+
+Setup: put this file next to the `ytmd` script, copy digest_config.example.json to
+digest_config.json and fill it in. Then:
+    python digest.py --hours 72 --dry-run      first test: no email, writes and opens the digest
+    python digest.py                          normal daily run
+    python digest.py --video <youtube url>    test one video
+Standard library only.
+"""
+import argparse
+import html
+import json
+import os
+import re
+import shutil
+import smtplib
+import socket
+import ssl
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+import webbrowser
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
+from pathlib import Path
+
+from digest_export import export_digest, file_name, load_tickers, number, resolve_ticker, speakers as note_speakers
+from market_data import market_brief, read_watchlist, save_market
+import prices
+import tipranks
+
+HERE = Path(__file__).resolve().parent
+YTMD = HERE / "ytmd"
+CONFIG = HERE / "digest_config.json"
+STATE = HERE / "digest_state.json"
+OUT_DIR = HERE / "digests"
+CACHE_DIR = HERE / "digest_cache"
+JSON_DIR = HERE / "digest_json"   # where the daily JSON files go unless json_dir is set in the config
+LAST_RUN = HERE / "last_run.json"  # how the latest run went, for the Market Digest app's home page
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+MAX_TRANSCRIPT_CHARS = 150_000
+# Tried in this order. On the free tier the Flash models allow 20 requests a day each and the Flash Lite ones 500.
+DEFAULT_MODELS = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+WORKERS = 3   # videos summarised at the same time; each model allows 5 requests a minute
+
+
+class Skip(Exception):
+    """A video that can never be processed (for example, no captions). It is not retried."""
+
+
+class Filtered(Skip):
+    """A video left out on purpose by the settings: none of the analysts you follow is in it, or it is not about
+    markets. Not retried, and listed apart from videos that failed."""
+
+
+# ---------------------------------------------------------------- the analysts you follow
+
+MARKET_LISTS = ("stocks", "market_levels", "sectors_and_themes", "predictions", "sp500_targets")
+
+
+def analyst_patterns(cfg):
+    """[(name, [regex, ...])] from the "analysts" setting. Each entry is a name, with other spellings after a slash:
+    "Tom Lee / Thomas Lee". Whole names only, any case, any spacing; captions are lower case and break lines anywhere."""
+    out = []
+    for entry in cfg.get("analysts") or []:
+        names = [n.strip() for n in re.split(r"[/|]", str(entry)) if len(n.strip()) > 2]
+        if names:
+            out.append((names[0], [re.compile(r"(?<!\w)" + r"[\s.\-]*".join(map(re.escape, re.split(r"[\s.]+", n.strip(" ."))))
+                                              + r"(?!\w)", re.I) for n in names]))
+    return out
+
+
+def names_in(patterns, text):
+    """The followed analysts named in a text (a title, captions, or the notes' speakers)."""
+    plain = re.sub(r"\[\d{1,2}(?::\d{2}){1,2}\]", " ", text or "")
+    return [name for name, pats in patterns if any(p.search(plain) for p in pats)]
+
+
+def left_out(cfg, patterns, video, notes):
+    """Why a summarised video is left out by the settings, or None to keep it."""
+    if patterns:
+        speakers = [s["name"] for s in note_speakers(notes)] + [str(s.get("analyst") or "") for s in notes.get("stocks") or []]
+        speaking = names_in(patterns, "\n".join(speakers)) or names_in(patterns, video.get("title", ""))
+        if not speaking:
+            return f"{', '.join(video.get('named') or ['an analyst you follow'])} only mentioned, not speaking"
+        video["analysts"] = speaking
+    if cfg.get("markets_only", True) and not any(notes.get(k) for k in MARKET_LISTS):
+        return "not about markets or stocks"
+    return None
+
+
+def mark_left_out(vid, why):
+    """Note in the saved notes that the video was left out, so the chat does not offer it."""
+    path = CACHE_DIR / f"{vid}.json"
+    try:
+        notes = json.loads(path.read_text(encoding="utf-8"))
+        notes["_left_out"] = why
+        path.write_text(json.dumps(notes, indent=1, ensure_ascii=False), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+
+
+# ---------------------------------------------------------------- settings and memory
+
+def load_config():
+    if not CONFIG.exists():
+        sys.exit(f"Missing {CONFIG.name}. Copy digest_config.example.json to {CONFIG.name} and fill it in.")
+    cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    cfg["gemini_api_key"] = os.environ.get("GEMINI_API_KEY") or cfg.get("gemini_api_key", "")
+    chosen = cfg.get("models") or [cfg.get("model"), cfg.get("fallback_model")]
+    cfg["models"] = list(dict.fromkeys(m for m in [*chosen, *DEFAULT_MODELS] if m))
+    cfg.setdefault("lookback_hours", 26)
+    cfg.setdefault("max_videos", 20)
+    cfg.setdefault("smtp_host", "smtp.gmail.com")
+    cfg.setdefault("smtp_port", 465)
+    if not cfg["gemini_api_key"] or "PASTE" in cfg["gemini_api_key"]:
+        sys.exit("Add your Gemini API key to digest_config.json (gemini_api_key).")
+    return cfg
+
+
+def load_state():
+    if STATE.exists():
+        return json.loads(STATE.read_text(encoding="utf-8"))
+    return {"channel_ids": {}, "done": {}}
+
+
+def save_state(state):
+    tmp = STATE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
+    tmp.replace(STATE)
+
+
+def log(msg):
+    print(datetime.now().strftime("%H:%M:%S"), msg, flush=True)
+
+
+def record_run(ok, message, **info):
+    """Save how this run went to last_run.json, which the Market Digest app shows. Never raises."""
+    try:
+        doc = {"finished_at": datetime.now().isoformat(timespec="seconds"), "ok": ok, "message": message, **info}
+        tmp = LAST_RUN.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(LAST_RUN)
+    except Exception:
+        pass
+
+
+def announce(cfg, count, out, what="Your market digest is ready"):
+    """Tell the person a new digest is ready: a desktop notice, and the digest opened in the browser. Both are
+    settings; opening is on unless chosen otherwise when no email is set up, so the digest still reaches them."""
+    if cfg.get("notify", True):
+        try:   # app.py holds the notice code for both systems; a failed notice must never fail the run
+            subprocess.run([sys.executable, str(HERE / "app.py"), "--notify", what,
+                            f"{count} video{'s' if count != 1 else ''}. Open Market Digest to read it."],
+                           timeout=60, capture_output=True, creationflags=0x08000000 if os.name == "nt" else 0)
+        except Exception:
+            pass
+    if cfg.get("open_when_ready", not cfg.get("email_to")):
+        show(out)
+
+
+def show(out):
+    """Open a saved digest in the default browser."""
+    try:
+        if hasattr(os, "startfile"):   # Windows
+            os.startfile(out)
+        else:
+            webbrowser.open(out.resolve().as_uri())
+    except Exception as err:
+        log(f"Could not open {out}: {err}")
+
+
+def wait_for_internet(minutes=15):
+    """A run that starts as the PC wakes can come before Wi-Fi connects, and would then find and send nothing."""
+    deadline = time.time() + minutes * 60
+    while True:
+        try:
+            socket.create_connection(("www.youtube.com", 443), timeout=10).close()
+            return True
+        except OSError:
+            if time.time() > deadline:
+                return False
+            log("No internet yet; checking again in 30s")
+            time.sleep(30)
+
+
+# ---------------------------------------------------------------- 1. find new videos
+
+def fetch(url, timeout=30):
+    req = urllib.request.Request(url, headers=UA)
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as err:
+            if attempt < 2 and err.code in (404, 429, 500, 502, 503, 504):
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+
+
+def channel_id(url, state):
+    """Turn a channel link or @handle into its UC... id, once, and remember it."""
+    url = url.strip()
+    if url.startswith("@"):
+        url = "https://www.youtube.com/" + url
+    url = re.sub(r"^(https?://)?(m\.|music\.)?youtube\.com", "https://www.youtube.com", url)
+    m = re.search(r"/channel/(UC[\w-]{22})", url)
+    if m:
+        return m.group(1)
+    if url in state["channel_ids"]:
+        return state["channel_ids"][url]
+    page = fetch(url)
+    for pat in (r'<link rel="canonical" href="https://www\.youtube\.com/channel/(UC[\w-]{22})"',
+                r'"externalId":"(UC[\w-]{22})"', r'"channelId":"(UC[\w-]{22})"'):
+        m = re.search(pat, page)
+        if m:
+            state["channel_ids"][url] = m.group(1)
+            return m.group(1)
+    raise RuntimeError(f"could not find the channel id on {url}")
+
+
+def latest_uploads(cid):
+    """A channel's latest uploads: YouTube's public feed, or yt-dlp when the feed is down (it answered 404 for every
+    channel from 3 Nov 2026)."""
+    try:
+        return feed_uploads(cid)
+    except (urllib.error.HTTPError, ET.ParseError) as err:
+        log(f"  YouTube's uploads feed failed ({err}); listing the channel's videos with yt-dlp instead")
+        return ytdlp_uploads(cid)
+
+
+def ytdlp_uploads(cid, count=12):
+    """The newest uploads on the channel's Videos tab, read by yt-dlp (slower than the feed: it opens each video)."""
+    exe = shutil.which("yt-dlp")
+    run = subprocess.run([*([exe] if exe else [sys.executable, "-m", "yt_dlp"]), "--skip-download", "--ignore-errors",
+                          "--no-warnings", "--encoding", "utf-8", "--playlist-end", str(count),
+                          "--print", "%(id)s\t%(timestamp)s\t%(channel)s\t%(title)s",
+                          f"https://www.youtube.com/channel/{cid}/videos"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
+                         env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
+    out = []
+    for line in run.stdout.splitlines():
+        parts = line.split("\t", 3)
+        if len(parts) == 4 and re.fullmatch(r"[\w-]{11}", parts[0]) and parts[1].isdigit():
+            vid, stamp, channel, title = parts
+            out.append({"id": vid, "title": title, "channel": channel,
+                        "published": datetime.fromtimestamp(int(stamp), timezone.utc).isoformat(),
+                        "url": f"https://www.youtube.com/watch?v={vid}", "short": False})
+    if not out:
+        raise RuntimeError("yt-dlp listed no videos either: " + ((run.stderr or "").strip().splitlines() or ["no output"])[-1])
+    return out
+
+
+def feed_uploads(cid):
+    """YouTube's public feed of a channel's latest uploads. No API key needed."""
+    ns = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
+    root = ET.fromstring(fetch(f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}"))
+    out = []
+    for e in root.findall("a:entry", ns):
+        vid = e.findtext("yt:videoId", "", ns)
+        link = e.find("a:link", ns)
+        out.append({
+            "id": vid,
+            "title": e.findtext("a:title", "", ns),
+            "channel": e.findtext("a:author/a:name", "", ns),
+            "published": e.findtext("a:published", "", ns),
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "short": bool(link is not None and "/shorts/" in link.get("href", "")),
+        })
+    return out
+
+
+# ---------------------------------------------------------------- 2. read the captions
+
+PERMANENT = {"captions_unavailable", "video_unavailable", "language_mismatch", "invalid_video"}
+
+
+def ytmd(*args):
+    # PYTHONUTF8: on Windows ytmd would otherwise print in the local code page, and titles with ’ break the reading.
+    run = subprocess.run([sys.executable, str(YTMD), *args, "--json"], capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", env={**os.environ, "PYTHONUTF8": "1"})
+    if run.returncode == 0:
+        return json.loads(run.stdout or "{}")
+    # ytmd reports errors as {"error": {"code": ..., "message": ...}} on stderr (or per item on stdout for add)
+    err = {}
+    for stream in (run.stderr, run.stdout):
+        try:
+            data = json.loads(stream or "{}")
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            err = data.get("error") or next((r.get("error") for r in data.get("results", []) if isinstance(r, dict) and r.get("error")), None) or err
+        if err:
+            break
+    message = err.get("message") or (run.stderr or run.stdout).strip()[:300]
+    if err.get("code") in PERMANENT:
+        raise Skip(message)
+    raise RuntimeError(f"{err.get('code', 'error')}: {message}")
+
+
+def transcript(video):
+    """Captions as lines that start with their time, e.g. "[12:34] text", so every point can be linked."""
+    meta = ytmd("add", video["url"])   # raises Skip when the video has no captions
+    lines, cursor = [], None
+    while True:
+        page = ytmd("read", video["id"], "--cursor", cursor) if cursor else ytmd("read", video["id"], "--max-chars", "100000")
+        for p in page.get("passages", []):
+            lines.append(f"[{clock(p['start'])}] {p['text']}")
+        cursor = page.get("next_cursor")
+        if not page.get("has_more") or not cursor:
+            break
+    text = "\n".join(lines)
+    if len(text) < 200:
+        raise Skip("captions too short to summarise")
+    video["duration"] = meta.get("duration_s") or 0
+    video["captions"] = meta.get("captions", "")
+    video["truncated"] = len(text) > MAX_TRANSCRIPT_CHARS
+    return text[:MAX_TRANSCRIPT_CHARS]
+
+
+def clock(s):
+    s = int(s or 0)
+    h, m, x = s // 3600, s % 3600 // 60, s % 60
+    return f"{h}:{m:02d}:{x:02d}" if h else f"{m}:{x:02d}"
+
+
+def seconds(t):
+    """'12:34' or '1:02:03' to seconds; None when it is not a time."""
+    if not isinstance(t, str) or not re.fullmatch(r"\d{1,2}(:\d{2}){1,2}", t.strip()):
+        return None
+    total = 0
+    for part in t.strip().split(":"):
+        total = total * 60 + int(part)
+    return total
+
+
+# ---------------------------------------------------------------- 3. ask Gemini
+
+class GeminiError(RuntimeError):
+    def __init__(self, code, message):
+        super().__init__(f"Gemini error {code}: {message}" if code else f"Gemini did not answer: {message}")
+        self.code = code
+
+
+REST_SECONDS = 600
+_resting = {}   # (model, uses tools) -> when it last failed
+_resting_lock = threading.Lock()
+
+
+def call_gemini(cfg, body, models=None, patient=True, timeout=120):
+    """Send one request to the first model in the list that is up.
+    A busy, out-of-quota or silent model is skipped for 10 minutes and the next one is tried at once,
+    so a bad model costs one failed call per run instead of minutes of retries per video.
+    If every model fails and patient is True, wait 20 seconds and try them all once more."""
+    models = models or cfg["models"]
+    tools = bool(body.get("tools"))
+    last = None
+    for round_ in (1, 2) if patient else (1,):
+        with _resting_lock:
+            now = time.time()
+            ready = [m for m in models if round_ == 2 or now - _resting.get((m, tools), 0) > REST_SECONDS]
+        for model in ready:
+            req = urllib.request.Request(API_URL.format(model=model), data=json.dumps(body).encode("utf-8"),
+                                         headers={"Content-Type": "application/json", "x-goog-api-key": cfg["gemini_api_key"]})
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    return json.load(r)
+            except urllib.error.HTTPError as err:
+                last = GeminiError(err.code, err.read().decode("utf-8", "replace")[:300])
+                if err.code in (400, 401, 403):   # a bad request or a bad key fails the same way on every model
+                    raise last
+            except (TimeoutError, ConnectionError, urllib.error.URLError, OSError) as err:
+                last = GeminiError(None, f"{err.__class__.__name__} {err}")
+            log(f"  {model}: {'error ' + str(last.code) if last.code else 'no answer'}, switching to the next model")
+            with _resting_lock:
+                _resting[(model, tools)] = time.time()
+        if round_ == 1 and patient:
+            log("  no model answered; waiting 20s and trying them all once more")
+            time.sleep(20)
+    raise last or GeminiError(None, "no model to try")
+
+
+def gemini(cfg, system, prompt):
+    body = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
+    }
+    data = call_gemini(cfg, body)
+    parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    raw = "".join(p.get("text", "") for p in parts).strip()
+    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        raise RuntimeError("Gemini did not return valid JSON: " + raw[:200])
+
+
+EXTRACT_SYSTEM = """You turn the transcript of one finance or markets video into a briefing for a busy professional who will not watch it.
+
+Rules:
+- Use only what the transcript says. Do not add facts, prices or opinions from your own knowledge.
+- Each transcript line starts with its time, like [12:34]. For every item, give "time" as the time of the line where it is said, copied exactly.
+- Copy numbers as spoken. Captions are automatic and can mishear names and figures; if a figure is unclear, keep it and set "unclear": true.
+- Report the channel's or speaker's view, not yours. Views are one of: bullish, bearish, neutral, mixed.
+- Leave a list empty when the video does not cover it. Never invent items to fill a list.
+- List every separate call on a stock as its own item. Do not merge two remarks, or two speakers' views, into one.
+
+Return one JSON object with exactly these keys:
+{
+ "summary": "3 to 5 sentences: what the video argues and why it matters",
+ "speakers": [{"name": "...", "role": "job title and firm if stated, else empty"}],
+ "key_points": [{"point": "...", "time": "m:ss"}],
+ "market_levels": [{"item": "index, yield, rate, commodity, currency or data release", "value": "as said", "number": 5.45, "unit": "%|USD|index pts|bp", "context": "what was said about it", "time": "m:ss", "unclear": false}],
+ "stocks": [{"name": "company name", "ticker": "if said, else empty", "view": "bullish|bearish|neutral|mixed", "reason": "the channel's reason, one sentence", "analyst": "the speaker who makes this call, if clear, else empty", "time": "m:ss"}],
+ "sectors_and_themes": [{"name": "...", "view": "bullish|bearish|neutral|mixed", "reason": "...", "time": "m:ss"}],
+ "predictions": [{"claim": "what they expect", "horizon": "timeframe if said", "time": "m:ss"}],
+ "risks": [{"risk": "...", "time": "m:ss"}],
+ "sp500_targets": [{"value": 8050, "horizon": "year-end|12-month", "time": "m:ss"}],
+ "upcoming_events": [{"event": "earnings, data release, meeting", "when": "as said", "date": "YYYY-MM-DD", "time": "m:ss"}]
+}
+
+Notes on the newer fields:
+- market_levels "number" is the figure as a plain number ("near 100" gives 100), or null when no single figure is said; "unit" is one of the four listed, or empty when none fits.
+- sp500_targets: only S&P 500 index targets the speaker states for year-end or for the next 12 months.
+- upcoming_events "date": only when a specific calendar day is said or follows plainly from the published date; otherwise empty."""
+
+DAY_SYSTEM = """You write the opening of a daily digest of finance videos for a busy professional.
+You receive structured notes from each video, numbered. Use only these notes.
+Return one JSON object:
+{
+ "overview": "4 to 6 sentences: what today's videos say about the markets, naming channels",
+ "themes": [{"theme": "short title", "detail": "2 to 3 sentences", "videos": [video numbers]}],
+ "disagreements": [{"topic": "...", "detail": "who says what", "videos": [video numbers],
+                     "sides": [{"analysts": ["speaker names, as in the notes"], "position": "what this side says", "videos": [video numbers]}]}]
+}
+Give at most 5 themes. Leave "disagreements" empty if the videos do not disagree. Each disagreement has two or more sides."""
+
+
+def extract(cfg, video, text, fresh=False):
+    """Gemini's notes for one video, saved in digest_cache so it is paid for once. fresh ignores the saved copy."""
+    cached = CACHE_DIR / f"{video['id']}.json"
+    if cached.exists() and not fresh:
+        return json.loads(cached.read_text(encoding="utf-8"))
+    head = f"Video: {video['title']}\nChannel: {video['channel']}\nPublished: {video['published']}\n\nTranscript:\n"
+    notes = gemini(cfg, EXTRACT_SYSTEM, head + text)
+    notes = clean_notes(notes, video.get("duration") or 0)
+    notes["_video"] = {k: video.get(k) for k in ("id", "title", "channel", "published", "url", "duration")}
+    CACHE_DIR.mkdir(exist_ok=True)
+    cached.write_text(json.dumps(notes, indent=1, ensure_ascii=False), encoding="utf-8")
+    return notes
+
+
+LISTS = ("key_points", "market_levels", "stocks", "sectors_and_themes", "predictions", "risks", "upcoming_events")
+VIEWS = {"bullish", "bearish", "neutral", "mixed"}
+
+
+def clean_notes(n, duration):
+    """Keep only well-formed items, and only times that exist in the video."""
+    out = {"summary": str(n.get("summary", "")).strip(), "speakers": note_speakers(n)}
+    for key in LISTS:
+        items = []
+        for it in n.get(key, []) or []:
+            if not isinstance(it, dict):
+                continue
+            s = seconds(it.get("time"))
+            it["seconds"] = s if s is not None and (not duration or s <= duration + 5) else None
+            if key in ("stocks", "sectors_and_themes"):
+                view = str(it.get("view") or "").strip().lower()
+                it["view"] = view if view in VIEWS else "mixed"
+            items.append(it)
+        out[key] = items
+    out["sp500_targets"] = [{"value": number(t.get("value")), "horizon": t.get("horizon")} for t in n.get("sp500_targets", []) or []
+                            if isinstance(t, dict) and number(t.get("value")) is not None and t.get("horizon") in ("year-end", "12-month")]
+    return out
+
+
+def day_summary(cfg, done):
+    brief = [{"n": i + 1, "channel": d["video"]["channel"], "title": d["video"]["title"], "summary": d["notes"]["summary"],
+              "speakers": [s["name"] for s in note_speakers(d["notes"])],
+              "stocks": [{k: s.get(k) for k in ("name", "view", "reason")} for s in d["notes"]["stocks"]],
+              "sectors": [{k: s.get(k) for k in ("name", "view")} for s in d["notes"]["sectors_and_themes"]],
+              "predictions": [p.get("claim") for p in d["notes"]["predictions"]]} for i, d in enumerate(done)]
+    try:
+        s = gemini(cfg, DAY_SYSTEM, json.dumps(brief, ensure_ascii=False))
+    except RuntimeError as err:
+        log(f"  overview failed: {err}")
+        return {"overview": "", "themes": [], "disagreements": []}
+    valid = lambda nums: [x for x in nums if isinstance(x, int) and 1 <= x <= len(done)] if isinstance(nums, list) else []
+    for key in ("themes", "disagreements"):
+        s[key] = [dict(t, videos=valid(t.get("videos"))) for t in s.get(key, []) if isinstance(t, dict)]
+    for t in s["disagreements"]:
+        t["sides"] = [dict(side, videos=valid(side.get("videos"))) for side in t.get("sides", []) if isinstance(side, dict)] if isinstance(t.get("sides"), list) else []
+    return s
+
+
+def update_config(**changes):
+    """Change some settings in digest_config.json, keeping the rest."""
+    cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    cfg.update(changes)
+    tmp = CONFIG.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    if os.name != "nt":
+        os.chmod(tmp, 0o600)
+    tmp.replace(CONFIG)
+
+
+def stocks_settings(stocks):
+    """The settings that hold your stocks, from the rows of your Google Sheet."""
+    return {"watchlist": [s["ticker"] for s in stocks],
+            "holdings": {s["ticker"]: s["shares"] for s in stocks if s.get("shares")},
+            "costs": {s["ticker"]: s["cost"] for s in stocks if s.get("cost")}}
+
+
+def sync_google(cfg, extra=(), wait=True):
+    """Read your stocks and Google Finance's prices from your portfolio sheet, if Google is connected. Updates cfg and
+    digest_config.json. Returns True when it worked. Never raises."""
+    if not (cfg.get("google_token") and cfg.get("google_sheet")):
+        return sync_published(cfg)
+    import google_link
+    try:
+        got = google_link.sync(cfg, extra_tickers=extra, wait=wait, log=log)
+    except google_link.GoogleError as err:
+        log(f"Google Finance not read: {err}")
+        update_config(google_problem=str(err), google_reconnect=err.reconnect)
+        return False
+    except Exception as err:
+        log(f"Google Finance not read: {err.__class__.__name__}: {err}")
+        return False
+    changes = {**stocks_settings(got["stocks"]), "google_synced": got["synced"], "google_problem": "", "google_reconnect": False}
+    cfg.update(changes)
+    update_config(**changes)
+    prices.record_google(got["quotes"], log=log)
+    return True
+
+
+def sync_published(cfg):
+    """Without signing in to Google: read the person's own copy of the Google Finance template, published as CSV
+    (watchlist_csv). Its tickers become the watchlist (share counts stay in the app: a published sheet is public),
+    and Google Finance's prices are recorded. True when it worked. Never raises."""
+    if not cfg.get("watchlist_csv"):
+        return False
+    try:
+        sheet = read_watchlist(cfg["watchlist_csv"])
+    except Exception as err:
+        log(f"Google Finance sheet not read: {err}")
+        update_config(google_problem=f"Your Google Finance sheet could not be read: {err}.")
+        return False
+    quotes = {w["ticker"]: {k: w.get(k) for k in ("name", "price", "change_pct_day", "high_52w", "low_52w", "pe", "currency")}
+              for w in sheet["watchlist"]}
+    sp = sheet["benchmarks"].get("sp500")
+    if sp:
+        quotes[prices.SP500] = {"price": sp["value"], "change_pct_day": sp.get("change_pct_day"), "name": "S&P 500",
+                                "high_52w": sp.get("high_52w"), "low_52w": sp.get("low_52w")}
+    tickers = [w["ticker"] for w in sheet["watchlist"]]
+    held = list((cfg.get("holdings") or {}).keys())
+    changes = {"watchlist": list(dict.fromkeys(tickers + [t for t in held if t not in tickers])),
+               "google_synced": datetime.now().isoformat(timespec="minutes"), "google_problem": ""}
+    cfg.update(changes)
+    update_config(**changes)
+    prices.record_google(quotes, log=log)
+    log(f"Google Finance sheet: {len(tickers)} stocks read")
+    return True
+
+
+def refresh_prices(cfg, done):
+    """Today's prices for your stocks and the stocks called lately (for the dashboard and the scoring of calls): from
+    Google Finance through your portfolio sheet when Google is connected, and the daily history from Yahoo Finance or
+    Stooq. Never stops the digest."""
+    try:
+        import insights
+        called = [str(s.get("ticker") or "") for d in done for s in d["notes"].get("stocks") or []]
+        wanted = [*insights.tickers_to_price(cfg), *called]
+        sync_google(cfg, extra=wanted)
+        prices.refresh([*insights.tickers_to_price(cfg), *called], log=log)
+    except Exception as err:
+        log(f"Prices not updated: {err}")
+
+
+def watchlist(cfg, day, done):
+    """(prices, market) from the watchlist in the settings (prices fetched by this computer) or from a watchlist
+    sheet, or (None, None) when there is none. A sheet that cannot be read gives a market of {"error": ...}, shown
+    as a note in the email; it never stops the digest."""
+    if not cfg.get("watchlist_csv") and not cfg.get("watchlist"):
+        return None, None
+    try:
+        if cfg.get("watchlist_csv"):
+            sheet = read_watchlist(cfg["watchlist_csv"])
+        else:
+            sheet = prices.as_watchlist(cfg["watchlist"])
+            if not any(w["price"] is not None for w in sheet["watchlist"]):
+                raise RuntimeError("no prices could be fetched for it today")
+        return sheet, market_brief(day, sheet, done, CACHE_DIR)
+    except Exception as err:
+        log(f"Watchlist prices not read: {err}")
+        return None, {"error": str(err)}
+
+
+def tipranks_tickers(prices, done):
+    """The stocks to look up on TipRanks: the watchlist, then the stocks called most in the day's videos."""
+    table, counts = load_tickers(), {}
+    for d in done:
+        for s in d["notes"].get("stocks", []):
+            t = resolve_ticker(str(s.get("name") or ""), s.get("ticker"), table)
+            if t:
+                counts[t] = counts.get(t, 0) + 1
+    return [w["ticker"] for w in (prices or {}).get("watchlist", [])] + sorted(counts, key=lambda t: -counts[t])
+
+
+def make_overview(cfg, done):
+    if len(done) > 1:
+        return day_summary(cfg, done)
+    return {"overview": done[0]["notes"]["summary"] if done else "", "themes": [], "disagreements": []}
+
+
+# ---------------------------------------------------------------- 4. build and send the digest
+
+C = {"ink": "#16202E", "muted": "#5C6878", "line": "#DCE2EA", "soft": "#F4F6F9", "blue": "#2447C5",
+     "bullish": "#1A7F37", "bearish": "#B42318", "neutral": "#5C6878", "mixed": "#9A6700"}
+e = html.escape
+
+
+def at(video, s):
+    return f"{video['url']}&t={s}s" if s is not None else video["url"]
+
+
+def tlink(video, item):
+    s = item.get("seconds")
+    if s is None:
+        return ""
+    return f' <a href="{at(video, s)}" style="color:{C["blue"]};text-decoration:none;white-space:nowrap">[{clock(s)}]</a>'
+
+
+def view_tag(view):
+    view = view if view in VIEWS else "mixed"
+    return f'<span style="color:{C[view]};font-weight:600">{e(view)}</span>'
+
+
+def section(title, body):
+    return (f'<h2 style="font:600 18px/1.3 Georgia,serif;color:{C["ink"]};margin:28px 0 10px;padding-top:14px;'
+            f'border-top:2px solid {C["ink"]}">{e(title)}</h2>{body}')
+
+
+def table(head, rows):
+    th = "".join(f'<th style="text-align:left;padding:6px 8px;border-bottom:1px solid {C["line"]};font-size:12px;color:{C["muted"]}">{h}</th>' for h in head)
+    tr = "".join("<tr>" + "".join(f'<td style="padding:6px 8px;border-bottom:1px solid {C["line"]};vertical-align:top">{c}</td>' for c in r) + "</tr>" for r in rows)
+    return f'<table style="border-collapse:collapse;width:100%;font-size:14px">{th and "<tr>" + th + "</tr>"}{tr}</table>'
+
+
+def bullets(items):
+    return '<ul style="margin:6px 0 0;padding-left:20px">' + "".join(f'<li style="margin:3px 0">{i}</li>' for i in items) + "</ul>"
+
+
+def change(pct):
+    """A % change in green or red, like +1.2%; a dash when unknown."""
+    if pct is None:
+        return f'<span style="color:{C["muted"]}">-</span>'
+    return f'<span style="color:{C["bullish"] if pct >= 0 else C["bearish"]}">{pct:+.1f}%</span>'
+
+
+def watchlist_html(market):
+    """The watchlist section: insight cards, then prices and today's calls. Built in code from the sheet and the notes."""
+    if market.get("error"):
+        return f'<p style="color:{C["muted"]}">Prices for your watchlist could not be read today: {e(market["error"])}.</p>'
+    out = []
+    b = market["benchmarks"]
+    marks = []
+    if b.get("sp500"):
+        marks.append(f'S&amp;P 500 {b["sp500"]["value"]:,.0f} ({change(b["sp500"].get("change_pct_day"))} today)')
+    if b.get("us10y"):
+        marks.append(f'US 10-year yield {b["us10y"]["value"]:.2f}%')
+    if marks:
+        out.append(f'<p style="margin:0 0 8px;color:{C["muted"]};font-size:13px">{" &middot; ".join(marks)}</p>')
+    cards = []
+    for c in market["insights"]:
+        clip = f' <a href="{e(c["url"])}" style="color:{C["blue"]};text-decoration:none">[{e(c["timestamp"] or "video")}]</a>' if c["url"] else ""
+        cards.append(f'{e(c["text"])}{clip}<br><span style="color:{C["muted"]};font-size:13px">Look at next: {e(c["look_at_next"])}</span>')
+    if cards:
+        out.append(bullets(cards))
+    rows = []
+    for w in market["watchlist"]:
+        calls = ", ".join(f"{n} {k}" for k, n in w["calls_today"].items() if n) or f'<span style="color:{C["muted"]}">none</span>'
+        price = f'{w["price"]:,.2f}' + (f' <span style="color:{C["muted"]};font-size:12px">{e(w["currency"])}</span>' if w.get("currency") else "") if w["price"] is not None else "-"
+        rows.append([f'<b>{e(w["ticker"])}</b><br><span style="color:{C["muted"]};font-size:12px">{e(w["name"])}</span>',
+                     price, change(w["change_pct_day"]), change(w["change_pct_week"]), calls])
+    out.append(f'<div style="margin-top:12px">{table(["Stock", "Price", "Day", "Week", "Calls today"], rows)}</div>')
+    out.append(f'<p style="margin:6px 0 0;font-size:12px;color:{C["muted"]}">Prices from Google Finance, can be delayed up to 20 minutes. '
+               'They are shown next to what analysts said, for information only.</p>')
+    return "".join(out)
+
+
+def render(day, done, skipped, overview, unchecked=(), market=None, filtered=()):
+    vref = lambda nums: " ".join(f'<a href="#v{n}" style="color:{C["blue"]}">#{n}</a>' for n in nums)
+    parts = [f'<p style="margin:0;color:{C["muted"]};font-size:13px">{day:%A, %d %B %Y}. '
+             f'{len(done)} new video{"s" if len(done) != 1 else ""} from {len({d["video"]["channel"] for d in done})} channel(s).</p>',
+             f'<h1 style="font:600 26px/1.25 Georgia,serif;color:{C["ink"]};margin:6px 0 14px">Market video digest</h1>']
+    if unchecked:
+        parts.append(f'<p style="padding:10px 12px;background:#FFF4D6;border-left:4px solid #9A6700">Could not check {len(unchecked)} channel{"s" if len(unchecked) != 1 else ""}, '
+                     'so this digest may be missing videos: ' + "; ".join(f"{e(ch)} ({e(why[:120])})" for ch, why in unchecked) + '.</p>')
+    if not done and not unchecked:
+        parts.append("<p>No new videos with captions since the last digest.</p>")
+    if overview.get("overview"):
+        parts.append(f'<p style="font-size:16px;line-height:1.6">{e(overview["overview"])}</p>')
+    if market:
+        parts.append(section("Your watchlist", watchlist_html(market)))
+    if overview.get("themes"):
+        parts.append(section("Themes today", "".join(
+            f'<p style="margin:0 0 10px"><b>{e(t.get("theme", ""))}</b>. {e(t.get("detail", ""))} {vref(t["videos"])}</p>' for t in overview["themes"])))
+    if overview.get("disagreements"):
+        parts.append(section("Where channels disagree", "".join(
+            f'<p style="margin:0 0 10px"><b>{e(t.get("topic", ""))}</b>. {e(t.get("detail", ""))} {vref(t["videos"])}</p>' for t in overview["disagreements"])))
+
+    # Stocks across all videos, grouped by ticker (tickers.json), so "Nvidia" and "NVDA" are one row, as in the
+    # JSON file. Built from the notes, not written by the model.
+    stocks, tickers = {}, load_tickers()
+    for n, d in enumerate(done, 1):
+        for s in d["notes"]["stocks"]:
+            said = str(s.get("ticker") or "").strip()
+            key = resolve_ticker(str(s.get("name") or said), said, tickers) or (said or str(s.get("name") or "")).strip().upper()
+            if key:
+                stocks.setdefault(key, []).append((n, d, s))
+    if stocks:
+        rows = []
+        for key, hits in sorted(stocks.items(), key=lambda kv: -len(kv[1])):
+            # The company's name as written, preferring a name over a bare ticker ("Nvidia" rather than "NVDA")
+            name = next((h[2]["name"] for h in hits if h[2].get("name") and str(h[2]["name"]).upper() != key), None) or hits[0][2].get("name") or key
+            tick = key
+            rows.append([f'<b>{e(name)}</b>' + (f'<br><span style="color:{C["muted"]};font-size:12px">{e(tick)}</span>' if tick and tick.upper() != name.upper() else ""),
+                         "<br>".join(f'{view_tag(s["view"])} <span style="color:{C["muted"]}">{e(d["video"]["channel"])}</span>' for n, d, s in hits),
+                         "<br>".join(f'{e(s.get("reason", ""))}{tlink(d["video"], s)}' for n, d, s in hits)])
+        parts.append(section("Stocks mentioned", table(["Stock", "View", "Why"], rows)))
+
+    levels = [(d, l) for d in done for l in d["notes"]["market_levels"]]
+    if levels:
+        parts.append(section("Market levels and data quoted", table(["What", "Level", "Said about it", "Source"], [
+            [e(l.get("item", "")), e(str(l.get("value", ""))) + (' <span title="may be misheard" style="color:#9A6700">(check)</span>' if l.get("unclear") else ""),
+             e(l.get("context", "")), f'{e(d["video"]["channel"])}{tlink(d["video"], l)}'] for d, l in levels])))
+
+    events = [(d, x) for d in done for x in d["notes"]["upcoming_events"]]
+    if events:
+        parts.append(section("Coming up", bullets([f'{e(x.get("event", ""))}, {e(x.get("when", ""))} ({e(d["video"]["channel"])}){tlink(d["video"], x)}' for d, x in events])))
+
+    cards = []
+    for n, d in enumerate(done, 1):
+        v, nt = d["video"], d["notes"]
+        meta = [e(v["channel"]), e(v["published"][:10])]
+        if v.get("duration"):
+            meta.append(clock(v["duration"]))
+        if v.get("captions") == "auto":
+            meta.append("auto captions")
+        body = [f'<p id="v{n}" style="margin:0 0 2px;color:{C["muted"]};font-size:12px">#{n}. {", ".join(meta)}</p>',
+                f'<p style="margin:0 0 6px;font-weight:600;font-size:16px"><a href="{v["url"]}" style="color:{C["ink"]}">{e(v["title"])}</a></p>',
+                f'<p style="margin:0">{e(nt["summary"])}</p>']
+        names = [f'{s["name"]} ({s["role"]})' if s["role"] else s["name"] for s in note_speakers(nt)]
+        if names:
+            body.append(f'<p style="margin:6px 0 0;color:{C["muted"]};font-size:13px">Speaking: {e(", ".join(names))}</p>')
+        groups = [("Key points", [f'{e(p.get("point", ""))}{tlink(v, p)}' for p in nt["key_points"]]),
+                  ("Sectors and themes", [f'{e(s.get("name", ""))}: {view_tag(s["view"])}. {e(s.get("reason", ""))}{tlink(v, s)}' for s in nt["sectors_and_themes"]]),
+                  ("What they expect", [f'{e(p.get("claim", ""))}' + (f' ({e(p["horizon"])})' if p.get("horizon") else "") + tlink(v, p) for p in nt["predictions"]]),
+                  ("Risks they flag", [f'{e(r.get("risk", ""))}{tlink(v, r)}' for r in nt["risks"]])]
+        for label, items in groups:
+            if items:
+                body.append(f'<p style="margin:12px 0 0;font-size:13px;font-weight:600;color:{C["muted"]}">{label}</p>' + bullets(items))
+        if v.get("truncated"):
+            body.append(f'<p style="margin:8px 0 0;font-size:12px;color:{C["muted"]}">Very long video: only the first part was read.</p>')
+        body.append(f'<!--ASK:{v["id"]}-->')   # becomes an "Ask about this video" link in the copy saved on this laptop
+        cards.append(f'<div style="padding:16px 0;border-bottom:1px solid {C["line"]}">{"".join(body)}</div>')
+    if cards:
+        parts.append(section("Video by video", "".join(cards)))
+    if skipped:
+        parts.append(section("Not included", bullets([f'<a href="{v["url"]}" style="color:{C["blue"]}">{e(v["title"])}</a> ({e(v["channel"])}): {e(why)}' for v, why in skipped])))
+    if filtered:
+        parts.append(f'<p style="margin:20px 0 0;font-size:12px;color:{C["muted"]};line-height:1.5"><b>Left out by your settings ({len(filtered)}):</b> '
+                     + "; ".join(f'<a href="{v["url"]}" style="color:{C["muted"]}">{e(v["title"][:80])}</a> ({e(why)})' for v, why in filtered) + '.</p>')
+    parts.append(f'<p style="margin:28px 0 0;font-size:12px;color:{C["muted"]};line-height:1.5">Written automatically by Gemini from the videos\' captions. '
+                 'Captions can mishear names and figures, so open the linked moment before relying on a number. '
+                 'This reports what each channel said. It is not investment advice.</p>')
+    return (f'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Market video digest {day:%d %b %Y}</title></head>'
+            f'<body style="margin:0;background:{C["soft"]}"><div style="max-width:720px;margin:0 auto;padding:24px 20px;background:#fff;'
+            f'font:15px/1.55 -apple-system,\'Segoe UI\',Roboto,Arial,sans-serif;color:{C["ink"]}">{"".join(parts)}</div></body></html>')
+
+
+def plain_text(done, skipped, overview, market=None):
+    lines = [overview.get("overview", ""), ""]
+    if market and market.get("insights"):
+        lines += ["Your watchlist:"] + [f'- {c["text"]} Look at next: {c["look_at_next"]}' for c in market["insights"]] + [""]
+    for n, d in enumerate(done, 1):
+        lines += [f'#{n} {d["video"]["title"]} ({d["video"]["channel"]})', d["video"]["url"], d["notes"]["summary"], ""]
+    lines += [f'Not included: {v["title"]} ({why})' for v, why in skipped]
+    return "\n".join(lines)
+
+
+def service():
+    """The Market Digest email service (service.json, shipped with the app): {"url", "token"}, or None if it is not set up."""
+    try:
+        doc = json.loads((HERE / "service.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    url = str(doc.get("email_service") or "").strip()
+    return {"url": url, "token": str(doc.get("email_service_token") or "")} if url.startswith("https://") else None
+
+
+class ServiceError(RuntimeError):
+    pass
+
+
+def call_service(action, **fields):
+    """One request to the email service. Returns its answer; raises ServiceError with a sentence for the person."""
+    svc = service()
+    if not svc:
+        raise ServiceError("The Market Digest email service is not available in this version.")
+    body = json.dumps({"action": action, "token": svc["token"], **fields}).encode("utf-8")
+    req = urllib.request.Request(svc["url"], data=body, headers={"Content-Type": "text/plain;charset=utf-8", **UA})
+    try:   # Apps Script answers a POST with a redirect to the result, which urllib follows as a GET
+        with urllib.request.urlopen(req, timeout=90) as r:
+            answer = json.loads(r.read().decode("utf-8", "replace") or "{}")
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as err:
+        raise ServiceError(f"Could not reach the Market Digest email service ({err.__class__.__name__}). Check the internet connection.")
+    if not answer.get("ok"):
+        raise ServiceError(answer.get("error") or "The email service said no.")
+    return answer
+
+
+def send(cfg, subject, html_body, text_body):
+    to = cfg.get("email_to") or []
+    if isinstance(to, str):
+        to = [to]
+    if to and cfg.get("email_key") and service():   # the Market Digest email service: only a confirmed address
+        call_service("send", email=to[0], key=cfg["email_key"], subject=subject, html=html_body, text=text_body)
+        return True
+    if not (to and cfg.get("smtp_user") and cfg.get("smtp_password")):
+        log("Email not set up in digest_config.json, so the digest was only saved to a file.")
+        return False
+    msg = EmailMessage()
+    msg["Subject"], msg["From"], msg["To"] = subject, cfg["smtp_user"], ", ".join(to)
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+    with smtplib.SMTP_SSL(cfg["smtp_host"], int(cfg["smtp_port"]), context=ssl.create_default_context(), timeout=60) as s:
+        s.login(cfg["smtp_user"], cfg["smtp_password"])
+        s.send_message(msg)
+    return True
+
+
+def check(cfg, state):
+    """Test every channel (link, channel id, uploads feed), the Gemini key and the email login. True if all pass."""
+    ok = bool(cfg.get("channels"))
+    if not ok:
+        print("No channels in digest_config.json.")
+    for ch in cfg.get("channels", []):
+        print(f"\n{ch}")
+        try:
+            cid = channel_id(ch, state)
+            print(f"  channel id:  {cid}")
+        except Exception as err:
+            print(f"  FAILED to find the channel id: {err}")
+            ok = False
+            continue
+        try:
+            ups = latest_uploads(cid)
+        except Exception as err:
+            print(f"  FAILED to list its uploads (feed, then yt-dlp): {err}")
+            print(f"  Try opening https://www.youtube.com/channel/{cid}/videos in your browser.")
+            ok = False
+            continue
+        print(f"  uploads: {len(ups)} videos")
+        for u in ups[:5]:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(u["published"].replace("Z", "+00:00"))
+            print(f"    {age.total_seconds() / 3600:6.1f} hours ago  {'(done) ' if u['id'] in state['done'] else ''}{u['title'][:70]}")
+    save_state(state)
+
+    print("\nGemini key: ", end="", flush=True)
+    try:
+        gemini(cfg, "Return JSON.", 'Return {"ok": true}')
+        print("works")
+    except RuntimeError as err:
+        print(f"FAILED: {err}")
+        ok = False
+
+    if cfg.get("watchlist_csv"):
+        print("Watchlist sheet: ", end="", flush=True)
+        try:
+            sheet = read_watchlist(cfg["watchlist_csv"])
+            priced = sum(1 for w in sheet["watchlist"] if w["price"] is not None)
+            sp = sheet["benchmarks"].get("sp500")
+            print(f"{len(sheet['watchlist'])} stocks, {priced} with prices" + (f", S&P 500 at {sp['value']:,.0f}" if sp else ""))
+        except Exception as err:
+            print(f"FAILED: {err}")
+            ok = False
+
+    folder = Path(cfg.get("json_dir") or JSON_DIR)
+    print("JSON folder: ", end="", flush=True)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        probe = folder / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        print(f"{folder} (can write)")
+    except OSError as err:
+        print(f"FAILED to write to {folder}: {err}")
+        print("  Check json_dir in digest_config.json. For a Google Drive folder, Google Drive for desktop must be running.")
+        ok = False
+
+    if cfg.get("tipranks_api_key"):
+        print("TipRanks: key set; run python digest.py --tipranks-check to test it (uses 1 of the month's calls)")
+
+    print("Email: ", end="", flush=True)
+    if not (cfg.get("email_to") and cfg.get("smtp_user") and cfg.get("smtp_password")):
+        print("not set up, so digests are only saved to the digests folder")
+    else:
+        try:
+            with smtplib.SMTP_SSL(cfg["smtp_host"], int(cfg["smtp_port"]), context=ssl.create_default_context(), timeout=30) as s:
+                s.login(cfg["smtp_user"], cfg["smtp_password"])
+            print(f"login works ({cfg['smtp_user']})")
+        except Exception as err:
+            print(f"FAILED to log in as {cfg['smtp_user']}: {err}")
+            print("  Gmail needs an app password (Google Account > Security > 2-Step Verification > App passwords), not the normal password.")
+            ok = False
+    return ok
+
+
+# ---------------------------------------------------------------- the JSON file for the Econova hub
+
+def saved_notes(vid):
+    """The notes saved for a video, with its details; None when they are missing."""
+    try:
+        notes = json.loads((CACHE_DIR / f"{vid}.json").read_text(encoding="utf-8"))
+        return {"video": notes["_video"], "notes": notes}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def whole_day(cfg, state, day, done, overview):
+    """Every video in today's digests, so a second run on the same day (for example a manual one after the morning
+    run) adds its videos to the day's file instead of replacing it. Returns (done, overview), or None when this run
+    found nothing new and today already has videos."""
+    date = f"{day:%Y-%m-%d}"
+    record = state.get("json_day") or {}
+    ids = list(record.get("ids", [])) if record.get("date") == date else []
+    if ids and not done:
+        return None
+    by_id = {d["video"]["id"]: d for d in done}
+    ids += [vid for vid in by_id if vid not in ids]
+    state["json_day"] = {"date": date, "ids": ids}
+    day_done = []
+    for vid in ids:
+        item = by_id.get(vid) or saved_notes(vid)
+        if item:
+            day_done.append(item)
+        else:
+            log(f"JSON digest: no saved notes for {vid}, so it is left out of today's file")
+    if len(day_done) == len(done):   # this run is the whole day: keep the overview the email used
+        return done, overview
+    return day_done, make_overview(cfg, day_done)
+
+
+def rebuild(cfg, state, date, test_run):
+    """Write the JSON file for an earlier day's digest, from the videos that digest covered and their saved notes.
+    Notes saved before the JSON fields existed are summarised again; the captions come from the ytmd library."""
+    try:
+        day = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        log("--rebuild needs a date like 2026-10-22.")
+        return False
+    ids = [vid for vid, when in state["done"].items()
+           if when[:2] == "20" and datetime.fromisoformat(when).astimezone().date() == day.date()]
+    if not ids:
+        log(f"No videos are recorded as sent in a digest on {date}.")
+        return False
+    folder = OUT_DIR if test_run else Path(cfg.get("json_dir") or JSON_DIR)
+    if not test_run and (folder / file_name(date)).exists():
+        log(f"{folder / file_name(date)} already exists, and past days' files are never changed. Delete it first to rebuild it.")
+        return False
+    done = []
+    for vid in ids:
+        item = saved_notes(vid)
+        if not item:
+            log(f"No saved notes for {vid}, so it is left out")
+            continue
+        if "sp500_targets" not in item["notes"]:   # saved before the JSON fields existed
+            v = dict(item["video"])
+            try:
+                log(f"Summarising again for the new fields: {v.get('title', vid)[:70]}")
+                item = {"video": v, "notes": extract(cfg, v, transcript(v), fresh=True)}
+            except Exception as err:
+                log(f"  could not ({err}); using the older notes")
+        done.append(item)
+    done.sort(key=lambda d: d["video"].get("published") or "", reverse=True)   # newest first, like the email
+    log(f"{len(done)} videos from the {date} digest")
+    return export_digest(day, done, make_overview(cfg, done), folder, log) is not None
+
+
+# ---------------------------------------------------------------- the daily run
+
+def main():
+    ap = argparse.ArgumentParser(description="Daily digest of new videos from the channels you follow.")
+    ap.add_argument("--hours", type=float, help="look back this many hours (default from the config, 26)")
+    ap.add_argument("--dry-run", action="store_true", help="do not email, and do not mark videos as done")
+    ap.add_argument("--video", help="make a digest of one video link instead of checking channels")
+    ap.add_argument("--check", action="store_true", help="test each channel, the Gemini key, the watchlist sheet, the JSON folder and the email login, then stop")
+    ap.add_argument("--open", action="store_true", help="open the digest in the browser when done")
+    ap.add_argument("--tipranks-check", action="store_true", help="test the TipRanks key and show what it sends (uses 1 of the month's calls), then stop")
+    ap.add_argument("--rebuild", metavar="YYYY-MM-DD", help="write the JSON file for an earlier day's digest from the saved notes, then stop")
+    args = ap.parse_args()
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    cfg, state = load_config(), load_state()
+    if not YTMD.exists():
+        sys.exit(f"Put digest.py in the same folder as the ytmd script (looked for {YTMD}).")
+
+    test_run = bool(args.dry_run or args.video)
+    if not (args.check or args.rebuild or args.tipranks_check):
+        log(f"--- {datetime.now():%A %d %B %Y}: {'test digest (not emailed)' if test_run else 'daily digest'}")
+    if not wait_for_internet():
+        log("No internet for 15 minutes; stopping. The daily schedule tries again in 30 minutes.")
+        if not (args.check or args.rebuild or args.tipranks_check):
+            record_run(False, "There was no internet connection for 15 minutes.", test=test_run)
+        sys.exit(1)
+
+    # 1. What is new
+    unchecked = []   # channels whose uploads could not be read this time
+    followed = [] if args.video else analyst_patterns(cfg)   # a single video you asked for is never left out
+    if args.check:
+        sys.exit(0 if check(cfg, state) else 1)
+    if args.rebuild:
+        sys.exit(0 if rebuild(cfg, state, args.rebuild, args.dry_run) else 1)
+    if args.tipranks_check:
+        ok = tipranks.check(cfg, state)
+        save_state(state)
+        sys.exit(0 if ok else 1)
+    if args.video:
+        vid = re.search(r"(?:v=|youtu\.be/|shorts/)([\w-]{11})", args.video)
+        if not vid:
+            sys.exit("That does not look like a YouTube video link.")
+        new = [{"id": vid.group(1), "title": "", "channel": "", "published": datetime.now(timezone.utc).isoformat(),
+                "url": f"https://www.youtube.com/watch?v={vid.group(1)}", "short": False}]
+    else:
+        now = datetime.now(timezone.utc)
+        # Older state files have no last_sent; the newest "done" time is when that digest went out.
+        last = state.get("last_sent") or max((t for t in state["done"].values() if t[:2] == "20"), default=None)
+        if args.hours or not last:
+            since = now - timedelta(hours=args.hours or cfg["lookback_hours"])
+        else:   # everything since the last digest, so days the PC was off are not lost (at most a week back)
+            since = max(datetime.fromisoformat(last) - timedelta(hours=1), now - timedelta(days=7))
+        new = []
+        for ch in cfg.get("channels", []):
+            try:
+                ups = latest_uploads(channel_id(ch, state))
+            except Exception as err:   # one broken channel should not stop the digest
+                log(f"Could not check {ch}: {err}")
+                unchecked.append((ch, str(err)))
+                continue
+            fresh = [u for u in ups if u["id"] not in state["done"] and datetime.fromisoformat(u["published"].replace("Z", "+00:00")) >= since]
+            log(f"{ch}: {len(ups)} in its feed, {len(fresh)} new since {since.astimezone():%d %b %H:%M}")
+            new += fresh
+        new.sort(key=lambda u: u["published"], reverse=True)
+        # With analysts to follow, most uploads are left out by a free check of the captions, so more are read;
+        # max_videos then limits the ones that reach Gemini.
+        limit = cfg["max_videos"] * (5 if followed else 1)
+        if len(new) > limit:
+            log(f"{len(new)} new videos; keeping the newest {limit} (max_videos in the config).")
+            new = new[:limit]
+    if not args.dry_run:
+        save_state(state)   # keeps the channel ids it just looked up
+
+    # 2 and 3. Read and summarise each one, several at a time
+    ytmd_lock = threading.Lock()   # ytmd writes one database file, so captions are fetched one at a time
+
+    def read(v):
+        """The captions, or why the video cannot or should not be summarised. Free: no Gemini call."""
+        try:
+            with ytmd_lock:
+                log(f"Reading: {v['title'] or v['url']}")
+                text = transcript(v)
+                if not v["title"] or not v["channel"]:   # a single --video run: take the details ytmd saved
+                    info = ytmd("info", v["id"])
+                    v["title"], v["channel"] = v["title"] or info.get("title", v["url"]), v["channel"] or info.get("channel", "")
+            if followed:
+                v["named"] = names_in(followed, v["title"] + "\n" + text)
+                if not v["named"]:
+                    raise Filtered("none of the analysts you follow is in it")
+            return text
+        except Exception as err:
+            return err
+
+    def summarise(item):
+        v, text = item
+        try:
+            notes = extract(cfg, v, text)
+            why = None if args.video else left_out(cfg, followed, v, notes)
+            if why:
+                mark_left_out(v["id"], why)
+                raise Filtered(why)
+            log(f"Summarised: {v['title'][:70]}")
+            return notes
+        except Exception as err:
+            return err
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        texts = list(pool.map(read, new))
+        ready = [(v, t) for v, t in zip(new, texts) if not isinstance(t, Exception)]
+        if len(ready) > cfg["max_videos"]:
+            log(f"{len(ready)} videos with your analysts; summarising the newest {cfg['max_videos']} (max_videos in the config).")
+            ready = ready[:cfg["max_videos"]]
+        summarised = dict(zip((v["id"] for v, _ in ready), pool.map(summarise, ready)))
+    results = [t if isinstance(t, Exception) else summarised.get(v["id"]) for v, t in zip(new, texts)]
+    done, skipped, filtered, sent_ok = [], [], [], {}
+    for v, result in zip(new, results):
+        if result is None:   # over max_videos
+            continue
+        if isinstance(result, Filtered):
+            filtered.append((v, str(result)))
+            log(f"Left out: {v['title'][:70]} ({result})")
+            if not args.dry_run:
+                state["done"][v["id"]] = "left out: " + str(result)
+        elif isinstance(result, Skip):
+            skipped.append((v, str(result)))
+            if not args.dry_run:
+                state["done"][v["id"]] = "skipped: " + str(result)
+        elif isinstance(result, Exception):   # temporary trouble: report it, and try again tomorrow
+            skipped.append((v, f"failed this time, will retry: {result}"))
+        else:
+            done.append({"video": v, "notes": result})
+            sent_ok[v["id"]] = datetime.now(timezone.utc).isoformat()   # recorded only after the digest goes out
+    if not args.dry_run:
+        save_state(state)
+
+    # 4. One digest
+    overview = make_overview(cfg, done)
+    today = datetime.now()
+    if not args.video:
+        refresh_prices(cfg, done)
+    sheet, market = watchlist(cfg, today, done)
+    page = render(today, done, skipped, overview, unchecked, market, filtered)
+    OUT_DIR.mkdir(exist_ok=True)
+    out = OUT_DIR / f"digest-{today:%Y-%m-%d-%H%M}.html"
+    local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}" '
+                   f'style="color:{C["blue"]}">Ask a question about this video</a> (opens the chat; start Market Digest on the desktop first)</p>', page)
+    out.write_text(local, encoding="utf-8")
+    log(f"Saved {out}")
+    subject = f"Market video digest, {today:%d %b %Y}: {len(done)} new video{'s' if len(done) != 1 else ''}"
+    emailed, email_error = False, ""
+    if not args.dry_run:
+        if not done and not skipped and unchecked:
+            log("Could not check any channel. Leaving videos queued; the daily schedule tries again in 30 minutes.")
+            emailed = None
+        elif done or skipped or unchecked:
+            try:
+                emailed = send(cfg, subject, page, plain_text(done, skipped, overview, market))
+            except Exception as err:
+                emailed = None
+                email_error = ("Gmail did not accept the sending address and app password" if isinstance(err, smtplib.SMTPAuthenticationError)
+                               else str(err))
+                log(f"Email failed: {err}. The digest is saved above; these videos stay queued and the daily schedule tries again in 30 minutes.")
+            if emailed:
+                log("Emailed to " + ", ".join(cfg["email_to"] if isinstance(cfg["email_to"], list) else [cfg["email_to"]]))
+            if emailed is not None:   # sent, or email is not set up and the saved file is the digest
+                state["done"].update(sent_ok)
+                if done:
+                    state["last_sent"] = datetime.now(timezone.utc).isoformat()
+                save_state(state)
+        else:
+            log(f"Nothing new today ({len(filtered)} left out by your settings), so no email was sent." if filtered else
+                "Nothing new today, so no email was sent.")
+    # The JSON copy for the Econova hub, written once the digest is out: videos a failed email leaves queued go into
+    # the file of the run that sends them, so no video is counted on two days. A test run (--dry-run or --video) goes
+    # to the digests folder, so it can never replace the real day's file. With no videos and a channel that could not
+    # be read, we cannot say "no new videos".
+    if emailed is None:
+        if done:
+            log(f"JSON digest for {today:%Y-%m-%d} waits for the email: these videos go into the file of the run that sends them.")
+    elif done or not unchecked:
+        try:
+            if args.dry_run or args.video:
+                export_digest(today, done, overview, OUT_DIR, log)
+                if sheet:
+                    save_market(market, OUT_DIR, log)
+            else:
+                day = whole_day(cfg, state, today, done, overview)
+                if day is None:
+                    log(f"JSON digest for {today:%Y-%m-%d}: no new videos on this run, so today's file is kept as it is.")
+                else:
+                    folder = Path(cfg.get("json_dir") or JSON_DIR)
+                    export_digest(today, *day, folder, log)
+                    if sheet:   # the market file covers the same videos as the day's digest file
+                        save_market(market if day[0] is done else market_brief(today, sheet, day[0], CACHE_DIR), folder, log)
+                    # Wall Street's view of the same stocks: one TipRanks call a day at most, inside the free tier
+                    tipranks.snapshot(cfg, state, today, tipranks_tickers(sheet, day[0]), folder, log)
+                save_state(state)
+        except Exception as err:   # a JSON problem must not turn a sent digest into a failed run
+            log(f"JSON digest for {today:%Y-%m-%d} NOT saved: {err.__class__.__name__}: {err}")
+    failed = [why for v, why in skipped if why.startswith("failed this time")]
+    if emailed is None:
+        ok, message = False, (f"The email could not be sent: {email_error}" if email_error else
+                              "No channel could be checked: " + "; ".join(f"{ch}: {why[:150]}" for ch, why in unchecked))
+    elif new and not done and failed:
+        ok, message = False, f"No video could be summarised. The first problem: {failed[0][len('failed this time, will retry: '):][:300]}"
+    else:
+        ok = True
+        message = (f"{len(done)} new video{'s' if len(done) != 1 else ''}" if done else "No new videos") + (
+            ", emailed" if emailed else ", not emailed (a test)" if args.dry_run else
+            ", saved on this computer (email is not set up)" if done or skipped or unchecked else ", so no email was needed") + "."
+        if filtered:
+            message += f" {len(filtered)} left out by your settings (analysts to follow, markets only)."
+        if unchecked:
+            message += f" {len(unchecked)} channel{'s' if len(unchecked) != 1 else ''} could not be checked."
+        if failed:
+            message += f" {len(failed)} video{'s' if len(failed) != 1 else ''} failed and will be tried again."
+    record_run(ok, message, test=test_run, videos=len(done), skipped=len(skipped), left_out=len(filtered), digest_file=out.name,
+               emailed_to=(cfg.get("email_to") if emailed else []), unchecked=[ch for ch, _ in unchecked])
+    if args.open:
+        show(out)
+    elif ok and done and not test_run and emailed is not None:
+        announce(cfg, len(done), out)
+    if emailed is None:
+        sys.exit(1)   # tells the scheduler (Task Scheduler, or run_digest.sh on a Mac) the run failed, so it retries
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except Exception as err:   # an unexpected crash still shows on the app's home page
+        if not any(a in sys.argv for a in ("--check", "--rebuild", "--tipranks-check")):
+            record_run(False, f"The run stopped with an error: {err.__class__.__name__}: {err}", test="--dry-run" in sys.argv)
+        raise

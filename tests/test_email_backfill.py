@@ -100,8 +100,8 @@ class RoundTrip(unittest.TestCase):
         folder, out = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
         local = re.sub(r"<!--ASK:([\w-]{11})-->", lambda m: f'<p style="margin:10px 0 0;font-size:13px"><a href="http://127.0.0.1:8765/?video={m.group(1)}">Ask a question about this video</a></p>', self.page)
         (folder / "digest-2026-10-22-0730.html").write_text(local, encoding="utf-8")
-        run = subprocess.run([sys.executable, "email_backfill.py", str(folder / "digest-*.html"), "--out", str(out)], capture_output=True, text=True,
-                             cwd=Path(__file__).resolve().parent.parent)
+        run = subprocess.run([sys.executable, str(Path(__file__).resolve().parent.parent / "tools" / "email_backfill.py"), str(folder / "digest-*.html"),
+                              "--out", str(out)], capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertEqual(json.loads((out / "video-digest_2026-10-22.json").read_text(encoding="utf-8"))["video_count"], 2)
 
