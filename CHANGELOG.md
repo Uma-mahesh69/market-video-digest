@@ -2,6 +2,20 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
+## Cloud version: what happened, in plain words (21 Nov 2026)
+
+Ideas taken from Google Finance, made from our own data:
+
+- **"In short" on every stock page**: one paragraph saying where the analysts stand and why (supporting facts first,
+  what goes against them after "though"), how the price moved, the bull and the bear case in the analysts' words,
+  and what is coming (earnings). Written by the engine from the card, so it never disagrees with the numbers.
+- **The day's big moves first**: Home opens with "NVDA fell 14.0% on Friday · analysts say WAIT", one click from what
+  the analysts say. The daily email says it too.
+- **Your stocks always in view**: the side menu lists them with their signal and the day's move.
+- **Prices a day late, fixed**: a stock fetched before the close was out (Friday's close missing on Saturday morning)
+  was not asked again that day, so NVDA's 14% fall did not show. A stock now counts as up to date only once it has
+  the latest finished trading day. And every stock in the engine's list gets its price, not only the first 80.
+
 ## Cloud version: trust and polish (21 Nov 2026)
 
 - **Signals you can believe.** One vote an analyst (their latest call), recent calls count most, Wall Street's

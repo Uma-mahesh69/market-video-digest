@@ -78,6 +78,8 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   ok('search opens a stock page', (await p.evaluate(() => location.hash)) === '#/s/NVDA');
   const text = await p.locator('.page').textContent();
   ok('stock page: signal, Wall Street, key numbers, bulls and bears, calls', ['Should I invest?', 'Wall Street', 'Key numbers', 'Bulls say', 'Bears say', 'Every call'].every(t => text.includes(t)));
+  ok('stock page: the stock in plain words first', ((await p.locator('.story p').textContent()) || '').length > 80);
+  ok('the side menu lists my stocks, the open one marked', await p.locator('.wl-row').count() === 10 && await p.locator('.wl-row[aria-current=page] b').textContent() === 'NVDA');
   ok('stock page: the chart marks analyst calls', await p.locator('.chart a').count() >= 1);
   await p.click('.seg >> text=1Y'); await wait(p, 300);
   ok('stock page: the period can be changed', await p.locator('.seg button[aria-pressed=true]').first().textContent() === '1Y');

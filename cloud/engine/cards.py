@@ -54,6 +54,69 @@ def case(calls, view, n=3):
     return out
 
 
+def _quote(text, n=150):
+    text = " ".join(str(text or "").split()).rstrip(".")
+    return text if len(text) <= n else text[:n].rsplit(" ", 1)[0] + "…"
+
+
+def story(c):
+    """A short paragraph in plain words, first thing on the stock page: where the analysts stand and why, how the
+    price moved, and what is coming. Made from the card alone (no model is asked), so it is always in step with it."""
+    name, n = c.get("name") or c["ticker"], c["calls"][insights.BULL] + c["calls"][insights.BEAR]
+    bull, conf, st = c["calls"][insights.BULL], c.get("confidence_pct") or 0, c.get("street") or {}
+    lead = {"yes": f"Analysts {'clearly favour' if conf >= 70 else 'lean towards'} {name}",
+            "no": f"Analysts are {'clearly against' if conf >= 70 else 'leaning against'} {name}",
+            "wait": f"Analysts are split on {name}", "none": f"No analyst has given a view on {name} lately"}[c["signal"]]
+    facts = []   # (words, which way they point: 1 for, -1 against, 0 neither)
+    if n:
+        bear = n - bull
+        words = (f"the one call in the videos this month was {'bullish' if bull else 'bearish'}" if n == 1
+                 else f"{bull} of {n} calls in the videos this month were bullish")
+        facts.append((words, 1 if bull > bear else -1 if bear > bull else 0))
+    if st.get("consensus"):
+        up = st.get("upside_pct")
+        target = f", with a 12-month target {abs(up):.0f}% {'above' if up >= 0 else 'below'} today's price" if up is not None else ""
+        s = insights.street_score(st["consensus"]) or 0
+        facts.append((f"Wall Street rates it {st['consensus']}{target}", 1 if s > 0 else -1 if s < 0 else 0))
+    way = {"yes": 1, "no": -1}.get(c["signal"], 0)
+    if not facts:
+        body = ""
+    elif not way:   # split: the two sides, side by side
+        body = ": " + ", while ".join(w for w, _ in facts)
+    else:           # what supports the signal first, what goes against it after
+        pro = [w for w, d in facts if d == way]
+        con = [("only " + w if way > 0 and w[0].isdigit() else w) for w, d in facts if d != way]
+        body = ": " + (" and ".join(pro) + (", though " + " and ".join(con) if con else "") if pro else "; ".join(con))
+    out = [lead + body + "."]
+    day, month = c.get("change_pct_day"), c.get("change_pct_month")
+    when = ""
+    if c.get("as_of"):
+        try:
+            when = " on " + _date(c["as_of"]).strftime("%A")
+        except ValueError:
+            pass
+    if day is not None and abs(day) >= 3:
+        out.append(f"The price {'rose' if day > 0 else 'fell'} {abs(day):.1f}%{when}"
+                   + (f", and is {'up' if month > 0 else 'down'} {abs(month):.0f}% over the month." if month is not None and abs(month) >= 10 and (month > 0) == (day > 0) else "."))
+    elif month is not None and abs(month) >= 10:
+        out.append(f"The price is {'up' if month > 0 else 'down'} {abs(month):.0f}% over the past month.")
+    bulls, bears = c.get("bulls") or [], c.get("bears") or []
+    who = lambda b: b.get("analyst") or b.get("channel") or "an analyst"
+    if bulls and bears:
+        out.append(f"The bull case, from {who(bulls[0])}: “{_quote(bulls[0]['text'])}.” The bear case, from {who(bears[0])}: “{_quote(bears[0]['text'])}.”")
+    elif bulls or bears:
+        b = (bulls or bears)[0]
+        out.append(f"The latest {'bullish' if bulls else 'bearish'} case, from {who(b)}: “{_quote(b['text'])}.”")
+    days = c.get("days_to_earnings")
+    if days is not None and days <= 14:
+        d = int(days)
+        out.append(f"It reports earnings {'today' if d == 0 else 'tomorrow' if d == 1 else f'in {d} days'}; the price often moves a lot that day.")
+    track = c.get("track")
+    if track and track.get("scored", 0) >= 3:
+        out.append(f"Earlier calls on it were right {track['right']} of {track['scored']} times, against the S&P 500.")
+    return " ".join(out)
+
+
 def fingerprint(doc):
     """The same for the same content, whatever the time: a card that did not change is not written again."""
     body = {k: v for k, v in doc.items() if k not in ("updated", "h")}
@@ -74,6 +137,7 @@ def stock_card(t, calls30, calls90, cache, records, street, events, today, prev)
     c["bulls"], c["bears"] = case(mine90, insights.BULL), case(mine90, insights.BEAR)
     c["mentions"] = c["calls"][insights.BULL] + c["calls"][insights.BEAR]
     c["unknown"] = c["price"] is None and not mine90 and not st
+    c["story"] = None if c["unknown"] else story(c)
     # the signal over time: a new line only when it changes
     same_rules = (prev or {}).get("method") == METHOD
     history = list((prev or {}).get("history") or []) if same_rules else []

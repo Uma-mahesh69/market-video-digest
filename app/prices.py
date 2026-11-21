@@ -127,14 +127,43 @@ def save(cache):
     tmp.replace(CACHE)
 
 
-def refresh(symbols, log=print, fetcher=None, pause=0.3):
-    """Fetch what is not already fetched today. Returns (fetched, failed). Never raises: prices are extra."""
+def last_session(now=None):
+    """The latest US trading day whose close is in: today after 21:15 UTC (the close is 20:00 or 21:00 UTC with
+    daylight saving), else the weekday before. Holidays are not known; on one, a stock is simply asked again later."""
+    now = now or datetime.now(timezone.utc)
+    d = now.date() if now.hour * 60 + now.minute >= 21 * 60 + 15 else now.date() - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d.isoformat()
+
+
+RETRY_HOURS = 2   # a stock still missing the latest close is asked again after this long, not on every run
+
+
+def needs_fetch(entry, today, session, now):
+    """Fetched today is not enough: the closes must reach the latest finished session. A fetch made before the data
+    was out (Friday's close missing on Saturday morning) is tried again, at most every RETRY_HOURS."""
+    if not entry or entry.get("day") != today:
+        return True
+    if ((entry.get("closes") or [[""]])[-1][0] or "") >= session:
+        return False
+    try:
+        return (now - datetime.fromisoformat(entry["checked"])).total_seconds() >= RETRY_HOURS * 3600
+    except (KeyError, TypeError, ValueError):
+        return True
+
+
+def refresh(symbols, log=print, fetcher=None, pause=0.3, now=None, limit=MAX_SYMBOLS):
+    """Fetch what is not up to date: not fetched today, or still without the latest close. At most `limit` a run,
+    in the order given. Returns (fetched, failed). Never raises: prices are extra."""
     fetcher = fetcher or fetch
-    today = date.today().isoformat()
-    wanted = list(dict.fromkeys(s for s in (clean(x) for x in [SP500, *symbols]) if s))[:MAX_SYMBOLS]
+    today = (now.date() if now else date.today()).isoformat()
+    now = now or datetime.now(timezone.utc)
+    session = last_session(now)
+    wanted = list(dict.fromkeys(s for s in (clean(x) for x in [SP500, *symbols]) if s))
     with _lock:
         cache = load()
-        todo = [s for s in wanted if (cache.get(s) or {}).get("day") != today]
+        todo = [s for s in wanted if needs_fetch(cache.get(s), today, session, now)][:limit]
         fetched, failed = [], []
         for s in todo:
             try:
@@ -143,7 +172,8 @@ def refresh(symbols, log=print, fetcher=None, pause=0.3):
                 theirs = {d: c for d, c in got["closes"]}
                 mine = [[d, c] for d, c in old.get("closes") or [] if d not in theirs]   # days only recorded here (Google Finance)
                 cache[s] = {**old, **got, "name": got.get("name") or old.get("name", ""), "currency": got.get("currency") or old.get("currency", ""),
-                            "closes": sorted([[d, c] for d, c in theirs.items()] + mine), "day": today}
+                            "closes": sorted([[d, c] for d, c in theirs.items()] + mine), "day": today,
+                            "checked": now.isoformat(timespec="seconds")}
                 fetched.append(s)
             except Exception as err:
                 failed.append(s)
