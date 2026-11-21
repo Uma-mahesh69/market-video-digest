@@ -263,6 +263,11 @@ class Engine(Globals):
         self.assertEqual(second["NVDA"]["changed"], {"from": flipped["NVDA"]["history"][0]["s"], "to": first["NVDA"]["signal"], "on": "2026-11-16"})
         third, _, _ = cards.build(pairs, cache, tr, second, ["NVDA"], today + timedelta(days=1), sources)
         self.assertEqual(len(third["NVDA"]["history"]), 2)   # no new line while the signal stays
+        # a card made under the old rules: its history restarts, and the move is not news
+        old_rules = {"NVDA": {k: v for k, v in flipped["NVDA"].items() if k != "method"}}
+        fresh, _, _ = cards.build(pairs, cache, tr, old_rules, ["NVDA"], today, sources)
+        self.assertIsNone(fresh["NVDA"]["changed"])
+        self.assertEqual([h["s"] for h in fresh["NVDA"]["history"]], [first["NVDA"]["signal"]])
 
     def test_stars_need_three_scored_calls(self):
         self.assertIsNone(cards.stars({"scored": 2, "hit_pct": 100, "edge": 9}))

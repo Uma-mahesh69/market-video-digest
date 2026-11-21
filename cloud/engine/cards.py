@@ -12,6 +12,9 @@ import digest as dg
 import insights
 import prices
 
+# Raise when the way the signal is worked out changes: the first run after starts each stock's history afresh, so a
+# signal that moved only because the rules did is not reported (or emailed) as "turned WAIT (was YES)".
+METHOD = 2
 USER_FIELDS = ("owned", "shares", "cost", "value", "weight_pct", "gain_pct", "for", "against", "worth_knowing", "watch", "latest")
 ROW_FIELDS = ("ticker", "name", "price", "currency", "change_pct_day", "signal", "confidence_pct", "calls", "spark", "low_52w", "high_52w",
               "verdict_text", "basis", "sector")
@@ -72,7 +75,9 @@ def stock_card(t, calls30, calls90, cache, records, street, events, today, prev)
     c["mentions"] = c["calls"][insights.BULL] + c["calls"][insights.BEAR]
     c["unknown"] = c["price"] is None and not mine90 and not st
     # the signal over time: a new line only when it changes
-    history = list((prev or {}).get("history") or [])
+    same_rules = (prev or {}).get("method") == METHOD
+    history = list((prev or {}).get("history") or []) if same_rules else []
+    c["method"] = METHOD
     if not history or history[-1]["s"] != c["signal"]:
         history.append({"d": today.isoformat(), "s": c["signal"], "c": c["confidence_pct"]})
     c["history"] = history[-20:]
