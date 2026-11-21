@@ -436,6 +436,16 @@ class Symbols(unittest.TestCase):
                  "BRK.B|Berkshire Hathaway Inc. Class B Common Stock|N|BRK.B|N|100|N|BRK-B\n")
         self.assertEqual(make_symbols.us_rows(other), [("BRK-B", "Berkshire Hathaway Inc.")])
 
+    def test_a_company_without_a_ticker_is_not_made_one(self):
+        import insights
+        table = insights.load_tickers()
+        self.assertIsNone(insights.symbol_for("Anthropic", "", table))          # private: no card, no price lookups
+        self.assertIsNone(insights.symbol_for("Databricks", "", table))
+        self.assertEqual(insights.symbol_for("Target", "", table), "TGT")       # found by name in the search list
+        self.assertEqual(insights.symbol_for("Costco", "", table), "COST")
+        self.assertEqual(insights.symbol_for("Berkshire Hathaway", "BRK.B", table), "BRK-B")   # the share class as prices write it
+        self.assertEqual(insights.symbol_for("Nvidia", "NVDA", table), "NVDA")
+
     def test_the_file_in_the_repository_is_a_sorted_list_of_pairs(self):
         rows = json.loads((Path(make_symbols.OUT)).read_text(encoding="utf-8"))
         # the full US list is kept here, so a deploy on a day Nasdaq Trader is down still searches every stock
