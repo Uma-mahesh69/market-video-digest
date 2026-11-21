@@ -12,6 +12,9 @@ import digest as dg
 import insights
 import prices
 
+# Raise when the way the signal is worked out changes: the first run after starts each stock's history afresh, so a
+# signal that moved only because the rules did is not reported (or emailed) as "turned WAIT (was YES)".
+METHOD = 2
 USER_FIELDS = ("owned", "shares", "cost", "value", "weight_pct", "gain_pct", "for", "against", "worth_knowing", "watch", "latest")
 ROW_FIELDS = ("ticker", "name", "price", "currency", "change_pct_day", "signal", "confidence_pct", "calls", "spark", "low_52w", "high_52w",
               "verdict_text", "basis", "sector")
@@ -72,7 +75,9 @@ def stock_card(t, calls30, calls90, cache, records, street, events, today, prev)
     c["mentions"] = c["calls"][insights.BULL] + c["calls"][insights.BEAR]
     c["unknown"] = c["price"] is None and not mine90 and not st
     # the signal over time: a new line only when it changes
-    history = list((prev or {}).get("history") or [])
+    same_rules = (prev or {}).get("method") == METHOD
+    history = list((prev or {}).get("history") or []) if same_rules else []
+    c["method"] = METHOD
     if not history or history[-1]["s"] != c["signal"]:
         history.append({"d": today.isoformat(), "s": c["signal"], "c": c["confidence_pct"]})
     c["history"] = history[-20:]
@@ -190,6 +195,18 @@ def build(pairs, cache, street, prev, universe, today, sources, themes=None):
     docs["analysts"] = analysts_doc(calls120, cache, sources["analysts"], pairs, today)
     docs["overview"]["top_calls"] = top_calls(docs["analysts"]["rows"], cards, today)
     return cards, charts, docs
+
+
+def public_overview(docs, cards):
+    """The few market numbers the front page and the example show before anyone signs in: how much is read, the mood,
+    the S&P 500 and the day's themes. Small on purpose; the full pages stay for signed-in users."""
+    o = docs.get("overview") or {}
+    rated = sum(1 for a in (docs.get("analysts") or {}).get("rows") or [] if a.get("stars") is not None)
+    return {"videos": o.get("videos", 0), "channels": o.get("channels", 0), "calls": o.get("calls", 0),
+            "analysts": len((docs.get("analysts") or {}).get("rows") or []), "rated": rated,
+            "stocks": sum(1 for c in cards.values() if c.get("signal") != "none"),
+            "mood_pct": o.get("mood_pct"), "views": o.get("views") or {}, "sp500": o.get("sp500"), "scorecard": o.get("scorecard"),
+            "themes": (o.get("themes") or [])[:3], "counts": o.get("counts") or {}, "lists": {}, "rows": {}}
 
 
 def top_calls(analysts, cards, today, days=21, n=10):

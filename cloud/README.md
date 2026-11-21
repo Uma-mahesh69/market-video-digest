@@ -80,7 +80,7 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-md python cloud/tools
 Open http://127.0.0.1:5000. "Continue with Google" opens the emulator's own sign-in, where any made-up account works.
 
 ```
-python -m unittest                 # 156 tests: the desktop app's, and the engine's on invented data
+python -m unittest                 # 159 tests: the desktop app's, and the engine's on invented data
 node cloud/tests/e2e.cjs           # 52 checks in a real browser (npm i -g playwright)
 ```
 
@@ -89,6 +89,12 @@ node cloud/tests/e2e.cjs           # 52 checks in a real browser (npm i -g playw
 - **Gemini watches the video link.** YouTube refuses caption downloads from cloud servers (tested from a GitHub
   runner, 16 Nov 2026), so captions are not fetched at all. Low-resolution frames at one every five seconds and a
   20-minute cap keep a video inside the free quota.
+- **The signal is calibrated, not counted.** Each analyst gets one vote on a stock (their latest call; turning
+  neutral withdraws it), a call loses half its weight every ten days, and well-rated analysts count more. Wall Street's
+  rating is weighed in, but most large companies are rated Buy, so a plain Buy is only a mild plus and only Strong Buy
+  is a Yes on its own. Confidence is mostly how one-sided the views are: 58 calls split 32/26 is a Wait, not a
+  confident Yes. The words under a signal follow the confidence ("clearly" only when it is). See
+  `check_stock` and `confidence_pct` in `app/insights.py`.
 - **No server of our own.** A static site, Firebase for sign-in and data, and a scheduled job. Nothing sleeps, and
   there is nothing to keep patched.
 - **Cards are public to signed-in users, user data is private.** The rules allow a user their own `users/{uid}`

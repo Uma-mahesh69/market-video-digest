@@ -233,7 +233,8 @@ def rows(data):
                         "url": rec.get("url"),
                         # the rest of what get_assets_data gives, for the stock page
                         "sector": rec.get("sector") or None, "market_cap": _num(rec.get("marketCap")), "pe": _num(rec.get("peRatio")),
-                        "dividend_yield_pct": None if _num(rec.get("dividendYield")) is None else round(_num(rec.get("dividendYield")) * 100, 2),
+                        # TipRanks gives the yield already in percent (2.2 is 2.2%), unlike priceTargetUpside, which is a fraction
+                        "dividend_yield_pct": None if _num(rec.get("dividendYield")) is None else round(_num(rec.get("dividendYield")), 2),
                         "hedge_fund_score": _num(rec.get("hedgeFundsScore")), "insider_score": _num(rec.get("insiderScore")),
                         "ytd_pct": _num(rec.get("ytdGainPct")), "year_pct": _num(rec.get("yearlyGainPct"))})
             continue

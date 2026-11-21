@@ -1,5 +1,5 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
-import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL_SAYS, COLOR } from './ui.js';
+import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL_SAYS, says as signalSays, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
 import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable } from './pages.js';
 
@@ -9,29 +9,69 @@ const signIn = () => data.signIn().catch(e => toast(e.message));
 
 // ---------------------------------------------------------------- the front page
 async function landing() {
-  document.title = 'Market Digest: Yes or No on your stocks, from the analysts';
-  const peek = el('.peek', {}, el('.bar-t', {}, el('i'), el('i'), el('i')), skeleton(300));
-  const example = el('button.btn.lg', { onclick: async () => { example.disabled = true; try { await data.startExample(); render(); } catch (e) { toast(e.message || friendly(e)); example.disabled = false; } } }, 'See a live example');
+  document.title = 'Market Digest: Yes, No or Wait on your stocks, from what analysts say';
+  const peek = el('.peek', {}, el('.bar-t', {}, el('i'), el('i'), el('i'), el('span', { text: 'Today’s signals · live' })), skeleton(300));
+  const tryExample = async b => { b.disabled = true; try { await data.startExample(); render(); } catch (e) { toast(e.message || friendly(e)); b.disabled = false; } };
+  const example = el('button.btn.lg', { onclick: () => tryExample(example) }, 'See a live example');
+  const google = label => el('button.btn.primary.lg.gbtn', { onclick: signIn }, el('span.g', {}, googleMark()), label);
+  const proof = el('.proof', { hidden: true }), working = el('section.working', { hidden: true });
   app.replaceChildren(el('.land', {},
-    el('header', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'), el('button.btn', { onclick: signIn }, 'Sign in')),
+    el('header', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+      el('a.hide-m', { href: '#how', class: 'navlink', onclick: e => { e.preventDefault(); document.getElementById('how').scrollIntoView({ behavior: 'smooth' }); } }, 'How it works'),
+      el('button.btn', { onclick: signIn }, 'Sign in')),
     el('.hero-l', {},
-      el('div', {}, el('h1', {}, 'Yes or No on your stocks, ', el('em', { text: 'from what the analysts say.' })),
-        el('p.lede', { text: 'We watch the finance channels and Wall Street’s ratings every day, and turn them into one clear signal for each stock you follow, with the numbers behind it.' }),
-        el('.cta', {}, el('button.btn.primary.lg.gbtn', { onclick: signIn }, el('span', { style: { background: '#fff', borderRadius: '4px', padding: '2px', display: 'grid' } }, googleMark()), 'Continue with Google'), example),
-        el('p.fine', {}, 'Free during the beta · No card · Nothing to install · Ready in 30 seconds', el('br'), 'By continuing you agree to the ', el('a', { href: '/terms.html', text: 'terms' }), ' and the ', el('a', { href: '/privacy.html', text: 'privacy policy' }), '.')),
+      el('div', {}, el('span.kicker', {}, el('i'), 'Free during the beta'),
+        el('h1', {}, 'Yes, No or Wait on every stock you follow, ', el('em', { text: 'from what the analysts actually say.' })),
+        el('p.lede', { text: 'We read the finance shows and Wall Street’s ratings every day and boil them down to one signal per stock, with the calls, the reasons and each analyst’s track record behind it.' }),
+        el('.cta', {}, google('Continue with Google'), example),
+        el('p.fine', {}, 'No card · Nothing to install · Ready in 30 seconds. By continuing you agree to the ', el('a', { href: '/terms.html', text: 'terms' }), ' and the ', el('a', { href: '/privacy.html', text: 'privacy policy' }), '.'),
+        proof),
       peek),
-    el('.how', {},
-      ...[['Pick your stocks', 'Choose a starter list, search, or paste your Google Finance watchlist. That is the whole setup.'],
-        ['We do the reading', 'Every day we go through the analysts’ videos and Wall Street’s ratings, so you do not have to.'],
-        ['You get a clear signal', 'Yes, No or Wait for each stock, how confident it is, and what changed, on one page and by email.']]
-        .map(([h, p], i) => el('.card', {}, el('.n', { text: i + 1 }), el('h3', { text: h }), el('p', { text: p })))),
-    el('footer', {}, 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong.', el('br'),
-      el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }))));
+    working,
+    el('section.how', { id: 'how' }, el('.sec-h', {}, el('.eyebrow', { text: 'How it works' }), el('h2', { text: 'Set up once. Read it in a minute a day.' })),
+      el('.how-g', {}, ...[['Pick your stocks', 'Choose a starter list, search any US stock, or paste your Google Finance watchlist. That is the whole setup.'],
+        ['We do the reading', 'Every day we go through the analysts’ calls in the finance videos and Wall Street’s ratings, so you do not have to.'],
+        ['You get a clear signal', 'Yes, No or Wait for each stock, how sure it is, and what changed, on one page and in a short daily email.']]
+        .map(([h, p], i) => el('.card', {}, el('.n', { text: i + 1 }), el('h3', { text: h }), el('p', { text: p }))))),
+    el('section.honest', {}, el('.sec-h', {}, el('.eyebrow', { text: 'Honest by design' }), el('h2', { text: 'A signal you can check, not a black box.' })),
+      el('.how-g', {}, ...[['check', 'Every call is scored', 'Each bullish or bearish call is checked against the S&P 500 afterwards. Analysts who keep being right count for more.'],
+        ['swap', 'Both sides, always', 'You see what the bulls and the bears said, in their words, with a link to the moment in the video.'],
+        ['clock', 'Fresh views count most', 'One analyst gets one vote, and a call from yesterday outweighs one from three weeks ago.']]
+        .map(([ic, h, p]) => el('div', {}, el('span.dot.info', {}, icon(ic)), el('h3', { text: h }), el('p', { text: p }))))),
+    el('section.cta-band', {}, el('div', {}, el('h2', { text: 'See where the analysts stand on your stocks.' }), el('p', { text: 'Free during the beta. Sign in with Google and pick your stocks.' })),
+      el('.cta', {}, google('Continue with Google'), el('button.btn.lg.ghost-l', { onclick: e => tryExample(e.currentTarget) }, 'See a live example'))),
+    el('footer', {}, el('.foot', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+      el('a', { href: '/privacy.html', text: 'Privacy' }), el('a', { href: '/terms.html', text: 'Terms' })),
+      el('p', { text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. Ratings from TipRanks; prices are daily closes and can be delayed.' }))));
   try {
     const d = await data.publicExample();
-    peek.replaceChildren(el('.bar-t', {}, el('i'), el('i'), el('i')), stockTable('peek', d.cards.slice(0, 6), () => el('span')));
+    peek.replaceChildren(peek.firstChild, stockTable('peek', d.cards.slice(0, 6), () => el('span')));
     peek.querySelectorAll('tr.link').forEach(tr => { tr.onclick = () => example.click(); });
+    const o = d.overview;
+    if (o && o.calls) {
+      const stat = (v, k) => el('div', {}, el('b', { text: Number(v).toLocaleString() }), el('span', { text: k }));
+      proof.replaceChildren(stat(o.videos, 'videos read, 30 days'), stat(o.calls, 'analyst calls'), stat(o.analysts, 'analysts tracked'), o.stocks ? stat(o.stocks, 'stocks with a signal') : null);
+      proof.hidden = false;
+    }
+    showWorking(working, d.cards);
   } catch (e) { peek.querySelector('.skel').replaceWith(el('.empty', { text: 'Sign in to see your stocks here.' })); }
+}
+
+// One real stock from the example with everything behind its signal: what a signed-in user sees for each of theirs.
+function showWorking(box, cards) {
+  const c = [...(cards || [])].filter(c => c.signal !== 'none' && (c.bulls || []).length && (c.bears || []).length)
+    .sort((a, b) => (b.confidence_pct || 0) - (a.confidence_pct || 0) || (b.mentions || 0) - (a.mentions || 0))[0];
+  if (!c) return;
+  const quote = (b, cls) => b ? el('blockquote.' + cls, {}, '“' + b.text + '”', el('cite', {}, b.analyst || b.channel, ' · ', day(b.day))) : null;
+  box.replaceChildren(el('.sec-h', {}, el('.eyebrow', { text: 'Every signal shows its working' }), el('h2', { text: `Today’s ${c.ticker}, as you would see it` })),
+    el('.work-g', {},
+      el('.card.signal', {}, el('.row', {}, el('span.badge', { text: c.ticker }), el('b', { text: c.name || c.ticker }), el('span.sp'), el('b.num', { text: money(c.price, c.currency) })),
+        el('.ringrow', {}, ring(c.confidence_pct, COLOR[c.signal]), el('div', {}, sig(c.signal, true), el('p', { style: { marginTop: '8px', fontWeight: 600 }, text: signalSays(c.signal, c.confidence_pct) }),
+          el('p.small', { text: 'Based on ' + String(c.basis || '').replace("your channels' videos", 'the videos') + '.' }))),
+        el('.factors', {}, (c.factors || []).slice(0, 6).map(f => el('span.chip.' + f.tone, { text: f.text })))),
+      el('.card.sides', {}, el('.side-h.up', { text: 'Bulls say' }), quote((c.bulls || [])[0], 'bull'), el('.side-h.down', { text: 'Bears say' }), quote((c.bears || [])[0], 'bear'),
+        el('p.small', { text: 'Each quote links to the moment it was said. Sign in for every call, the price chart and the analysts’ records.' }))));
+  box.hidden = false;
 }
 
 // ---------------------------------------------------------------- the frame
@@ -52,8 +92,8 @@ function shell(active, page) {
   input.onkeydown = e => { if (e.key === 'Enter') { const b = results.querySelector('button'); if (b && !results.hidden) b.click(); } if (e.key === 'Escape') { results.hidden = true; input.blur(); } };
   input.onblur = () => setTimeout(() => { results.hidden = true; }, 180);
   const freshBox = el('.fresh');
-  const top = el('.top', {}, el('a.logo', { href: '#/' }, logoMark()), el('.search', {}, icon('search'), input, results), el('span', { style: { flex: 1 } }),
-    data.example ? el('button.btn.primary.sm', { onclick: signIn }, 'Sign in to save') :
+  const top = el('.top', {}, el('a.logo', { href: '#/' }, logoMark()), el('.search', {}, icon('search'), input, results), el('span.top-sp'),
+    data.example ? el('button.btn.primary.sm', { onclick: signIn }, el('span.hide-m', { text: 'Sign in to save' }), el('span.hide-desktop', { text: 'Sign in' })) :
       el('a', { href: '#/account', 'aria-label': 'Account', class: 'hide-desktop' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() })));
   const main = el('.main', {}, top, page);
   app.replaceChildren(el('.shell', {},
@@ -193,7 +233,7 @@ async function stock(root, t) {
   // the signal
   const history = (c.history || []).slice(-4);
   const signalCard = el('.card.signal', {}, el('.eyebrow', { text: 'Should I invest?' }),
-    el('.ringrow', {}, ring(c.confidence_pct, COLOR[c.signal]), el('div', {}, sig(c.signal, true), el('p', { style: { marginTop: '8px', fontWeight: 600 }, text: SIGNAL_SAYS[c.signal] }), el('p.small', { text: c.signal === 'none' ? 'Nobody in the videos or on Wall Street has given a view yet.' : 'Based on ' + c.basis.replace("your channels' videos", 'the videos') + '.' }))),
+    el('.ringrow', {}, ring(c.confidence_pct, COLOR[c.signal]), el('div', {}, sig(c.signal, true), el('p', { style: { marginTop: '8px', fontWeight: 600 }, text: signalSays(c.signal, c.confidence_pct) }), el('p.small', { text: c.signal === 'none' ? 'Nobody in the videos or on Wall Street has given a view yet.' : 'Based on ' + c.basis.replace("your channels' videos", 'the videos') + '.' }))),
     el('.factors', {}, (c.factors || []).map(f => el('span.chip.' + f.tone, { text: f.text }))),
     history.length > 1 ? el('.hist', {}, 'Signal history: ', history.map((h, i) => [i ? ' → ' : '', el('span', { style: { fontWeight: 700, color: COLOR[h.s] }, text: h.s === 'none' ? '—' : h.s.toUpperCase() }), el('span', { text: ' ' + day(h.d) })])) : null,
     mine && mine.shares && c.price != null ? el('div', { style: { borderTop: '1px solid var(--line-2)', paddingTop: '12px', marginTop: 'auto' } }, el('.eyebrow', { text: 'Your position', style: { marginBottom: '6px' } }),
@@ -226,7 +266,7 @@ async function stock(root, t) {
 
   const stats = el('.card', {}, el('h2', { text: 'Key numbers' }), el('.kv', {},
     kv('Market cap', st.market_cap ? money(st.market_cap, c.currency, true) : null), kv('P/E', c.pe != null ? num(c.pe) : null),
-    kv('Dividend yield', st.dividend_yield_pct != null ? (st.dividend_yield_pct >= 0.05 ? st.dividend_yield_pct + '%' : 'None') : null), kv('Sector', c.sector),
+    kv('Dividend yield', st.dividend_yield_pct != null ? (st.dividend_yield_pct >= 0.01 ? num(st.dividend_yield_pct, 2) + '%' : 'None') : null), kv('Sector', c.sector),
     kv('Week', pct(c.change_pct_week), tone(c.change_pct_week)), kv('Month', pct(c.change_pct_month), tone(c.change_pct_month)),
     kv('This year', pct(st.ytd_pct), tone(st.ytd_pct)), kv('12 months', pct(st.year_pct), tone(st.year_pct)),
     kv('1-year low', money(c.low_52w, c.currency)), kv('1-year high', money(c.high_52w, c.currency)),

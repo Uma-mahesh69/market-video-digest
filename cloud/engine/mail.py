@@ -90,25 +90,28 @@ def compose(user, view, kind, today, site):
     for r in rows[:30]:
         word, color = SIGNAL[r["signal"]]
         move = r.get("change_pct_week") if kind == "weekly" else r.get("change_pct_day")
-        body += (f'<tr><td {td}><b>{e(r["ticker"])}</b><div style="color:#5C6878;font-size:12px">{e((r.get("name") or "")[:28])}</div></td>'
+        link = f'{e(site)}#/s/{e(r["ticker"])}'
+        body += (f'<tr><td {td}><a href="{link}" style="color:#16202E;text-decoration:none"><b>{e(r["ticker"])}</b></a><div style="color:#5C6878;font-size:12px">{e((r.get("name") or "")[:28])}</div></td>'
                  f'<td {td} align="center"><span style="display:inline-block;min-width:44px;padding:3px 8px;border-radius:6px;background:{color};color:#fff;font-weight:700;font-size:12px">{word}</span></td>'
                  f'<td {td} align="right">{str(r["confidence_pct"]) + "%" if r.get("confidence_pct") is not None else "—"}</td>'
                  f'<td {td} align="right">{e(money(r.get("price"), r.get("currency")))}</td>'
                  f'<td align="right" style="padding:9px 8px;border-bottom:1px solid #E5E9F0;font-size:14px;color:{"#1A7F37" if (move or 0) > 0 else "#B42318" if (move or 0) < 0 else "#5C6878"}">{pct(move)}</td></tr>')
     th = 'style="padding:6px 8px;font-size:11px;color:#5C6878;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #E5E9F0"'
     name = (user.get("name") or "").split(" ")[0]
-    page = f"""<div style="background:#F4F6F9;padding:24px 12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#16202E">
+    preview = " · ".join(n["text"] for n in notes[:3]) or f"{counts['yes']} Yes, {counts['wait']} Wait, {counts['no']} No"
+    page = f"""<div style="display:none;max-height:0;overflow:hidden;opacity:0">{e(preview)}</div>
+<div style="background:#F4F6F9;padding:24px 12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#16202E">
 <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #DCE2EA;border-radius:12px;padding:22px">
-<div style="font-weight:700;font-size:16px;margin-bottom:14px">Market Digest</div>
+<div style="font-weight:700;font-size:16px;margin-bottom:14px"><span style="display:inline-block;width:20px;height:20px;border-radius:6px;background:#2F4FD8;vertical-align:-4px;margin-right:8px"></span>Market Digest</div>
 <div style="font-size:20px;font-weight:700;margin-bottom:4px">{e('Your week in stocks' if kind == 'weekly' else 'Your stocks today')}{', ' + e(name) if name else ''}</div>
 <div style="color:#5C6878;font-size:13px;margin-bottom:14px">{today:%A %d %B %Y} · {counts['yes']} Yes · {counts['wait']} Wait · {counts['no']} No</div>
 {chips}
 <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:8px">
 <tr><th {th} align="left">Stock</th><th {th}>Invest?</th><th {th} align="right">Confidence</th><th {th} align="right">Price</th><th {th} align="right">{'Week' if kind == 'weekly' else 'Today'}</th></tr>
 {body}</table>
-<div style="margin:18px 0 6px"><a href="{e(site)}" style="display:inline-block;background:#2447C5;color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px">Open my dashboard</a></div>
+<div style="margin:18px 0 6px"><a href="{e(site)}" style="display:inline-block;background:#2F4FD8;color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px">Open my dashboard</a></div>
 <div style="color:#5C6878;font-size:12px;margin-top:16px;line-height:1.5">The signals sum up what analysts said; they are not personal financial advice and can be wrong.<br>
-You get this because you signed up to Market Digest. <a href="{e(site)}#/account" style="color:#2447C5">Change or stop these emails</a>.</div>
+You get this because you signed up to Market Digest. <a href="{e(site)}#/account" style="color:#2F4FD8">Change or stop these emails</a>.</div>
 </div></div>"""
     text = "\n".join([lead, ""] + [n["text"] for n in notes[:6]] + [""] +
                      [f"{r['ticker']:<7} {SIGNAL[r['signal']][0]:<5} {str(r.get('confidence_pct') or '—'):>3}%  {money(r.get('price'), r.get('currency'))}" for r in rows[:30]] +

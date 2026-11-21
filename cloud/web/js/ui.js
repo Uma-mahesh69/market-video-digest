@@ -30,7 +30,8 @@ export const tone = x => x == null ? 'mut' : x > 0 ? 'up' : x < 0 ? 'down' : 'mu
 export function money(x, cur = 'USD', compact = false) {
   if (x == null || isNaN(x)) return '—';
   const opts = cur && cur.length === 3 ? { style: 'currency', currency: cur } : {};
-  if (compact) return x.toLocaleString(undefined, { ...opts, notation: 'compact', maximumFractionDigits: 2 });
+  // compact: T, B, M for every currency but the rupee (an Indian browser would otherwise write $3T as "$3.00LCr")
+  if (compact) return x.toLocaleString(cur === 'INR' ? 'en-IN' : 'en-US', { ...opts, notation: 'compact', maximumFractionDigits: 2 });
   const big = Math.abs(x) >= 10000;
   return x.toLocaleString(undefined, { ...opts, maximumFractionDigits: big ? 0 : 2, minimumFractionDigits: big ? 0 : 2 });
 }
@@ -44,6 +45,14 @@ export function ago(iso) {
 export const safeUrl = u => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : null);   // links from data: https only
 export const SIGNAL = { yes: 'YES', no: 'NO', wait: 'WAIT', none: '—' };
 export const SIGNAL_SAYS = { yes: 'Analysts clearly favour it', no: 'Analysts are clearly against it', wait: 'Analysts are split', none: 'No analyst views yet' };
+// The sentence under a signal, as strong as the confidence behind it: "clearly" only when it is.
+export function says(signal, conf) {
+  if (signal !== 'yes' && signal !== 'no') return SIGNAL_SAYS[signal] || SIGNAL_SAYS.none;
+  const yes = signal === 'yes';
+  if (conf == null || conf >= 70) return SIGNAL_SAYS[signal];
+  if (conf >= 45) return yes ? 'Analysts lean in favour' : 'Analysts lean against it';
+  return yes ? 'A tentative Yes: the evidence is thin or mixed' : 'A tentative No: the evidence is thin or mixed';
+}
 export const COLOR = { yes: 'var(--green)', no: 'var(--red)', wait: 'var(--amber)', none: 'var(--grey)' };
 
 // ---------------------------------------------------------------- icons (Lucide-style strokes, drawn here)
@@ -91,7 +100,7 @@ export function googleMark() {
   return s;
 }
 export function stars(n) {
-  if (n == null) return el('span.small', { text: 'New' });
+  if (n == null) return null;   // not rated yet: say nothing rather than tag every new name
   const box = el('span.stars', { title: `${n} of 5`, role: 'img', 'aria-label': `${n} of 5 stars` });
   for (let i = 1; i <= 5; i++) {
     const fill = n >= i ? 1 : n >= i - 0.5 ? 0.5 : 0, id = 'h' + Math.random().toString(36).slice(2, 8);

@@ -141,7 +141,7 @@ export const data = {
   async market(name) {
     const c = cache.market.get(name);
     if (c && Date.now() - c.at < TTL) return c.doc;
-    if (this.example) return null;
+    if (this.example) return name === 'overview' && this._example ? this._example.overview || null : null;
     const snap = await getDoc(doc(db, 'market', name)), d = snap.exists() ? snap.data() : null;
     cache.market.set(name, { doc: d, at: Date.now() }); return d;
   },

@@ -188,7 +188,8 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
                 written += 1
         # the example on the front page, for people who have not signed in yet: the first pack, as it really stands today
         sample = [t for t in ((sources.get("packs") or [{}])[0].get("tickers") or []) if t in new_cards and not new_cards[t].get("unknown")]
-        demo = {"cards": [new_cards[t] for t in sample], "charts": {doc_id(t): charts[t] for t in sample if t in charts}, "date": today.isoformat()}
+        demo = {"cards": [new_cards[t] for t in sample], "charts": {doc_id(t): charts[t] for t in sample if t in charts}, "date": today.isoformat(),
+                "overview": cards_mod.public_overview(docs, new_cards)}
         if hashes.get("public/demo") != cards_mod.fingerprint(demo):
             store.set("public", "demo", demo)
             hashes["public/demo"] = cards_mod.fingerprint(demo)

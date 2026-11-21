@@ -1,5 +1,5 @@
 // The pages other than Home and the stock page, and two pieces they share with them: the stock table and the picker.
-import { el, icon, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL } from './ui.js';
+import { el, icon, logoMark, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL } from './ui.js';
 import { data, cleanTicker, tickersIn, friendly } from './data.js';
 
 export const go = hash => { location.hash = hash; };
@@ -82,7 +82,7 @@ export function picker(chosen, onChange) {
   data.market('meta').then(meta => {
     for (const p of (meta && meta.packs) || FALLBACK_PACKS) {
       const b = el('button.pack', { type: 'button', onclick: () => set(b.classList.contains('on') ? chosen.filter(t => !p.tickers.includes(t)) : [...chosen, ...p.tickers]) },
-        el('b', { text: p.name }), el('span', { text: p.tickers.slice(0, 4).join(', ') + (p.tickers.length > 4 ? '…' : '') }));
+        el('b', { text: p.name }), el('span', { text: p.tickers.slice(0, 3).join(' · ') + (p.tickers.length > 3 ? ` +${p.tickers.length - 3}` : '') }));
       b._t = p.tickers; packs.append(b);
     }
     draw();
@@ -109,7 +109,7 @@ export function picker(chosen, onChange) {
     } }, 'Find my stocks')));
   box.append(el('.eyebrow', { text: 'Start with a list', style: { marginBottom: '8px' } }), packs,
     el('.eyebrow', { text: 'Or search', style: { margin: '18px 0 8px' } }), el('div', { style: { position: 'relative' } }, input, results),
-    el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '8px', marginLeft: '-8px' }, onclick: () => { pasteBox.hidden = !pasteBox.hidden; if (!pasteBox.hidden) paste.focus(); } }, 'Or paste a list from Google Finance or a broker'),
+    el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '8px', marginLeft: '-8px', color: 'var(--brand)' }, onclick: () => { pasteBox.hidden = !pasteBox.hidden; if (!pasteBox.hidden) paste.focus(); } }, 'Or paste a list from Google Finance or a broker'),
     pasteBox, el('.eyebrow', { text: 'Your stocks', style: { margin: '18px 0 8px' } }), picked);
   draw();
   return box;
@@ -163,8 +163,11 @@ export function welcome(root, done) {
     try { await data.save({ stocks: chosen.map(t => data.profile.stocks.find(s => s.t === t) || { t }), onboarded: true }); done(); }
     catch (e) { toast(friendly(e)); next.disabled = false; }
   } }, 'Show my dashboard');
-  root.append(el('.onb', {}, el('.eyebrow', { text: 'One step' }), el('h1', { text: 'Which stocks do you follow?' }),
-    el('p.mut', { style: { margin: '6px 0 22px', fontSize: '15px' }, text: 'Pick a list or search. You can change this any time, and add how many shares you own later.' }),
+  const first = (data.profile.name || '').split(' ')[0];
+  root.append(el('.onb', {}, el('.row', { style: { marginBottom: '28px' } }, el('a.logo', { href: '#/', style: { padding: 0 } }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+      el('span.small', { text: data.profile.email || '' }), el('button.btn.ghost.sm', { onclick: () => data.signOut() }, 'Not you?')),
+    el('.eyebrow', { text: 'One step to your dashboard' }), el('h1', { text: first ? `Welcome, ${first}. Which stocks do you follow?` : 'Which stocks do you follow?' }),
+    el('p.mut', { style: { margin: '6px 0 22px', fontSize: '15px' }, text: 'Pick a list, search, or paste your watchlist. You can change this any time, and add how many shares you own later.' }),
     el('.card', {}, picker(chosen, c => { next.disabled = !c.length; })),
     el('.row', { style: { marginTop: '18px' } }, next, el('span.small', { text: 'Free during the beta. No card needed.' }))));
 }
@@ -229,7 +232,7 @@ export async function analysts(root) {
   a.rows.forEach((r, i) => body.append(el('tr.link', { tabindex: 0, onclick: () => go('#/a/' + encodeURIComponent(r.analyst)), onkeydown: e => { if (e.key === 'Enter') go('#/a/' + encodeURIComponent(r.analyst)); } },
     el('td.c.mut.hide-s', { text: i + 1 }),
     el('td', {}, el('div', { style: { fontWeight: 700 }, text: r.analyst }), el('.small', { text: r.role || '' })),
-    el('td', {}, stars(r.stars)),
+    el('td', {}, stars(r.stars) || el('span.small', { text: 'Not rated yet', title: 'Needs at least 3 calls old enough to judge' })),
     el('td.r', {}, r.scored ? el('b', { text: r.hit_pct + '%' }) : '—', r.scored ? el('.small', { text: `${r.right} of ${r.scored}` }) : null),
     el('td.r', { class: tone(r.edge), text: r.edge == null ? '—' : `${r.edge > 0 ? '+' : ''}${r.edge} pts` }),
     el('td.r.hide-s', { text: r.calls }), el('td.hide-m', {}, split({ bullish: r.bullish, bearish: r.bearish, neutral: Math.max(0, r.calls - r.bullish - r.bearish) })),
@@ -283,7 +286,8 @@ export async function calendar(root) {
 // ---------------------------------------------------------------- how to read it
 const WORDS = [
   ['Invest? Yes / No / Wait', 'What the analysts\u2019 views on a stock add up to. YES: they clearly favour it. NO: they are clearly against it. WAIT: they are split. A dash means nobody has given a view yet. It is the same for everyone who follows that stock; it does not know your finances.'],
-  ['Confidence', 'How much stands behind the signal, from 5% to 95%. It rises when the views are one-sided, when there are many of them, when the video analysts and Wall Street agree, and when earlier calls on that stock turned out right.'],
+  ['Confidence', 'How much stands behind the signal, from 5% to 95%. Above all it measures how one-sided the views are: many calls split 55/45 is not a confident Yes. It also rises with the number of analysts, when the video analysts and Wall Street clearly agree, and when earlier calls on that stock turned out right. For WAIT, it is how sure we are that the views really are split.'],
+  ['How calls are counted', 'Each analyst gets one vote on a stock: their latest call. Recent calls count most (a call loses half its weight every ten days), and calls from analysts with a good record count more. Wall Street’s rating is weighed in, but a plain Buy is only a mild plus, because most large companies are rated Buy; only Strong Buy is a Yes on its own.'],
   ['Bullish, bearish', 'A bullish call expects the stock to rise; a bearish call expects it to fall.'],
   ['Analyst rating (stars)', 'How an analyst\u2019s past calls did: how often they were right, and by how much they beat the market. It needs at least 3 calls old enough to judge. A call counts more toward the signal when it comes from a well-rated analyst.'],
   ['Right or wrong, vs S&P 500', 'A bullish call is right when the stock then did better than the S&P 500 (an index of 500 large US companies: the usual yardstick for "the market"); a bearish call, when it did worse. "+4 pts" means it beat the market by 4 percentage points.'],
@@ -297,7 +301,7 @@ const WORDS = [
   ['Earnings', 'The day a company reports its results, four times a year. The price often moves a lot that day.'],
 ];
 const FAQ = [
-  ['Where do the signals come from?', 'Every day we go through new videos on the main finance channels and note each call an analyst makes on a stock, with the reason and the moment it was said. We add Wall Street\u2019s rating from TipRanks and the price. Code, not opinion, turns that into the signal.'],
+  ['Where do the signals come from?', 'Every day we go through new videos on the main finance channels and note each call an analyst makes on a stock, with the reason and the moment it was said. We add Wall Street\u2019s rating from TipRanks and the price. Code, not opinion, turns that into the signal, and the same rules apply to every stock.'],
   ['How fresh is it?', 'Videos are read through the day. Prices are daily closing prices. Wall Street\u2019s ratings are refreshed every few days, the stocks in people\u2019s lists first. The side menu shows when the last update ran.'],
   ['Why does my stock say "Fetching\u2026" or show a dash?', 'A stock nobody followed before is picked up within the hour. A dash under Invest? means no analyst has made a call on it lately and there is no Wall Street rating yet; smaller and non-US companies are covered less.'],
   ['Is this financial advice?', 'No. It sums up what analysts said, for everyone alike. Analysts are often wrong, and the reading of videos is automatic and can mishear. Use it to decide what to look at, then make your own decision or talk to a licensed adviser.'],
@@ -353,7 +357,7 @@ export function account(root, refresh) {
       } }, 'Download my data'), el('button.btn.danger', { onclick: () => modal('Delete your account?', el('p', { style: { marginTop: '8px' }, text: 'Your list, your holdings and your email choices are deleted now and cannot be brought back. The emails stop.' }),
         done => [el('button.btn', { onclick: done }, 'Keep my account'), el('button.btn.danger', { onclick: async () => { try { await data.deleteAccount(); done(); } catch (e) { toast(friendly(e)); } } }, 'Delete everything')]) }, 'Delete my account'))),
     el('.card', {}, el('h2', { text: 'How the signals work' }),
-      el('p.small', { style: { lineHeight: 1.6 }, text: 'We read the finance channels every day and note each analyst call on a stock. A stock gets YES when the calls and Wall Street’s rating clearly favour it, NO when they are clearly against it, and WAIT when they are split. A call counts more from an analyst whose past calls beat the market. Confidence (5% to 95%) grows with how one-sided the views are, how many there are, and how earlier calls on that stock turned out.' }),
+      el('p.small', { style: { lineHeight: 1.6 }, text: 'We read the finance channels every day and note each analyst call on a stock. A stock gets YES when the calls and Wall Street’s rating clearly favour it, NO when they are clearly against it, and WAIT when they are split. Each analyst gets one vote (their latest call), recent calls count most, and a call counts more from an analyst whose past calls beat the market. Confidence (5% to 95%) is mostly how one-sided the views are, then how many there are and how earlier calls on that stock turned out.' }),
       el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. For decisions that matter, talk to a licensed adviser.' }),
       el('p.small', { style: { marginTop: '10px' } }, el('a', { href: '#/help', text: 'How it works, in full' }), ' · ', el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }), ' · ', el('a', { href: '#/status', text: 'Service status' })))));
 }
