@@ -305,8 +305,13 @@ def tickers_to_price(cfg, days=90):
 
 # ---------------------------------------------------------------- the check-up: each of your stocks in plain words
 
-STREET_SCORE = {"strong buy": 1.0, "buy": 0.6, "moderate buy": 0.5, "outperform": 0.5, "hold": 0.0, "neutral": 0.0,
-                "moderate sell": -0.5, "underperform": -0.5, "sell": -0.6, "strong sell": -1.0}
+# Wall Street's ratings lean bullish: most large companies are rated Buy, and Sell is rare. So a plain Buy is only a
+# mild plus here, a Hold a mild minus, and only Strong Buy on its own is enough for a Yes.
+STREET_SCORE = {"strong buy": 0.8, "buy": 0.25, "moderate buy": 0.25, "outperform": 0.25, "hold": -0.15, "neutral": -0.15,
+                "moderate sell": -0.55, "underperform": -0.55, "sell": -0.65, "strong sell": -1.0}
+STREET_WEIGHT = 0.8        # Wall Street's rating against the video analysts' (1.0 once there are enough calls)
+HALF_LIFE_DAYS = 10        # a call counts half as much after ten days: the latest views matter most
+YES_AT = 0.3               # the score from which the signal says Yes (or, below minus this, No)
 VERDICT_TEXT = {"positive": "Analysts are positive", "mixed": "Analysts are mixed", "cautious": "Analysts are cautious",
                 "quiet": "Not enough analyst views yet"}
 
@@ -341,18 +346,44 @@ def confidence_pct(score, n, has_street, agree, track=None):
     None when there are no views at all."""
     if score is None:
         return None
-    evidence = 0.45 * min(1.0, n / 5) + (0.35 if has_street else 0) + (0.20 if agree else 0)
-    conviction = min(1.0, abs(score) / 0.8)
-    if abs(score) < 0.3:   # "wait": how sure we are that the views really are split
+    # n: how many independent calls stand behind it (recent ones count fully, older ones less)
+    evidence = 0.5 * min(1.0, n / 6) + (0.3 if has_street else 0) + (0.2 if agree else 0)
+    conviction = min(1.0, abs(score) / 0.7)
+    if abs(score) < YES_AT:   # "wait": how sure we are that the views really are split
         value = 0.9 * evidence * (1 - conviction / 2)
     else:
-        value = 0.4 * conviction + 0.6 * evidence
+        # one-sidedness leads: plenty of calls that are split 55/45 is not a confident Yes
+        value = conviction * (0.45 + 0.55 * evidence)
         if track and track["scored"] >= 3:   # earlier calls on it that went wrong take some of the confidence away
             value *= 0.8 + 0.4 * track["right"] / track["scored"]
     return int(max(5, min(95, round(value * 100))))
 
 
-def factors_of(counts, n, st, s_score, month, from_high, weight, days_left, agree, track):
+def video_votes(mine, records, today):
+    """The video analysts' weighted bullish and bearish votes on one stock: one vote an analyst (their latest call),
+    worth more from an analyst with a good record, and fading with age. (bull, bear, effective number of calls)."""
+    latest = {}
+    for c in sorted(mine, key=lambda c: c["day"]):   # an analyst who has since turned neutral or mixed no longer votes
+        latest[c["analyst"] or ("video", c.get("video_id"))] = c
+    bull = bear = n_eff = 0.0
+    for c in latest.values():
+        if c["view"] not in (BULL, BEAR):
+            continue
+        try:
+            age = max(0, (today - date.fromisoformat(c["day"])).days) if today else 0
+        except (TypeError, ValueError):
+            age = 0
+        fade = 0.5 ** (age / HALF_LIFE_DAYS)
+        w = analyst_weight(records.get(c["analyst"])) * fade
+        n_eff += fade
+        if c["view"] == BULL:
+            bull += w
+        else:
+            bear += w
+    return bull, bear, n_eff
+
+
+def factors_of(counts, n, st, s_score, month, from_high, weight, days_left, disagree, track):
     """The few facts behind the signal, as short labels: tone is good, bad, warn or info."""
     out = []
     bull, bear = counts.get(BULL, 0), counts.get(BEAR, 0)
@@ -376,7 +407,7 @@ def factors_of(counts, n, st, s_score, month, from_high, weight, days_left, agre
         out.append({"text": f"{weight:.0f}% of your portfolio", "tone": "warn"})
     if days_left is not None and 0 <= days_left <= 21:
         out.append({"text": f"Earnings in {int(days_left)}d", "tone": "warn"})
-    if n >= 2 and s_score not in (None, 0) and not agree:
+    if disagree:
         out.append({"text": "Videos and Wall St disagree", "tone": "warn"})
     return out
 
@@ -388,21 +419,25 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
     q = prices.quote(t, cache) or {}
     mine = [c for c in calls if c["ticker"] == t]
     counts = Counter(c["view"] for c in mine)
-    w_bull = sum(analyst_weight(records.get(c["analyst"])) for c in mine if c["view"] == BULL)
-    w_bear = sum(analyst_weight(records.get(c["analyst"])) for c in mine if c["view"] == BEAR)
+    w_bull, w_bear, n_eff = video_votes(mine, records, today)
     n = counts.get(BULL, 0) + counts.get(BEAR, 0)
     st = street.get(t) or {}
     s_score = street_score(st.get("consensus"))
     parts, weights_used = [], []
-    if n:
-        parts.append((w_bull - w_bear) / (w_bull + w_bear))
-        weights_used.append(min(1.0, n / 4))
+    video_lean = (w_bull - w_bear) / (w_bull + w_bear) if w_bull + w_bear else None
+    if video_lean is not None:
+        parts.append(video_lean)
+        weights_used.append(min(1.0, n_eff / 3))
     if s_score is not None:
         parts.append(s_score)
-        weights_used.append(1.0)
+        weights_used.append(STREET_WEIGHT)
     score = sum(p * w for p, w in zip(parts, weights_used)) / sum(weights_used) if parts else None
-    verdict = "quiet" if score is None else "positive" if score >= 0.3 else "cautious" if score <= -0.3 else "mixed"
-    agree = n >= 2 and s_score is not None and ((w_bull - w_bear) > 0) == (s_score > 0) and s_score != 0
+    verdict = "quiet" if score is None else "positive" if score >= YES_AT else "cautious" if score <= -YES_AT else "mixed"
+    # agreeing means both lean the same way clearly, not 55/45 against a Buy
+    agree = (n >= 2 and s_score is not None and video_lean is not None and abs(video_lean) >= 0.25 and abs(s_score) >= 0.25
+             and (video_lean > 0) == (s_score > 0))
+    disagree = (n >= 2 and s_score is not None and video_lean is not None and abs(video_lean) >= 0.25 and abs(s_score) >= 0.25
+                and (video_lean > 0) != (s_score > 0))
     confidence = "strong" if (n >= 4 and agree) or n >= 8 else "some" if n >= 2 or s_score is not None else "little"
 
     good, bad, know = [], [], []
@@ -457,7 +492,7 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
         if e.get("date") and (re.search(rf"\b{re.escape(t.lower())}\b", text) or (name and name.split()[0] in text)):
             watch.append(f"{e['event']} on {e['date']}.")
             break
-    if n >= 2 and s_score is not None and not agree and s_score != 0:
+    if disagree:
         watch.append("The YouTube analysts and Wall Street disagree on it: worth reading both sides.")
 
     basis = [f"{n} call{'s' if n != 1 else ''} in your channels' videos" if n else "", "Wall Street's rating" if s_score is not None else ""]
@@ -473,8 +508,8 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
         "from_high_pct": q.get("from_high_pct"), "as_of": q.get("as_of"), "source": q.get("source"),
         "change_pct_week": q.get("change_pct_week"), "high_52w": q.get("high_52w"), "low_52w": q.get("low_52w"), "pe": q.get("pe"),
         "spark": [c for _, c in closes], "spark_from": closes[0][0] if closes else None,
-        "signal": SIGNAL[verdict], "confidence_pct": confidence_pct(score, n, s_score is not None, agree, track),
-        "factors": factors_of(counts, n, st, s_score, month, q.get("from_high_pct"), w, days_left, agree, track),
+        "signal": SIGNAL[verdict], "confidence_pct": confidence_pct(score, n_eff, s_score is not None, agree, track),
+        "factors": factors_of(counts, n, st, s_score, month, q.get("from_high_pct"), w, days_left, disagree, track),
         "track": track, "days_to_earnings": days_left if days_left is not None and days_left >= 0 else None,
         "verdict": verdict, "verdict_text": VERDICT_TEXT[verdict], "confidence": confidence,
         "basis": " and ".join(b for b in basis if b) or "nothing yet",

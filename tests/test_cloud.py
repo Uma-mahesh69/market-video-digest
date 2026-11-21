@@ -220,6 +220,11 @@ class Engine(Globals):
         demo = store.get("public", "demo")
         self.assertEqual([c["ticker"] for c in demo["cards"]], ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"])
         self.assertIn("NVDA", demo["charts"])
+        # the front page's proof numbers and the example's market card, without the signed-in pages' full lists
+        self.assertEqual(demo["overview"]["analysts"], 8)
+        self.assertGreater(demo["overview"]["calls"], 0)
+        self.assertEqual((demo["overview"]["lists"], demo["overview"]["rows"]), ({}, {}))
+        self.assertIn("price", demo["overview"]["sp500"])
 
     def test_a_ticker_nobody_knows_is_marked_so_the_page_can_say_so(self):
         store = MemoryStore()

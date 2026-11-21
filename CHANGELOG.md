@@ -2,7 +2,19 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
-## Cloud version (in `cloud/`, not yet deployed)
+## Cloud version: trust and polish (21 Nov 2026)
+
+- **Signals you can believe.** One vote an analyst (their latest call), recent calls count most, Wall Street's
+  usual Buy is no longer a Yes by itself, and confidence follows how one-sided the views are. Before, NVDA showed
+  YES at 87% on 32 bullish and 26 bearish calls; it is now a Wait. Clearly bullish stocks keep their high confidence.
+- **Dividend yields fixed.** TipRanks gives them in percent already; they were multiplied by 100 again (NVDA showed 34.5%).
+- **A new front page**: live numbers (videos read, calls, analysts), one real stock with everything behind its signal,
+  how it works, and why the signal can be checked. The example now has the market card too.
+- **Look**: the Inter typeface (named before but never loaded), lighter headings, a share image and app icons for
+  phones, and no "New" tag beside every analyst not yet rated.
+- **Emails**: each stock links to its page, and the inbox preview line says what changed.
+
+## Cloud version (in `cloud/`)
 
 - **A hosted product**: customers open a website, sign in with Google, pick their stocks (a starter list, search, or
   paste) and see their dashboard. No install, no keys, no settings.

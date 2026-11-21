@@ -192,6 +192,18 @@ def build(pairs, cache, street, prev, universe, today, sources, themes=None):
     return cards, charts, docs
 
 
+def public_overview(docs, cards):
+    """The few market numbers the front page and the example show before anyone signs in: how much is read, the mood,
+    the S&P 500 and the day's themes. Small on purpose; the full pages stay for signed-in users."""
+    o = docs.get("overview") or {}
+    rated = sum(1 for a in (docs.get("analysts") or {}).get("rows") or [] if a.get("stars") is not None)
+    return {"videos": o.get("videos", 0), "channels": o.get("channels", 0), "calls": o.get("calls", 0),
+            "analysts": len((docs.get("analysts") or {}).get("rows") or []), "rated": rated,
+            "stocks": sum(1 for c in cards.values() if c.get("signal") != "none"),
+            "mood_pct": o.get("mood_pct"), "views": o.get("views") or {}, "sp500": o.get("sp500"), "scorecard": o.get("scorecard"),
+            "themes": (o.get("themes") or [])[:3], "counts": o.get("counts") or {}, "lists": {}, "rows": {}}
+
+
 def top_calls(analysts, cards, today, days=21, n=10):
     """What the best-rated analysts have just turned bullish on: one line a stock, the best analyst's newest call."""
     since = (today - timedelta(days=days)).isoformat()

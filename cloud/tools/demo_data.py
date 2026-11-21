@@ -107,7 +107,7 @@ def make(today=None, seed=7):
         street[t] = {"ticker": t, "companyName": name, "sector": sector, "marketCap": cap * 1e9, "price": price,
                      "smartScore": max(1, min(10, round(6 + lean * 5))), "analystConsensus": consensus,
                      "bestAnalystConsensus": consensus if rng.random() < 0.7 else "ModerateBuy",
-                     "priceTarget": round(price * (1 + upside), 2), "priceTargetUpside": upside, "peRatio": pe, "dividendYield": div / 100,
+                     "priceTarget": round(price * (1 + upside), 2), "priceTargetUpside": upside, "peRatio": pe, "dividendYield": div,
                      "newsSentiment": round(max(0.05, min(0.95, 0.5 + lean * 0.4)), 2), "hedgeFundsScore": round(max(0.05, min(0.95, 0.5 + lean * 0.3 + rng.gauss(0, 0.1))), 2),
                      "insiderScore": round(max(0.05, min(0.95, 0.5 + rng.gauss(0, 0.2))), 2), "ytdGainPct": round(drift * 220 + rng.gauss(0, 6), 1),
                      "yearlyGainPct": round(drift * 250 + rng.gauss(0, 8), 1),

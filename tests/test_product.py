@@ -365,7 +365,8 @@ class Checkup(Folder):
         from datetime import date, datetime, timedelta, timezone
         self.today = date.today()
         n = 0
-        for view, ticker, who, count in (("bullish", "NVDA", "Dan Ives", 5), ("bearish", "TSLA", "Mike Wilson", 3), ("bullish", "TSLA", "Tom Lee", 1)):
+        for view, ticker, who, count in (("bullish", "NVDA", "Dan Ives", 5), ("bearish", "TSLA", "Mike Wilson", 1), ("bearish", "TSLA", "Lisa Shalett", 1),
+                                         ("bearish", "TSLA", "Gary Black", 1), ("bullish", "TSLA", "Tom Lee", 1)):
             for _ in range(count):
                 n += 1
                 when = datetime.now(timezone.utc) - timedelta(days=n % 10 + 1)
@@ -423,6 +424,36 @@ class Checkup(Folder):
         self.assertLess(conf(1.0, 5, True, True, {"right": 0, "scored": 5}), conf(1.0, 5, True, True, {"right": 5, "scored": 5}))
         self.assertEqual(conf(1.0, 20, True, True, {"right": 9, "scored": 9}), 95)   # never certain
         self.assertGreaterEqual(conf(0.0, 0, True, False), 5)
+
+    def test_one_vote_an_analyst_and_recent_calls_count_most(self):
+        from datetime import date, timedelta
+        today = date(2026, 11, 21)
+        call = lambda view, who, ago: {"ticker": "X", "name": "X", "view": view, "reason": "", "analyst": who, "channel": "c",
+                                       "video": "", "video_id": who + str(ago), "day": (today - timedelta(days=ago)).isoformat(), "link": ""}
+        votes = app.insights.video_votes
+        # the same analyst saying it three times is one vote, and only their latest view counts
+        bull, bear, n = votes([call("bullish", "A", 9), call("bullish", "A", 5), call("bearish", "A", 1)], {}, today)
+        self.assertEqual((bull > 0, bear > 0, round(n, 2)), (False, True, round(0.5 ** 0.1, 2)))
+        # turning neutral withdraws the earlier view
+        self.assertEqual(votes([call("bearish", "A", 9), call("neutral", "A", 2)], {}, today), (0.0, 0.0, 0.0))
+        # a call from yesterday outweighs one from three weeks ago
+        bull, bear, _ = votes([call("bullish", "A", 21), call("bearish", "B", 1)], {}, today)
+        self.assertGreater(bear, 2 * bull)
+
+    def test_a_big_but_split_crowd_and_a_plain_buy_is_not_a_confident_yes(self):
+        from datetime import date, timedelta
+        today = date.today()
+        calls = [{"ticker": "NVDA", "name": "NVIDIA", "view": "bullish" if i < 32 else "bearish", "reason": "", "analyst": f"A{i}",
+                  "channel": "c", "video": "", "video_id": f"v{i}", "day": (today - timedelta(days=i % 20)).isoformat(), "link": ""} for i in range(58)]
+        street = {"NVDA": {"consensus": "Buy", "upside_pct": 54.0}}
+        s = app.insights.check_stock("NVDA", calls, {}, {}, street, {}, {}, [], today)
+        self.assertEqual(s["signal"], "wait")
+        self.assertNotIn("Videos and Wall St disagree", [f["text"] for f in s["factors"]])
+        # Strong Buy with every analyst bullish is a confident Yes; a plain Buy alone is not a Yes at all
+        strong = app.insights.check_stock("NVDA", calls[:6], {}, {}, {"NVDA": {"consensus": "Strong Buy"}}, {}, {}, [], today)
+        self.assertEqual(strong["signal"], "yes")
+        self.assertGreaterEqual(strong["confidence_pct"], 75)
+        self.assertEqual(app.insights.check_stock("NVDA", [], {}, {}, street, {}, {}, [], today)["signal"], "wait")
 
     def test_ideas_are_the_most_called_stocks_that_are_not_on_the_list(self):
         c = app.insights.checkup({"watchlist": ["NVDA"]}, days=30)
