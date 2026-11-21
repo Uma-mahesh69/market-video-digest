@@ -92,8 +92,8 @@ function shell(active, page) {
   input.onkeydown = e => { if (e.key === 'Enter') { const b = results.querySelector('button'); if (b && !results.hidden) b.click(); } if (e.key === 'Escape') { results.hidden = true; input.blur(); } };
   input.onblur = () => setTimeout(() => { results.hidden = true; }, 180);
   const freshBox = el('.fresh');
-  const top = el('.top', {}, el('a.logo', { href: '#/' }, logoMark()), el('.search', {}, icon('search'), input, results), el('span', { style: { flex: 1 } }),
-    data.example ? el('button.btn.primary.sm', { onclick: signIn }, 'Sign in to save') :
+  const top = el('.top', {}, el('a.logo', { href: '#/' }, logoMark()), el('.search', {}, icon('search'), input, results), el('span.top-sp'),
+    data.example ? el('button.btn.primary.sm', { onclick: signIn }, el('span.hide-m', { text: 'Sign in to save' }), el('span.hide-desktop', { text: 'Sign in' })) :
       el('a', { href: '#/account', 'aria-label': 'Account', class: 'hide-desktop' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() })));
   const main = el('.main', {}, top, page);
   app.replaceChildren(el('.shell', {},
