@@ -12,7 +12,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import digest as dg
 import prices
-from digest_export import load_tickers, resolve_ticker
+from digest_export import COMPANY_WORDS, load_tickers, norm, resolve_ticker
+from pathlib import Path
 
 MIN_SESSIONS = 3      # a call is scored once this many trading days have passed
 BULL, BEAR = "bullish", "bearish"
@@ -63,6 +64,46 @@ def speakers(notes):
     return [s["name"] for s in dg.note_speakers(notes)]
 
 
+SYMBOLS_FILE = Path(__file__).resolve().parent.parent / "cloud" / "web" / "symbols.json"   # the web app's search list
+_names = None
+
+
+def names_index():
+    """Company name (without Inc., Corp. and the like) -> ticker, from the search list of every US and NSE listing.
+    A name two US listings share (GOOG and GOOGL) is left out rather than guessed."""
+    global _names
+    if _names is None:
+        _names, seen = {}, set()
+        try:
+            rows = json.loads(SYMBOLS_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            rows = []
+        for t, n in rows:
+            key = COMPANY_WORDS.sub("", norm(n))
+            if not key or len(key) < 3:
+                continue
+            if key in seen and not t.endswith(".NS"):
+                _names.pop(key, None)
+                continue
+            if key not in _names or (_names[key].endswith(".NS") and not t.endswith(".NS")):
+                _names[key] = t   # a US listing over an Indian one of the same name
+            seen.add(key)
+    return _names
+
+
+def symbol_for(name, said, table):
+    """The ticker for a stock as the notes give it, or None when it cannot be known (a private company, a name no
+    list has). Never the company name itself in capitals: "ANTHROPIC" is not a ticker."""
+    share_class = lambda t: re.sub(r"^([A-Z]{1,4})\.([A-Z])$", r"\1-\2", str(t or "").strip().upper())   # BRK.B is BRK-B for prices
+    hit = resolve_ticker(name or said, said, table)
+    if hit:
+        return share_class(hit)
+    said = share_class(said)
+    if said and prices.clean(said) and not (name and said == norm(name).upper().replace(" ", "")):
+        return said
+    return names_index().get(COMPANY_WORDS.sub("", norm(re.sub(r"\(.*?\)", "", name or ""))))
+
+
 def calls_in(videos):
     """Every stock call in these videos, as flat rows."""
     table = load_tickers()
@@ -72,7 +113,7 @@ def calls_in(videos):
         for s in notes.get("stocks") or []:
             said = str(s.get("ticker") or "").strip()
             name = str(s.get("name") or "").strip()
-            symbol = resolve_ticker(name or said, said, table) or (said or name).upper()
+            symbol = symbol_for(name, said, table)
             if not symbol:
                 continue
             rows.append({"ticker": prices.clean(symbol) or symbol, "name": name, "view": s.get("view") if s.get("view") in VIEWS else "mixed",
