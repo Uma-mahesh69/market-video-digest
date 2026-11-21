@@ -340,7 +340,7 @@ def pct(x):
 SIGNAL = {"positive": "yes", "cautious": "no", "mixed": "wait", "quiet": "none"}
 
 
-def confidence_pct(score, n, has_street, agree, track=None):
+def confidence_pct(score, n, has_street, agree, track=None, disagree=False):
     """How much stands behind the signal, 5 to 95: how one-sided the views are, how much evidence there is
     (calls in the videos, Wall Street's rating, and the two agreeing), and how earlier calls on the stock turned out.
     None when there are no views at all."""
@@ -356,6 +356,8 @@ def confidence_pct(score, n, has_street, agree, track=None):
         value = conviction * (0.45 + 0.55 * evidence)
         if track and track["scored"] >= 3:   # earlier calls on it that went wrong take some of the confidence away
             value *= 0.8 + 0.4 * track["right"] / track["scored"]
+        if disagree:   # the video analysts lean one way and Wall Street the other: a Yes or No on one side only
+            value *= 0.7
     return int(max(5, min(95, round(value * 100))))
 
 
@@ -508,7 +510,7 @@ def check_stock(t, calls, cache, records, street, cfg, weights, events, today):
         "from_high_pct": q.get("from_high_pct"), "as_of": q.get("as_of"), "source": q.get("source"),
         "change_pct_week": q.get("change_pct_week"), "high_52w": q.get("high_52w"), "low_52w": q.get("low_52w"), "pe": q.get("pe"),
         "spark": [c for _, c in closes], "spark_from": closes[0][0] if closes else None,
-        "signal": SIGNAL[verdict], "confidence_pct": confidence_pct(score, n_eff, s_score is not None, agree, track),
+        "signal": SIGNAL[verdict], "confidence_pct": confidence_pct(score, n_eff, s_score is not None, agree, track, disagree),
         "factors": factors_of(counts, n, st, s_score, month, q.get("from_high_pct"), w, days_left, disagree, track),
         "track": track, "days_to_earnings": days_left if days_left is not None and days_left >= 0 else None,
         "verdict": verdict, "verdict_text": VERDICT_TEXT[verdict], "confidence": confidence,

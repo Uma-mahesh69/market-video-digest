@@ -226,10 +226,10 @@ textarea.input{resize:vertical;min-height:110px}
 .menu button:hover,.menu a:hover{background:var(--hover);text-decoration:none}
 .picked{display:flex;flex-wrap:wrap;gap:6px;min-height:30px}
 .picked .chip button{border:0;background:none;padding:0;color:inherit;font-weight:800;line-height:1}
-.packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
 .pack{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px;text-align:left}
 .pack:hover{border-color:var(--brand)}.pack.on{border-color:var(--brand);background:var(--brand-soft)}
-.pack b{display:block}.pack span{font-size:12px;color:var(--muted)}
+.pack b{display:block}.pack span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .skel{background:linear-gradient(90deg,var(--line-2),var(--hover),var(--line-2));background-size:200% 100%;animation:sk 1.2s infinite;border-radius:8px;min-height:16px}
 @keyframes sk{to{background-position:-200% 0}}@keyframes fade{from{opacity:0}}@keyframes rise{from{opacity:0;transform:translate(-50%,8px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -284,7 +284,7 @@ textarea.input{resize:vertical;min-height:110px}
 .foot .sp{flex:1}.foot .logo{padding:0;font-size:14px}.foot .logo svg{width:22px;height:22px}.foot a:not(.logo){color:var(--muted)}
 .banner{background:var(--brand-soft);color:var(--brand);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0 0;font-weight:600}
 .banner .sp{flex:1}
-.onb{max-width:680px;margin:0 auto;padding:36px 20px 80px}
+.onb{max-width:720px;margin:0 auto;padding:24px 20px 80px}
 .onb h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
 .center{min-height:100vh;display:grid;place-items:center;padding:20px}
 

@@ -424,6 +424,8 @@ class Checkup(Folder):
         self.assertLess(conf(1.0, 5, True, True, {"right": 0, "scored": 5}), conf(1.0, 5, True, True, {"right": 5, "scored": 5}))
         self.assertEqual(conf(1.0, 20, True, True, {"right": 9, "scored": 9}), 95)   # never certain
         self.assertGreaterEqual(conf(0.0, 0, True, False), 5)
+        # the videos one way and Wall Street the other: less sure than either alone would make it
+        self.assertLess(conf(0.5, 3, True, False, None, True), conf(0.5, 3, True, False))
 
     def test_one_vote_an_analyst_and_recent_calls_count_most(self):
         from datetime import date, timedelta

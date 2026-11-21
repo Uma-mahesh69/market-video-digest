@@ -1,5 +1,5 @@
 // The pages other than Home and the stock page, and two pieces they share with them: the stock table and the picker.
-import { el, icon, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL } from './ui.js';
+import { el, icon, logoMark, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL } from './ui.js';
 import { data, cleanTicker, tickersIn, friendly } from './data.js';
 
 export const go = hash => { location.hash = hash; };
@@ -82,7 +82,7 @@ export function picker(chosen, onChange) {
   data.market('meta').then(meta => {
     for (const p of (meta && meta.packs) || FALLBACK_PACKS) {
       const b = el('button.pack', { type: 'button', onclick: () => set(b.classList.contains('on') ? chosen.filter(t => !p.tickers.includes(t)) : [...chosen, ...p.tickers]) },
-        el('b', { text: p.name }), el('span', { text: p.tickers.slice(0, 4).join(', ') + (p.tickers.length > 4 ? '…' : '') }));
+        el('b', { text: p.name }), el('span', { text: p.tickers.slice(0, 3).join(' · ') + (p.tickers.length > 3 ? ` +${p.tickers.length - 3}` : '') }));
       b._t = p.tickers; packs.append(b);
     }
     draw();
@@ -109,7 +109,7 @@ export function picker(chosen, onChange) {
     } }, 'Find my stocks')));
   box.append(el('.eyebrow', { text: 'Start with a list', style: { marginBottom: '8px' } }), packs,
     el('.eyebrow', { text: 'Or search', style: { margin: '18px 0 8px' } }), el('div', { style: { position: 'relative' } }, input, results),
-    el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '8px', marginLeft: '-8px' }, onclick: () => { pasteBox.hidden = !pasteBox.hidden; if (!pasteBox.hidden) paste.focus(); } }, 'Or paste a list from Google Finance or a broker'),
+    el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '8px', marginLeft: '-8px', color: 'var(--brand)' }, onclick: () => { pasteBox.hidden = !pasteBox.hidden; if (!pasteBox.hidden) paste.focus(); } }, 'Or paste a list from Google Finance or a broker'),
     pasteBox, el('.eyebrow', { text: 'Your stocks', style: { margin: '18px 0 8px' } }), picked);
   draw();
   return box;
@@ -163,8 +163,11 @@ export function welcome(root, done) {
     try { await data.save({ stocks: chosen.map(t => data.profile.stocks.find(s => s.t === t) || { t }), onboarded: true }); done(); }
     catch (e) { toast(friendly(e)); next.disabled = false; }
   } }, 'Show my dashboard');
-  root.append(el('.onb', {}, el('.eyebrow', { text: 'One step' }), el('h1', { text: 'Which stocks do you follow?' }),
-    el('p.mut', { style: { margin: '6px 0 22px', fontSize: '15px' }, text: 'Pick a list or search. You can change this any time, and add how many shares you own later.' }),
+  const first = (data.profile.name || '').split(' ')[0];
+  root.append(el('.onb', {}, el('.row', { style: { marginBottom: '28px' } }, el('a.logo', { href: '#/', style: { padding: 0 } }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+      el('span.small', { text: data.profile.email || '' }), el('button.btn.ghost.sm', { onclick: () => data.signOut() }, 'Not you?')),
+    el('.eyebrow', { text: 'One step to your dashboard' }), el('h1', { text: first ? `Welcome, ${first}. Which stocks do you follow?` : 'Which stocks do you follow?' }),
+    el('p.mut', { style: { margin: '6px 0 22px', fontSize: '15px' }, text: 'Pick a list, search, or paste your watchlist. You can change this any time, and add how many shares you own later.' }),
     el('.card', {}, picker(chosen, c => { next.disabled = !c.length; })),
     el('.row', { style: { marginTop: '18px' } }, next, el('span.small', { text: 'Free during the beta. No card needed.' }))));
 }
