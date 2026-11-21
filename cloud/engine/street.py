@@ -10,6 +10,21 @@ from . import ROOT  # noqa: F401
 import tipranks
 
 
+# Rows read since the dividend fix carry units=2: dividend_yield_pct is the percent TipRanks gives. Rows kept from
+# before were multiplied by 100 once too often (NVDA 34.5%); `upgrade` puts each of those right, once.
+UNITS = 2
+
+
+def upgrade(row):
+    if row.get("units") == UNITS:
+        return row
+    row = dict(row)
+    if isinstance(row.get("dividend_yield_pct"), (int, float)):
+        row["dividend_yield_pct"] = round(row["dividend_yield_pct"] / 100, 4)
+    row["units"] = UNITS
+    return row
+
+
 def weekdays_left(day):
     """Weekdays from this day to the end of its month, this day included."""
     n, d = 0, day
@@ -62,7 +77,7 @@ def refresh(key, state, street, wanted, first, today, limits, log=print, client=
             state["tipranks"]["today"] += 1   # counted before the call: a call that fails is still charged
             calls -= 1
             for r in tipranks.rows(tipranks.payload(tr.call(tipranks.TOOL, {arg: batch if is_list else ",".join(batch)}))):
-                street[r["ticker"]] = {**r, "at": today.isoformat()}
+                street[r["ticker"]] = {**r, "at": today.isoformat(), "units": UNITS}
                 done += 1
         log(f"TipRanks: {done} stocks refreshed in {state['tipranks']['today']} call(s) today; {len(queue)} waiting their turn")
     except Exception as err:

@@ -269,6 +269,26 @@ class Engine(Globals):
         self.assertIsNone(fresh["NVDA"]["changed"])
         self.assertEqual([h["s"] for h in fresh["NVDA"]["history"]], [first["NVDA"]["signal"]])
 
+    def test_dividend_yields_kept_from_before_the_fix_are_put_right_once(self):
+        old = {"ticker": "NVDA", "consensus": "Buy", "dividend_yield_pct": 34.5}   # 0.345% multiplied by 100 again
+        fixed = street.upgrade(old)
+        self.assertEqual((fixed["dividend_yield_pct"], fixed["units"]), (0.345, street.UNITS))
+        self.assertEqual(street.upgrade(fixed), fixed)                               # never twice
+        self.assertEqual(street.upgrade({"ticker": "AMZN", "dividend_yield_pct": None})["units"], street.UNITS)
+        # a run turns the stored row right and the card keeps it; a fresh read from TipRanks is marked right
+        store, tmp = MemoryStore(), tempfile.mkdtemp()
+        demo_data.fill(store, today=date(2026, 11, 13), log=lambda m: None, work=tmp)
+        (Path(tmp) / "cards.json").unlink()   # as after a lost scratch folder: the next run reads the cards back from the store
+        card = store.get("stocks", "MSFT")
+        card["street"] = {k: v for k, v in card["street"].items() if k != "units"}
+        card["street"]["dividend_yield_pct"] = 70.0
+        card["h"] = "written-by-the-old-engine"
+        store.set("stocks", "MSFT", card)
+        demo_data.fill(store, today=date(2026, 11, 14), log=lambda m: None, work=tmp)
+        st = store.get("stocks", "MSFT")["street"]
+        self.assertEqual((st["dividend_yield_pct"], st["units"]), (0.7, street.UNITS))
+        self.assertTrue(all((c.get("street") or {}).get("units", street.UNITS) == street.UNITS for c in store.all("stocks").values()))
+
     def test_stars_need_three_scored_calls(self):
         self.assertIsNone(cards.stars({"scored": 2, "hit_pct": 100, "edge": 9}))
         self.assertEqual(cards.stars({"scored": 10, "hit_pct": 100, "edge": 12}), 5)
@@ -418,7 +438,9 @@ class Symbols(unittest.TestCase):
 
     def test_the_file_in_the_repository_is_a_sorted_list_of_pairs(self):
         rows = json.loads((Path(make_symbols.OUT)).read_text(encoding="utf-8"))
-        self.assertGreater(len(rows), 50)
+        # the full US list is kept here, so a deploy on a day Nasdaq Trader is down still searches every stock
+        self.assertGreater(len(rows), 8000)
+        self.assertTrue({"AAPL", "COST", "BRK-B", "SPY", "PLTR"} <= {r[0] for r in rows})
         self.assertTrue(all(isinstance(r, list) and len(r) == 2 and prices.clean(r[0]) == r[0] and r[1] for r in rows))
 
 

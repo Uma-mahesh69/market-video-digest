@@ -9,21 +9,32 @@ import io
 import json
 import re
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "web" / "symbols.json"
 UA = {"User-Agent": "Mozilla/5.0 (compatible; symbol-list-builder)"}
-US = ["https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt", "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"]
+# each list from the website, or from Nasdaq Trader's FTP server when the website answers 503 (it does, some days)
+US = [("https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt", "ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqlisted.txt"),
+      ("https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt", "ftp://ftp.nasdaqtrader.com/symboldirectory/otherlisted.txt")]
 NSE = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
 SKIP = re.compile(r"\b(warrants?|units?|rights?|notes? due|debentures?|preferred|depositary shares? each|% )", re.I)
 TAIL = re.compile(r"\s*[-,]?\s*(common stock|common shares|ordinary shares?|class [a-c]( common stock| ordinary shares?)?|american depositary shares?|"
                   r"each representing.*|depositary shares?|shares of beneficial interest|\(the\)|new)\s*$", re.I)
 
 
-def get(url):
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=40) as r:
-        return r.read().decode("utf-8", "replace")
+def get(url, tries=4):
+    """The text at url; Nasdaq Trader answers 503 now and then, so a few tries, further apart each time."""
+    for i in range(tries):
+        try:
+            req = urllib.request.Request(url, headers=UA) if url.startswith("http") else url
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return r.read().decode("utf-8", "replace")
+        except Exception:
+            if i == tries - 1:
+                raise
+            time.sleep(5 * 2 ** i)
 
 
 def tidy(name):
@@ -66,9 +77,19 @@ def main():
     except (OSError, ValueError):
         names = {}
     before = len(names)
-    for url, parse in [(US[0], us_rows), (US[1], us_rows), (NSE, nse_rows)]:
+    for urls, parse in [(US[0], us_rows), (US[1], us_rows), ((NSE,), nse_rows)]:
+        url = urls[0]
         try:
-            rows = parse(get(url))
+            text = None
+            for url in urls:
+                try:
+                    text = get(url, tries=2 if url.startswith("ftp") else 3)
+                    break
+                except Exception as err:
+                    if url == urls[-1]:
+                        raise
+                    print(f"  {url}: {type(err).__name__}, trying the next source", file=sys.stderr)
+            rows = parse(text)
             for t, n in rows:
                 names.setdefault(t, n)   # a name already in the file (checked by hand) wins
             print(f"{len(rows):>6} from {url}")

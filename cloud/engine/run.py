@@ -154,7 +154,7 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
     prev = work.json("cards.json", None)
     if prev is None:
         prev = {c.get("ticker"): c for c in (step("Cards", lambda: store.all("stocks"), {}) or {}).values() if c.get("ticker")}
-    street = {t: {**c["street"], "ticker": t, "name": c.get("name")} for t, c in prev.items() if c.get("street")}
+    street = {t: street_mod.upgrade({**c["street"], "ticker": t, "name": c.get("name")}) for t, c in prev.items() if c.get("street")}
     street = step("TipRanks", lambda: street_mod.refresh(settings.get("tipranks_api_key"), state, street, universe, mine, today,
                                                          sources["limits"], log, client=tipranks_client), street) or street
 
