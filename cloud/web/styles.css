@@ -69,6 +69,14 @@ button.chip{cursor:pointer}button.chip:hover{filter:brightness(.97)}
 .nav a[aria-current=page]{background:var(--brand-soft);color:var(--brand)}
 .nav svg{width:18px;height:18px;flex:none}
 .side .fill{flex:1}
+.wl{flex:1;min-height:0;overflow:auto;margin:14px -4px 6px;padding:0 4px;border-top:1px solid var(--line-2)}
+.wl-h{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:12px 8px 6px}
+.wl-row{display:grid;grid-template-columns:8px 1fr auto 62px;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;color:var(--ink);font-size:13px}
+.wl-row:hover{background:var(--hover);text-decoration:none}.wl-row[aria-current=page]{background:var(--brand-soft)}
+.wl-row i{width:8px;height:8px;border-radius:50%}
+.wl-row b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.wl-s{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--muted)}
+.wl-d{text-align:right;font-variant-numeric:tabular-nums}
 .fresh{font-size:12px;color:var(--muted);padding:8px 10px}
 .fresh b{display:block;color:var(--ink-2);font-weight:600}
 .me{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;color:var(--ink);border:0;background:none;width:100%;text-align:left}
@@ -128,6 +136,15 @@ button.chip{cursor:pointer}button.chip:hover{filter:brightness(.97)}
 .dot.warn{background:var(--amber-soft);color:var(--amber)}.dot.info{background:var(--brand-soft);color:var(--brand)}
 .todo .tx{flex:1;min-width:0}.todo .tx b{font-weight:700}
 .todo .go{color:var(--grey)}.todo .go svg{width:16px;height:16px;display:block}
+
+/* ---------- the day's big moves, on Home */
+.movers{display:grid;gap:8px;margin-bottom:14px}
+.mover{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);color:var(--ink);box-shadow:var(--shadow)}
+.mover:hover{text-decoration:none;border-color:var(--grey)}
+.mover.down{background:color-mix(in srgb,var(--red-soft) 55%,var(--surface))}.mover.up{background:color-mix(in srgb,var(--green-soft) 55%,var(--surface))}
+.mover .tx{flex:1;min-width:0}.mover .go{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--brand);white-space:nowrap}
+.mover .go svg{width:16px;height:16px}
+@media (max-width:640px){.mover .go{font-size:0}.mover .go svg{width:18px;height:18px}}
 
 /* ---------- tables */
 .scroll{overflow-x:auto}
@@ -196,6 +213,12 @@ tr.link{cursor:pointer}tr.link:hover td{background:var(--hover)}
 .say cite{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:2px}
 .big{font-size:22px;font-weight:700;letter-spacing:-.02em}
 .score{display:flex;align-items:baseline;gap:4px}.score b{font-size:30px;font-weight:700;letter-spacing:-.02em}.score span{color:var(--muted);font-weight:600}
+
+/* ---------- "in short": the stock in plain words */
+.story{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--grey);border-radius:var(--r);padding:14px 18px;margin:0 0 14px;box-shadow:var(--shadow)}
+.story.yes{border-left-color:var(--green)}.story.no{border-left-color:var(--red)}.story.wait{border-left-color:var(--amber)}
+.story p{font-size:15px;line-height:1.6;color:var(--ink-2);margin-top:4px;max-width:78em}
+.story-l{font-size:16px;line-height:1.6;color:var(--ink-2);margin-top:10px;max-width:60em}
 
 /* ---------- lists */
 .list>*{display:flex;gap:10px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line-2)}

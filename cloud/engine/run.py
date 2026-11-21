@@ -147,7 +147,8 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
     universe = list(dict.fromkeys(t for t in (prices.clean(x) for x in [*mine, *sources["base_tickers"], *packs, *called]) if t))[:MAX_UNIVERSE]
 
     # 3. prices: once a day a symbol
-    step("Prices", lambda: prices.refresh(universe, log, fetcher=price_fetcher, pause=0.15 if price_fetcher is None else 0))
+    step("Prices", lambda: prices.refresh(universe, log, fetcher=price_fetcher, pause=0.15 if price_fetcher is None else 0,
+                                                  now=now, limit=len(universe) + 1))
     cache = prices.load()
 
     # 4. Wall Street's ratings, a few batches a weekday

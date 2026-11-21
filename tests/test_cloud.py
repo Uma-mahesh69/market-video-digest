@@ -3,6 +3,7 @@ runs against an in-memory store with invented data. Run from the project folder:
 import json
 import tempfile
 import unittest
+from unittest import mock
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -269,6 +270,30 @@ class Engine(Globals):
         self.assertIsNone(fresh["NVDA"]["changed"])
         self.assertEqual([h["s"] for h in fresh["NVDA"]["history"]], [first["NVDA"]["signal"]])
 
+    def test_a_price_fetched_before_the_close_was_out_is_fetched_again(self):
+        sat_morning = datetime(2026, 11, 21, 1, 25, tzinfo=timezone.utc)
+        self.assertEqual(prices.last_session(sat_morning), "2026-11-20")                                  # Friday's close
+        self.assertEqual(prices.last_session(datetime(2026, 11, 20, 20, 0, tzinfo=timezone.utc)), "2026-11-19")   # not out yet
+        self.assertEqual(prices.last_session(datetime(2026, 11, 23, 9, 0, tzinfo=timezone.utc)), "2026-11-20")    # Monday morning
+        stale = {"day": "2026-11-21", "closes": [["2026-11-19", 145.98]], "checked": "2026-11-21T01:25:00+00:00"}
+        later = sat_morning + timedelta(hours=8)
+        self.assertTrue(prices.needs_fetch(stale, "2026-11-21", "2026-11-20", later))      # the 14% fall must not wait a day
+        self.assertFalse(prices.needs_fetch(stale, "2026-11-21", "2026-11-20", sat_morning + timedelta(minutes=30)))   # not every run
+        fresh = {**stale, "closes": [["2026-11-20", 125.53]]}
+        self.assertFalse(prices.needs_fetch(fresh, "2026-11-21", "2026-11-20", later))
+        self.assertTrue(prices.needs_fetch(fresh, "2026-11-22", "2026-11-20", later))      # a new day: asked once more
+
+    def test_every_stock_in_the_universe_gets_its_price_not_only_the_first_80(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(prices, "CACHE", Path(tmp) / "prices.json"):
+            asked = []
+            fetch = lambda s: asked.append(s) or {"name": s, "currency": "USD", "closes": [["2026-11-20", 1.0]]}
+            names = [f"T{i:03d}" for i in range(150)]
+            prices.refresh(names, log=lambda m: None, fetcher=fetch, pause=0, now=datetime(2026, 11, 21, 9, tzinfo=timezone.utc), limit=200)
+            self.assertEqual(len(asked), 151)   # the S&P 500 and all 150
+            asked.clear()
+            prices.refresh(names, log=lambda m: None, fetcher=fetch, pause=0, now=datetime(2026, 11, 21, 12, tzinfo=timezone.utc), limit=200)
+            self.assertEqual(asked, [])         # all have Friday's close: nothing to do
+
     def test_dividend_yields_kept_from_before_the_fix_are_put_right_once(self):
         old = {"ticker": "NVDA", "consensus": "Buy", "dividend_yield_pct": 34.5}   # 0.345% multiplied by 100 again
         fixed = street.upgrade(old)
@@ -288,6 +313,24 @@ class Engine(Globals):
         st = store.get("stocks", "MSFT")["street"]
         self.assertEqual((st["dividend_yield_pct"], st["units"]), (0.7, street.UNITS))
         self.assertTrue(all((c.get("street") or {}).get("units", street.UNITS) == street.UNITS for c in store.all("stocks").values()))
+
+    def test_each_card_has_a_short_story_in_plain_words(self):
+        base = {"ticker": "NVDA", "name": "NVIDIA", "signal": "yes", "confidence_pct": 80, "calls": {"bullish": 5, "bearish": 1},
+                "street": {"consensus": "Strong Buy", "upside_pct": 20.0}, "change_pct_day": -14.01, "change_pct_month": -30.0, "as_of": "2026-11-20",
+                "bulls": [{"text": "Demand is ahead of supply.", "analyst": "A"}], "bears": [{"text": "Governance risk.", "analyst": "B"}],
+                "days_to_earnings": 3, "track": {"right": 4, "scored": 5}}
+        s = cards.story(base)
+        self.assertTrue(s.startswith("Analysts clearly favour NVIDIA: 5 of 6 calls in the videos this month were bullish and Wall Street rates it Strong Buy"))
+        self.assertIn("The price fell 14.0% on Friday, and is down 30% over the month.", s)
+        self.assertIn("The bull case, from A: “Demand is ahead of supply.”", s)
+        self.assertIn("earnings in 3 days", s)
+        self.assertIn("right 4 of 5 times", s)
+        # what goes against the signal comes after "though"; a split puts the two sides side by side
+        against = cards.story({**base, "signal": "no", "confidence_pct": 40, "calls": {"bullish": 1, "bearish": 0}, "street": {"consensus": "Moderate Sell"}})
+        self.assertIn("leaning against NVIDIA: Wall Street rates it Moderate Sell, though the one call in the videos this month was bullish.", against)
+        split = cards.story({**base, "signal": "wait", "calls": {"bullish": 3, "bearish": 3}})
+        self.assertIn("split on NVIDIA: 3 of 6 calls in the videos this month were bullish, while Wall Street", split)
+        self.assertTrue(cards.story({**base, "signal": "none", "calls": {"bullish": 0, "bearish": 0}, "street": None, "bulls": [], "bears": []}).startswith("No analyst has given a view on NVIDIA lately."))
 
     def test_stars_need_three_scored_calls(self):
         self.assertIsNone(cards.stars({"scored": 2, "hit_pct": 100, "edge": 9}))

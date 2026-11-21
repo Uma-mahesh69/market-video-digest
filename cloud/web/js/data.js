@@ -212,7 +212,7 @@ export function forYou(rows) {
     }
     if (r.weight != null && r.weight >= 35) add(70, 'warn', 'pie', `is ${Math.round(r.weight)}% of your portfolio: a lot on one stock`);
     if (r.signal === 'yes' && (r.confidence_pct || 0) >= 75 && !r.owned) add(55 + r.confidence_pct / 10, 'good', 'up', `Strong Yes (${r.confidence_pct}%) and you do not own it`);
-    if (Math.abs(r.change_pct_day || 0) >= 5) add(50, r.change_pct_day > 0 ? 'good' : 'bad', r.change_pct_day > 0 ? 'up' : 'down', `moved ${r.change_pct_day > 0 ? '+' : ''}${r.change_pct_day.toFixed(1)}% today`);
+    // big moves (4% and more) have their own banner at the top of Home
     if ((r.factors || []).some(f => /disagree/i.test(f.text))) add(40, 'info', 'info', 'Video analysts and Wall Street disagree');
   }
   out.sort((a, b) => b.pri - a.pri);

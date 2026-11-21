@@ -1,5 +1,5 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
-import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL_SAYS, says as signalSays, COLOR } from './ui.js';
+import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL, SIGNAL_SAYS, says as signalSays, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
 import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable } from './pages.js';
 
@@ -63,7 +63,7 @@ function showWorking(box, cards) {
     .sort((a, b) => (b.confidence_pct || 0) - (a.confidence_pct || 0) || (b.mentions || 0) - (a.mentions || 0))[0];
   if (!c) return;
   const quote = (b, cls) => b ? el('blockquote.' + cls, {}, '“' + b.text + '”', el('cite', {}, b.analyst || b.channel, ' · ', day(b.day))) : null;
-  box.replaceChildren(el('.sec-h', {}, el('.eyebrow', { text: 'Every signal shows its working' }), el('h2', { text: `Today’s ${c.ticker}, as you would see it` })),
+  box.replaceChildren(el('.sec-h', {}, el('.eyebrow', { text: 'Every signal shows its working' }), el('h2', { text: `Today’s ${c.ticker}, as you would see it` }), c.story ? el('p.story-l', { text: c.story }) : null),
     el('.work-g', {},
       el('.card.signal', {}, el('.row', {}, el('span.badge', { text: c.ticker }), el('b', { text: c.name || c.ticker }), el('span.sp'), el('b.num', { text: money(c.price, c.currency) })),
         el('.ringrow', {}, ring(c.confidence_pct, COLOR[c.signal]), el('div', {}, sig(c.signal, true), el('p', { style: { marginTop: '8px', fontWeight: 600 }, text: signalSays(c.signal, c.confidence_pct) }),
@@ -92,6 +92,16 @@ function shell(active, page) {
   input.onkeydown = e => { if (e.key === 'Enter') { const b = results.querySelector('button'); if (b && !results.hidden) b.click(); } if (e.key === 'Escape') { results.hidden = true; input.blur(); } };
   input.onblur = () => setTimeout(() => { results.hidden = true; }, 180);
   const freshBox = el('.fresh');
+  // your stocks, always in view (desktop): signal and the day's move, one click to each
+  const watch = el('.wl');
+  const here = decodeURIComponent((location.hash.match(/^#\/s\/(.+)$/) || [])[1] || '');
+  if (data.profile && data.profile.stocks && data.profile.stocks.length) data.cards(data.profile.stocks.map(s => s.t)).then(cards => {
+    const list = data.profile.stocks.map(s => cards[s.t] || { ticker: s.t, signal: 'none' });
+    watch.replaceChildren(el('.wl-h', {}, el('span', { text: 'My stocks' }), el('span', { text: 'Today' })),
+      ...list.map(c => el('a.wl-row', { href: '#/s/' + encodeURIComponent(c.ticker), 'aria-current': c.ticker === here ? 'page' : null, title: SIGNAL_SAYS[c.signal] || '' },
+        el('i', { style: { background: COLOR[c.signal] || COLOR.none } }), el('b', { text: c.ticker }), el('span.wl-s', { text: SIGNAL[c.signal] || '—' }),
+        el('span', { class: 'wl-d ' + tone(c.change_pct_day), text: c.change_pct_day == null ? '—' : pct(c.change_pct_day) }))));
+  }).catch(() => {});
   const top = el('.top', {}, el('a.logo', { href: '#/' }, logoMark()), el('.search', {}, icon('search'), input, results), el('span.top-sp'),
     data.example ? el('button.btn.primary.sm', { onclick: signIn }, el('span.hide-m', { text: 'Sign in to save' }), el('span.hide-desktop', { text: 'Sign in' })) :
       el('a', { href: '#/account', 'aria-label': 'Account', class: 'hide-desktop' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() })));
@@ -99,7 +109,7 @@ function shell(active, page) {
   app.replaceChildren(el('.shell', {},
     el('aside.side', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), nav('nav.nav'),
       el('nav.nav', { style: { marginTop: '10px', borderTop: '1px solid var(--line-2)', paddingTop: '10px' } }, el('a', { href: '#/help', 'aria-current': active === 'help' ? 'page' : null }, icon('info'), el('span', { text: 'How it works' }))),
-      el('.fill'), freshBox,
+      watch, freshBox,
       data.example ? el('button.btn.primary', { onclick: signIn }, 'Sign in to save') :
         el('a.me', { href: '#/account' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() }),
           el('.who', {}, el('b', { text: p.name || 'Account' }), el('span.small', { text: p.email || '' })))),
@@ -189,7 +199,15 @@ async function home(root) {
   }
   side.classList.add('f3'); tableCard.classList.add('f2');   // on a phone the table comes before the market cards
   hold.classList.add('flow');
-  hold.replaceChildren(tiles, el('.cols', {}, healthCard ? el('.stack', {}, todoCard, healthCard) : todoCard, side), tableCard,
+  // the day's big moves in your stocks come first, as Google Finance does ("Why is NVDA down 14%?")
+  const movers = rows.filter(r => Math.abs(r.change_pct_day || 0) >= 4).sort((a, b) => Math.abs(b.change_pct_day) - Math.abs(a.change_pct_day)).slice(0, 2);
+  const onDay = r => r.as_of ? ' on ' + new Date(r.as_of + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : ' today';
+  const moverBox = movers.length ? el('.movers', {}, movers.map(r => el('a.mover.' + (r.change_pct_day > 0 ? 'up' : 'down'), { href: '#/s/' + encodeURIComponent(r.ticker) },
+    el('span.dot.' + (r.change_pct_day > 0 ? 'good' : 'bad'), {}, icon(r.change_pct_day > 0 ? 'up' : 'down')),
+    el('span.tx', {}, el('b', { text: `${r.ticker} ${r.change_pct_day > 0 ? 'rose' : 'fell'} ${Math.abs(r.change_pct_day).toFixed(1)}%${onDay(r)}` }),
+      el('span.small', { text: r.signal === 'none' ? ' · no analyst view yet' : ` · analysts say ${SIGNAL[r.signal]}` })),
+    el('span.go', {}, 'What analysts say', icon('right'))))) : null;
+  hold.replaceChildren(moverBox, tiles, el('.cols', {}, healthCard ? el('.stack', {}, todoCard, healthCard) : todoCard, side), tableCard,
     el('p.small', { class: 'f4', text: 'The signals sum up what analysts said; they are not personal financial advice and can be wrong.' }));
   if (!side.children.length) hold.querySelector('.cols').style.gridTemplateColumns = '1fr';
 }
@@ -278,6 +296,7 @@ async function stock(root, t) {
   hold.replaceChildren(
     el('.quote', {}, el('div', {}, el('.row', {}, el('span.badge', { text: t }), c.sector ? el('span.chip', { text: c.sector }) : null), el('h1', { style: { marginTop: '6px' }, text: c.name || t })), el('span.sp'),
       el('div', { style: { textAlign: 'right' } }, el('.px', { text: money(c.price, c.currency) }), el('div', {}, el('b', { class: tone(c.change_pct_day), text: pct(c.change_pct_day, 2) }), el('span.small', { text: ` today · close of ${day(c.as_of)}` }))), act),
+    c.story ? el('.story.' + c.signal, {}, el('.eyebrow', { text: 'In short' }), el('p', { text: c.story })) : null,
     el('.hero', {}, el('.card', {}, el('h2', {}, 'Price', move != null ? el('span', { class: tone(move), style: { fontWeight: 600 }, text: pct(move) }) : null, el('span.sp'), seg), chartBox,
       el('p.small', { style: { marginTop: '6px' }, text: '▲ ▼ mark the days an analyst made a bullish or bearish call. Click one to watch it.' })), signalCard),
     el('.grid.g3', { style: { marginTop: '14px' } }, videoCard, streetCard, stats),

@@ -48,6 +48,9 @@ def user_view(user, cards, today=None, days=1):
         if ch:
             notes.append({"tone": "good" if ch["to"] == "yes" else "bad" if ch["to"] == "no" else "warn", "changed": True, "on": ch["on"],
                           "text": f"{r['ticker']} turned {SIGNAL[ch['to']][0]} (was {SIGNAL[ch['from']][0]})"})
+        move = r.get("change_pct_day")
+        if days == 1 and isinstance(move, (int, float)) and abs(move) >= 4:   # the day's big moves, as on Home
+            notes.append({"tone": "good" if move > 0 else "bad", "text": f"{r['ticker']} {'rose' if move > 0 else 'fell'} {abs(move):.1f}% (analysts say {SIGNAL[r['signal']][0]})"})
         if r["shares"] and r["signal"] == "no":
             notes.append({"tone": "bad", "text": f"You own {r['ticker']}: analysts say No"})
         if r.get("days_to_earnings") is not None and r["days_to_earnings"] <= 5:
