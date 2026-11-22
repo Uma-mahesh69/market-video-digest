@@ -303,6 +303,12 @@ textarea.input{resize:vertical;min-height:110px}
 .cta-band .btn.primary{background:var(--on-brand);color:var(--brand);border-color:var(--on-brand)}.cta-band .btn.primary:hover{opacity:.92}
 .cta-band .ghost-l{background:transparent;color:var(--on-brand);border-color:color-mix(in srgb,var(--on-brand) 45%,transparent)}.cta-band .ghost-l:hover{background:color-mix(in srgb,var(--on-brand) 12%,transparent)}
 .land footer{margin-top:auto;padding:28px;max-width:1180px;width:100%;margin-left:auto;margin-right:auto;color:var(--muted);font-size:12px}
+.member-list{display:grid;gap:2px;padding:10px 14px 14px}
+.member-list>div{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-2);font-weight:500}
+.member-list>div:last-child{border-bottom:0}
+.invite{max-width:520px;padding:28px}.invite .logo{padding:0 0 18px}
+.invite h1{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.25;margin-bottom:10px}
+.invite p{margin-bottom:8px}
 .foot{display:flex;align-items:center;gap:18px;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px;font-size:13px}
 .foot .sp{flex:1}.foot .logo{padding:0;font-size:14px}.foot .logo svg{width:22px;height:22px}.foot a:not(.logo){color:var(--muted)}
 .banner{background:var(--brand-soft);color:var(--brand);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0 0;font-weight:600}

@@ -6,6 +6,9 @@ import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search
 const app = document.getElementById('app');
 const NAV = [['', 'My stocks', 'home'], ['ideas', 'Ideas', 'bulb'], ['analysts', 'Analysts', 'users'], ['calendar', 'Calendar', 'cal']];
 const signIn = () => data.signIn().catch(e => toast(e.message));
+// The private beta: only invited members get in (the database rules enforce it). While it is on, the front page shows
+// no live data and no example; set it to false (and open public/demo in firestore.rules) to open the doors again.
+const PRIVATE_BETA = true;
 
 // ---------------------------------------------------------------- the front page
 async function landing() {
@@ -15,16 +18,25 @@ async function landing() {
   const example = el('button.btn.lg', { onclick: () => tryExample(example) }, 'See a live example');
   const google = label => el('button.btn.primary.lg.gbtn', { onclick: signIn }, el('span.g', {}, googleMark()), label);
   const proof = el('.proof', { hidden: true }), working = el('section.working', { hidden: true });
+  if (PRIVATE_BETA) {   // nothing live to show a stranger: what members get instead of today's signals
+    const item = (ic, text) => el('div', {}, el('span.dot.info', {}, icon(ic)), el('span', { text }));
+    peek.classList.add('members');
+    peek.replaceChildren(el('.bar-t', {}, el('i'), el('i'), el('i'), el('span', { text: 'What members see' })),
+      el('.member-list', {}, item('check', 'Yes, Wait or No for each of your stocks, and how sure it is'), item('users', 'Every analyst call behind it, scored against the S&P 500'),
+        item('info', '“In short”: what happened to each stock, in plain words'), item('down', 'The day’s big moves in your stocks, first thing'), item('mail', 'A short email after the market closes')));
+  }
+  const cta = PRIVATE_BETA ? [google('Member sign in')] : [google('Continue with Google'), example];
   app.replaceChildren(el('.land', {},
     el('header', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
       el('a.hide-m', { href: '#how', class: 'navlink', onclick: e => { e.preventDefault(); document.getElementById('how').scrollIntoView({ behavior: 'smooth' }); } }, 'How it works'),
       el('button.btn', { onclick: signIn }, 'Sign in')),
     el('.hero-l', {},
-      el('div', {}, el('span.kicker', {}, el('i'), 'Free during the beta'),
+      el('div', {}, el('span.kicker', {}, el('i'), PRIVATE_BETA ? 'Private beta · by invitation' : 'Free during the beta'),
         el('h1', {}, 'Yes, No or Wait on every stock you follow, ', el('em', { text: 'from what the analysts actually say.' })),
         el('p.lede', { text: 'We read the finance shows and Wall Street’s ratings every day and boil them down to one signal per stock, with the calls, the reasons and each analyst’s track record behind it.' }),
-        el('.cta', {}, google('Continue with Google'), example),
-        el('p.fine', {}, 'No card · Nothing to install · Ready in 30 seconds. By continuing you agree to the ', el('a', { href: '/terms.html', text: 'terms' }), ' and the ', el('a', { href: '/privacy.html', text: 'privacy policy' }), '.'),
+        el('.cta', {}, ...cta),
+        el('p.fine', {}, PRIVATE_BETA ? 'Invited members only: sign in with the Google account your invitation went to. By continuing you agree to the '
+          : 'No card · Nothing to install · Ready in 30 seconds. By continuing you agree to the ', el('a', { href: '/terms.html', text: 'terms' }), ' and the ', el('a', { href: '/privacy.html', text: 'privacy policy' }), '.'),
         proof),
       peek),
     working,
@@ -38,11 +50,14 @@ async function landing() {
         ['swap', 'Both sides, always', 'You see what the bulls and the bears said, in their words, with a link to the moment in the video.'],
         ['clock', 'Fresh views count most', 'One analyst gets one vote, and a call from yesterday outweighs one from three weeks ago.']]
         .map(([ic, h, p]) => el('div', {}, el('span.dot.info', {}, icon(ic)), el('h3', { text: h }), el('p', { text: p }))))),
-    el('section.cta-band', {}, el('div', {}, el('h2', { text: 'See where the analysts stand on your stocks.' }), el('p', { text: 'Free during the beta. Sign in with Google and pick your stocks.' })),
+    PRIVATE_BETA ? el('section.cta-band', {}, el('div', {}, el('h2', { text: 'Have an invitation?' }), el('p', { text: 'Sign in with the Google account it was sent to, and pick your stocks.' })),
+      el('.cta', {}, google('Member sign in')))
+    : el('section.cta-band', {}, el('div', {}, el('h2', { text: 'See where the analysts stand on your stocks.' }), el('p', { text: 'Free during the beta. Sign in with Google and pick your stocks.' })),
       el('.cta', {}, google('Continue with Google'), el('button.btn.lg.ghost-l', { onclick: e => tryExample(e.currentTarget) }, 'See a live example'))),
     el('footer', {}, el('.foot', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
       el('a', { href: '/privacy.html', text: 'Privacy' }), el('a', { href: '/terms.html', text: 'Terms' })),
       el('p', { text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. Ratings from TipRanks; prices are daily closes and can be delayed.' }))));
+  if (PRIVATE_BETA) return;
   try {
     const d = await data.publicExample();
     peek.replaceChildren(peek.firstChild, stockTable('peek', d.cards.slice(0, 6), () => el('span')));
@@ -55,6 +70,17 @@ async function landing() {
     }
     showWorking(working, d.cards);
   } catch (e) { peek.querySelector('.skel').replaceWith(el('.empty', { text: 'Sign in to see your stocks here.' })); }
+}
+
+// Signed in with an address that is not on the members list: say so plainly, and how to get in.
+function notInvited() {
+  document.title = 'Private beta · Market Digest';
+  const again = async () => { await data.signOut(); signIn(); };
+  app.replaceChildren(el('.center', {}, el('.card.invite', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })),
+    el('h1', { text: 'Market Digest is invitation-only for now' }),
+    el('p', {}, 'You are signed in as ', el('b', { text: data.user.email || 'this account' }), ', which is not on the members list.'),
+    el('p.small', { text: 'If you were invited, sign in with the Google account the invitation was sent to. Otherwise, ask the person who told you about Market Digest for a place in the beta.' }),
+    el('.row', { style: { marginTop: '18px', flexWrap: 'wrap' } }, el('button.btn.primary', { onclick: again }, 'Use another Google account'), el('button.btn', { onclick: () => data.signOut() }, icon('out'), 'Sign out')))));
 }
 
 // One real stock from the example with everything behind its signal: what a signed-in user sees for each of theirs.
@@ -311,6 +337,7 @@ function gate(root, what) {
 }
 export function render() {
   if (data.problem) { app.replaceChildren(el('.center', {}, el('.card.empty', {}, el('h3', { text: 'Something is not working' }), data.problem, el('div', {}, el('button.btn.primary', { onclick: () => location.reload() }, 'Reload'))))); return; }
+  if (data.user && data.denied) { notInvited(); return; }
   if (!data.user && !data.example) { landing(); return; }
   if (!data.profile) { app.replaceChildren(el('.center', {}, skeleton(40))); return; }
   if (data.user && !data.profile.onboarded && !data.profile.stocks.length) { app.replaceChildren(el('div')); welcome(app.firstChild, () => { go('#/'); render(); }); document.title = 'Welcome · Market Digest'; return; }

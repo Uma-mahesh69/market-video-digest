@@ -83,9 +83,20 @@ def email():
     return f"login accepted; emails will come from this address and link to {s['site']}"
 
 
+def members():
+    from cloud.engine import access
+    found = access.parse(os.environ.get("BETA_MEMBERS"))
+    if found is None:
+        raise RuntimeError("the secret BETA_MEMBERS is empty: nobody new can get into the private beta")
+    if not found:
+        raise RuntimeError("BETA_MEMBERS has no valid email address in it")
+    return f"{len(found)} address(es) on the private beta's members list"   # the addresses themselves are not printed
+
+
 def main():
     found = []
     check("Firebase (the database)", True, firebase)
+    check("Members (who may use the site)", True, members)
     check("YouTube (listing new videos)", True, lambda: youtube(found))
     check("Gemini (watching a video)", True, lambda: gemini(found))
     check("TipRanks (Wall Street's ratings)", False, street)

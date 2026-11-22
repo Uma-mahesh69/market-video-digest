@@ -1,5 +1,5 @@
 // The whole product in a real browser, against the local Firebase emulators filled with example data:
-// the front page, the example, sign-in, choosing stocks, every page, the account, and the security rules.
+// the private beta (who gets in), the front page, sign-in, choosing stocks, every page, the account, and the security rules.
 //   1. cd cloud && npx firebase-tools emulators:start --only auth,firestore,hosting --project demo-md
 //   2. FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-md python cloud/tools/demo_data.py
 //   3. node cloud/tests/e2e.cjs            (needs Playwright: npm i -g playwright)
@@ -16,13 +16,17 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
     const page = await ctx.newPage();
     page.on('pageerror', e => problems.push('pageerror: ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/permission|403|Failed to load resource/i.test(m.text())) problems.push('console: ' + m.text().slice(0, 200)); });
-    await page.goto(BASE + '/'); await page.waitForSelector('.land, .shell, .onb', { timeout: 15000 });
+    await page.goto(BASE + '/'); await page.waitForSelector('.land, .shell, .onb, .invite', { timeout: 15000 });
     return page;
   };
   const wait = (p, ms = 700) => p.waitForTimeout(ms);
   const rows = p => p.locator('.card.flush tbody tr.link').count();
   const email = `e2e-${Date.now()}@example.com`;
-  const signIn = async (p, who = email, name = 'Test Person') => { await p.evaluate(([e, n]) => window.__mdSignInAs(e, n), [who, name]); await p.waitForSelector('.shell, .onb', { timeout: 15000 }); await wait(p); };
+  const signIn = async (p, who = email, name = 'Test Person', lands = '.shell, .onb') => { await p.evaluate(([e, n]) => window.__mdSignInAs(e, n), [who, name]); await p.waitForSelector(lands, { timeout: 15000 }); await wait(p); };
+  // the members list, as the engine writes it from the BETA_MEMBERS secret (the emulator's admin access stands in for it)
+  const FS = 'http://127.0.0.1:8080/v1/projects/demo-md/databases/(default)/documents/members';
+  const admit = async who => { const r = await fetch(`${FS}?documentId=${encodeURIComponent(who.toLowerCase())}`, { method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { email: { stringValue: who.toLowerCase() } } }) }); return r.ok || r.status === 409; };
+  const revoke = async who => (await fetch(`${FS}/${encodeURIComponent(who.toLowerCase())}`, { method: 'DELETE', headers: { Authorization: 'Bearer owner' } })).ok;
   // Firestore from inside the page, as the signed-in (or signed-out) browser: what the rules allow and refuse
   const fire = (p, fn, arg) => p.evaluate(async ([src, a]) => {
     const fs = await import('/vendor/firebase-firestore-lite.js'), app = (await import('/vendor/firebase-app.js')).getApp();
@@ -31,22 +35,31 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   }, [fn.toString(), arg]);
   const denied = r => typeof r === 'string' && /DENIED:.*permission-denied/.test(r);
 
-  // ---- 1. the front page and the example, signed out
+  // ---- 1. the private beta: the front page, a stranger, and what nobody outside the list can read
   let p = await open();
-  await p.waitForSelector('.peek tr.link', { timeout: 10000 }).catch(() => {});
-  ok('front page shows today\'s example signals', await p.locator('.peek tr.link').count() >= 5);
-  ok('signed out: the public example can be read', (await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'public', 'demo'))).exists())) === true);
+  const front = await p.locator('.land').textContent();
+  ok('front page: a private beta, members sign in, no live data shown', front.includes('Private beta') && front.includes('Member sign in')
+    && await p.locator('.peek tr.link').count() === 0 && await p.locator('text=See a live example').count() === 0);
+  ok('signed out: the example cannot be read', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'public', 'demo'))).exists())));
   ok('signed out: stock cards cannot be read', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'stocks', 'NVDA'))).exists())));
-  ok('signed out: nobody\'s account can be read', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'users', 'demo-user'))).exists())));
-  await p.click('text=See a live example'); await p.waitForSelector('.shell'); await wait(p, 1200);
-  ok('example: dashboard with rows and a sign-in banner', await rows(p) >= 5 && await p.locator('.banner').count() === 1);
-  await p.locator('.card.flush tbody tr.link').first().click(); await p.waitForSelector('.signal'); await wait(p);
-  ok('example: a stock page opens with its signal and chart', await p.locator('.signal .sig').count() === 1 && await p.locator('.chart svg').count() === 1);
-  await p.goto(BASE + '/#/ideas'); await wait(p);
-  ok('example: other pages ask to sign in', (await p.locator('.page').textContent()).includes('Sign in to see'));
+  ok('signed out: no account can be read', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'users', 'demo-user'))).exists())));
+  const stranger = `stranger-${Date.now()}@example.com`;
+  await signIn(p, stranger, 'Not Invited', '.invite');
+  ok('a stranger who signs in is told it is invitation-only', (await p.locator('.invite').textContent()).includes(stranger));
+  ok('rules: a stranger reads no stock, chart, market page or example', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'stocks', 'NVDA'))).exists()))
+    && denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'charts', 'NVDA'))).exists())) && denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'market', 'overview'))).exists()))
+    && denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'public', 'demo'))).exists())));
+  ok('rules: a stranger cannot make an account or ask for a stock', denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'users', auth.currentUser.uid), { email: auth.currentUser.email, stocks: [] })))
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'requests', 'AAPL'), { by: auth.currentUser.uid, at: 'x' }))));
+  ok('rules: nobody can see the list or add themselves to it', (await fire(p, async (fs, db, auth) => (await fs.getDoc(fs.doc(db, 'members', auth.currentUser.email))).exists())) === false
+    && denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'members', 'you@example.com'))).exists())) && denied(await fire(p, async (fs, db) => (await fs.getDocs(fs.collection(db, 'members'))).size))
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'members', auth.currentUser.email), { email: auth.currentUser.email }))));
+  await p.click('.invite >> text=Sign out'); await p.waitForSelector('.land');
+  ok('and can sign out again', true);
   await p.context().close();
 
-  // ---- 2. a new person signs in and chooses stocks
+  // ---- 2. an invited person signs in and chooses stocks
+  ok('the engine can put someone on the list', await admit(email));
   p = await open();
   await signIn(p);
   ok('first sign-in asks which stocks you follow', await p.locator('.onb').count() === 1);
@@ -144,7 +157,17 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   ok('phone: the tab bar replaces the side menu', await phone.locator('.tabbar').isVisible() && !(await phone.locator('.side').isVisible()));
   await phone.context().close();
 
-  // ---- 8. deleting the account
+  // ---- 8. taken off the list: no access at once, but their own saved list stays theirs
+  await revoke(email);
+  await p.reload(); await p.waitForSelector('.invite', { timeout: 15000 }); await wait(p);   // the next visit, as the person would make it
+  ok('taken off the list: the next visit shows the invitation page', await p.locator('.invite').count() === 1);
+  ok('rules: and reads no stock, but can still see its own saved list', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'stocks', 'NVDA'))).exists()))
+    && (await fire(p, async (fs, db, auth) => (await fs.getDoc(fs.doc(db, 'users', auth.currentUser.uid))).exists())) === true);
+  await admit(email); await p.goto(BASE + '/#/'); await p.reload(); await p.waitForSelector('.shell', { timeout: 15000 }); await wait(p, 1500);
+  ok('put back on the list: everything is as it was', await rows(p) >= 10);
+  await p.goto(BASE + '/#/account'); await wait(p, 900);
+
+  // ---- 9. deleting the account
   await p.click('text=Delete my account'); await p.click('.modal >> text=Delete everything'); await p.waitForSelector('.land', { timeout: 15000 });
   ok('deleting the account signs out and returns to the front page', true);
   await signIn(p);

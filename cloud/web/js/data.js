@@ -19,6 +19,7 @@ export const data = {
   profile: null,     // { email, name, photo, stocks: [{t, shares, cost}], prefs, onboarded }
   example: false,    // true while looking at the public example without signing in
   problem: null,     // why the service could not be reached, if it could not
+  denied: false,     // signed in, but not on the private beta's members list
 
   async start(onChange) {
     try {
@@ -40,10 +41,13 @@ export const data = {
       onChange(); return;
     }
     onAuthStateChanged(auth, async user => {
-      this.user = user; this.profile = null;
+      this.user = user; this.profile = null; this.denied = false;
       if (user) {
         this.example = false;
-        try { await this.loadProfile(); } catch (e) { this.problem = friendly(e); }
+        // the private beta: only addresses on the members list get in (the database rules enforce it; this only
+        // decides which page to show)
+        if (!(await this.isMember())) this.denied = true;
+        else try { await this.loadProfile(); } catch (e) { this.problem = friendly(e); }
       }
       onChange();
     });
@@ -58,6 +62,11 @@ export const data = {
       if (/popup-blocked|operation-not-supported/.test(e.code || '')) { await signInWithRedirect(auth, provider); return; }   // no pop-ups here: use the whole page
       throw new Error(friendly(e));
     }
+  },
+  async isMember() {
+    const email = String((this.user && this.user.email) || '').toLowerCase();
+    if (!email) return false;
+    try { return (await getDoc(doc(db, 'members', email))).exists(); } catch (e) { return false; }
   },
   async signOut() { cache.cards.clear(); cache.market.clear(); cache.charts.clear(); await signOut(auth); },
   async deleteAccount() {

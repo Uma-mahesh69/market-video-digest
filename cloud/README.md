@@ -50,7 +50,7 @@ service grows with the number of channels, not the number of users.
 | `tools/make_symbols.py` | Builds the search list at deploy time. |
 | `tools/demo_data.py` | Invented data for local work and tests. |
 | `tests/live.cjs` | The live site as a visitor sees it before signing in: pages, example stocks, phones, files, headers, what a stranger may read. Changes nothing. |
-| `tests/e2e.cjs` | The whole product in a browser against the emulators: 54 checks, the security rules included. |
+| `tests/e2e.cjs` | The whole product in a browser against the emulators: 60 checks, the security rules included. |
 
 The signal itself, the scoring of analysts' calls and the notes format are the tested code in `app/`
 (`insights.py`, `prices.py`, `tipranks.py`, `digest.py`), which the engine imports.
@@ -59,10 +59,11 @@ The signal itself, the scoring of analysts' calls and the notes format are the t
 
 | Collection | Written by | Read by | Holds |
 |---|---|---|---|
-| `stocks/{TICKER}` | engine | signed-in users | The card: price, signal, confidence, factors, calls, Wall Street, signal history |
-| `charts/{TICKER}` | engine | signed-in users | A year of daily closes |
-| `market/{page}` | engine | signed-in users | `overview`, `analysts`, `calendar`, `videos`, `meta`, `status` |
-| `public/demo` | engine | anyone | The first starter list as it stands today, for the front page |
+| `stocks/{TICKER}` | engine | members | The card: price, signal, confidence, factors, calls, Wall Street, signal history |
+| `charts/{TICKER}` | engine | members | A year of daily closes |
+| `market/{page}` | engine | members | `overview`, `analysts`, `calendar`, `videos`, `meta`, `status` |
+| `public/demo` | engine | members (anyone, once the beta opens) | The first starter list as it stands today, for the front page |
+| `members/{email}` | engine (from the `BETA_MEMBERS` secret) | that address, to check it is in | The private beta: who may use the site |
 | `users/{uid}` | that user | that user, engine | Email, name, stocks (with shares and cost if typed), email choices |
 | `requests/{TICKER}` | signed-in users | engine | "Start covering this stock" |
 | `videos/{id}` | engine | engine | Gemini's notes for each video, written once |
@@ -81,8 +82,8 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-md python cloud/tools
 Open http://127.0.0.1:5000. "Continue with Google" opens the emulator's own sign-in, where any made-up account works.
 
 ```
-python -m unittest                 # 164 tests: the desktop app's, and the engine's on invented data
-node cloud/tests/e2e.cjs           # 54 checks in a real browser (npm i -g playwright)
+python -m unittest                 # 168 tests: the desktop app's, and the engine's on invented data
+node cloud/tests/e2e.cjs           # 60 checks in a real browser (npm i -g playwright)
 node cloud/tests/live.cjs          # the deployed site, signed out (BASE=https://… for another project)
 ```
 

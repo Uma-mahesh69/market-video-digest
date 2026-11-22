@@ -8,7 +8,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import CLOUD, ROOT, cards as cards_mod, mail, street as street_mod, videos
+from . import CLOUD, ROOT, access, cards as cards_mod, mail, street as street_mod, videos
 from .store import doc_id
 import digest as dg
 import prices
@@ -25,7 +25,7 @@ def settings_from_env():
     env = os.environ.get
     models = [m.strip() for m in env("GEMINI_MODELS", "").split(",") if m.strip()]
     return {"gemini_api_key": env("GEMINI_API_KEY", "").strip(), "models": models or list(dg.DEFAULT_MODELS),
-            "tipranks_api_key": env("TIPRANKS_API_KEY", "").strip(), **mail.settings_from_env()}
+            "tipranks_api_key": env("TIPRANKS_API_KEY", "").strip(), "members": env("BETA_MEMBERS"), **mail.settings_from_env()}
 
 
 class Work:
@@ -127,12 +127,15 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
         log("Videos: GEMINI_API_KEY is not set, so no new videos are read")
     pairs = videos.as_pairs(notes)
 
-    # 2. who wants what: all users once a day (and when emailing), the tickers they asked for every run
+    # 2. who may use it (the private beta's members), then who wants what: all users once a day (and when emailing)
+    members = step("Members", lambda: access.sync(store, settings.get("members"), today, log), None)
     mail_hour = sources.get("email", {}).get("hour_utc", 2)
     mail_due = force_mail or (state.get("mail_day") != today.isoformat() and 0 <= now.hour - mail_hour < 6 and "daily")
     users = None
     if state.get("users_day") != today.isoformat() or mail_due:
         users = step("Users", lambda: store.all("users"), None)
+        if users is not None and members is not None:
+            users = access.only_members(users, members)   # an account not on the list gets no emails and no coverage
         if users is not None:
             state.update(users_day=today.isoformat(), user_tickers=user_tickers(users), users=len(users))
             for uid in step("Mail records", lambda: store.all("mail"), {}) or {}:

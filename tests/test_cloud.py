@@ -1,6 +1,7 @@
 """Tests for the cloud version: the shared engine (cloud/engine) and its tools. No network, no Firebase: the engine
 runs against an in-memory store with invented data. Run from the project folder: python -m unittest -v"""
 import json
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -238,7 +239,7 @@ class Engine(Globals):
         store, _ = self.fill()
         before = store.writes
         self.fill(store)
-        videos_and_user = len(store.all("videos")) + 1   # the example data is put in again by fill()
+        videos_and_user = len(store.all("videos")) + 2   # the example data (videos, its user, its member) is put in again by fill()
         self.assertEqual(store.writes - before - videos_and_user, 2)   # engine/state and market/status
 
     def test_without_the_scratch_folder_everything_is_rebuilt_from_the_store(self):
@@ -454,6 +455,20 @@ class Emails(Globals):
                    read_videos=False, price_fetcher=lambda s: closes[s], mail_sender=lambda st, to, *a: sent.append(to))
         self.assertEqual(sent, [])                       # Monday 02:00 UTC would be about Sunday: no email
 
+    def test_only_members_get_emails(self):
+        store = MemoryStore()
+        demo_data.fill(store, today=self.TODAY, work=self.work, log=lambda m: None)
+        store.set("users", "stranger", {**demo_data.DEMO_USER, "email": "stranger@example.com"})   # signed up before the beta closed
+        sent = []
+        notes, closes, _ = demo_data.make(self.TODAY)
+        sources = engine.load_sources()
+        sources["base_tickers"], sources["packs"] = ["NVDA"], []
+        settings = {"smtp_user": "me@x.y", "smtp_password": "p", "site": "https://md.example/", "members": "YOU@example.com, friend@example.com"}
+        engine.run(store, settings, sources=sources, now=datetime(2026, 11, 17, 2, tzinfo=timezone.utc), log=lambda m: None, work=self.work,
+                   read_videos=False, price_fetcher=lambda s: closes[s], mail_sender=lambda st, to, *a: sent.append(to))
+        self.assertEqual(sent, ["you@example.com"])
+        self.assertEqual(set(store.all("members")), {"you@example.com", "friend@example.com"})
+
     def test_the_site_address_comes_from_the_project_when_none_is_set(self):
         import os
         keep = {k: os.environ.pop(k, None) for k in ("SITE_URL", "FIREBASE_SERVICE_ACCOUNT")}
@@ -467,6 +482,34 @@ class Emails(Globals):
                 os.environ.pop(k, None)
                 if v is not None:
                     os.environ[k] = v
+
+
+class Access(unittest.TestCase):
+    """The private beta: the members list, from the BETA_MEMBERS secret into Firestore."""
+
+    def test_the_list_is_read_from_the_secret_however_it_is_written(self):
+        from cloud.engine import access
+        self.assertEqual(access.parse("A@x.com, b@y.org\n c@z.in;A@x.com <d@w.co> not-an-address"), ["a@x.com", "b@y.org", "c@z.in", "d@w.co"])
+        self.assertIsNone(access.parse(None))
+        self.assertIsNone(access.parse("   "))
+
+    def test_firestore_follows_the_list_and_a_broken_secret_changes_nothing(self):
+        from cloud.engine import access
+        store, day = MemoryStore(), date(2026, 11, 22)
+        self.assertEqual(access.sync(store, "a@x.com, b@y.org", day, log=lambda m: None), {"a@x.com", "b@y.org"})
+        self.assertEqual(access.sync(store, "b@y.org, c@z.in", day, log=lambda m: None), {"b@y.org", "c@z.in"})   # a removed, c added
+        self.assertEqual(set(store.all("members")), {"b@y.org", "c@z.in"})
+        self.assertEqual(access.sync(store, None, day, log=lambda m: None), {"b@y.org", "c@z.in"})                # not set: kept
+        self.assertEqual(access.sync(store, "oops, no addresses", day, log=lambda m: None), {"b@y.org", "c@z.in"})   # a typo: kept
+        users = {"1": {"email": "B@Y.org"}, "2": {"email": "x@q.com"}, "3": {}}
+        self.assertEqual(list(access.only_members(users, {"b@y.org"})), ["1"])
+
+    def test_the_rules_keep_everything_behind_the_members_list(self):
+        rules = (Path(__file__).resolve().parent.parent / "cloud" / "firestore.rules").read_text(encoding="utf-8")
+        for path in ("stocks/{ticker}", "charts/{ticker}", "market/{page}", "public/{page}"):
+            self.assertRegex(rules, r"match /" + re.escape(path) + r" +\{ allow read: if member\(\); \}")
+        self.assertNotIn("if true", rules)
+        self.assertIn("allow create, update: if mine(uid) && member() && validUser", rules)
 
 
 class Symbols(unittest.TestCase):
