@@ -614,6 +614,52 @@ class TrackRecord(unittest.TestCase):
         self.assertEqual((h["yes_hit_pct"], h["n"]), (60, 25))
 
 
+class WhoWasRight(unittest.TestCase):
+    """Per stock and per analyst: who has been right about it, the top-rated view, the mood by month, and actions."""
+    END, setUp, call = TrackRecord.END, TrackRecord.setUp, TrackRecord.call
+
+    def test_each_call_is_new_upgraded_downgraded_or_reiterated(self):
+        d = self.days
+        calls = [self.call("UP", "bearish", "Ann", d[1]), self.call("UP", "neutral", "Ann", d[2]), self.call("UP", "bullish", "Ann", d[3]),
+                 self.call("UP", "bullish", "Ann", d[4]), self.call("UP", "bearish", "Ann", d[5]), self.call("DOWN", "bullish", "Ann", d[5])]
+        acts = cards.actions(calls)
+        self.assertEqual([acts[cards._key(c)] for c in calls], ["new", "upgraded", "upgraded", "reiterated", "downgraded", "new"])
+
+    def test_who_has_been_right_about_a_stock_comes_first(self):
+        d = self.days
+        calls = [self.call("UP", "bullish", "Right", d[i]) for i in (0, 5, 10)] + [self.call("UP", "bearish", "Wrong", d[i]) for i in (0, 5, 10, 15)]
+        calls += [self.call("UP", "bullish", "Fresh", d[-1]), self.call("DOWN", "bullish", "Right", d[0])]
+        rows = cards.experts_on("UP", calls, self.cache, {})
+        self.assertEqual([r["analyst"] for r in rows], ["Right", "Wrong", "Fresh"])   # too recent to judge comes last
+        self.assertEqual((rows[0]["right"], rows[0]["scored"], rows[0]["calls"]), (3, 3, 3))   # calls on other stocks are not counted
+        self.assertEqual((rows[1]["hit_pct"], rows[2]["scored"]), (0, 0))
+
+    def test_the_top_rated_view_counts_only_well_rated_analysts_latest_calls(self):
+        d, today = self.days, date.fromisoformat(self.days[-1])
+        good = {"scored": 10, "hit_pct": 80, "edge": 8}
+        records = {"Star": good, "Star2": good, "Weak": {"scored": 10, "hit_pct": 20, "edge": -8}}
+        calls = [self.call("UP", "bearish", "Star", d[60]), self.call("UP", "bullish", "Star", d[70]), self.call("UP", "bullish", "Star2", d[65]),
+                 self.call("UP", "bearish", "Weak", d[70])]
+        v = cards.top_view("UP", calls, records, today)
+        self.assertEqual((v["bullish"], v["bearish"], v["analysts"]), (2, 0, ["Star", "Star2"]))
+        self.assertIsNone(cards.top_view("UP", calls[-1:], records, today))
+
+    def test_the_mood_by_month_covers_the_last_four_months(self):
+        today = date(2026, 11, 13)
+        calls = [self.call("UP", "bullish", "A", "2026-11-02"), self.call("UP", "bearish", "B", "2026-09-10"), self.call("UP", "neutral", "C", "2026-09-11"),
+                 self.call("UP", "bullish", "D", "2026-06-01"), self.call("DOWN", "bullish", "E", "2026-11-03")]
+        rows = cards.trend("UP", calls, today)
+        self.assertEqual([r["m"] for r in rows], ["2026-08", "2026-09", "2026-10", "2026-11"])
+        self.assertEqual([(r["bullish"], r["bearish"], r["other"]) for r in rows], [(0, 0, 0), (0, 1, 1), (0, 0, 0), (1, 0, 0)])
+        self.assertIsNone(cards.trend("FLAT", calls, today))
+
+    def test_an_analysts_coverage_newest_first_with_the_record_on_each(self):
+        d = self.days
+        calls = [self.call("UP", "bullish", "Ann", d[0]), self.call("UP", "bullish", "Ann", d[10]), self.call("DOWN", "bearish", "Ann", d[20]), self.call("UP", "bearish", "Bo", d[30])]
+        rows = cards.coverage("Ann", calls, self.cache)
+        self.assertEqual([(r["ticker"], r["calls"], r["hit_pct"]) for r in rows], [("DOWN", 1, 100), ("UP", 2, 100)])
+
+
 class FollowsAndFeedback(unittest.TestCase):
     TODAY = date(2026, 11, 17)
     EXPERTS = [{"analyst": "Dan Ives", "stars": 4.5, "recent": [{"day": "2026-11-16", "view": "bullish", "ticker": "TSLA"}, {"day": "2026-11-01", "view": "bullish", "ticker": "AAPL"}]},

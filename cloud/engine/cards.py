@@ -4,7 +4,7 @@ Nothing here depends on a user. A user's own numbers (shares, value, weight, gai
 the card and what they typed, so their holdings are never needed here."""
 import hashlib
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import timedelta
 
 from . import ROOT  # noqa: F401
@@ -38,7 +38,90 @@ def call_row(c, cache, records):
     r = records.get(c["analyst"]) or {}
     return {**{k: c[k] for k in ("day", "view", "analyst", "channel", "reason", "link", "ticker")},
             "outcome": {k: s[k] for k in ("stock_pct", "sp500_pct", "edge", "right")} if s else None,
-            "analyst_stars": stars(r), "analyst_hit_pct": r.get("hit_pct") if r.get("scored", 0) >= 3 else None}
+            "analyst_stars": stars(r), "analyst_hit_pct": r.get("hit_pct") if r.get("scored", 0) >= 3 else None,
+            "action": c.get("action")}
+
+
+LEAN = {insights.BULL: 1, insights.BEAR: -1}
+_key = lambda c: (c.get("video_id"), c.get("analyst"), c.get("ticker"), c.get("day"))
+
+
+def actions(calls):
+    """What each call did to the same analyst's view of the same stock, from their call before it: "new" (no earlier
+    call we know of), "upgraded" (more bullish), "downgraded" (more bearish) or "reiterated". {call key: action}."""
+    out, last = {}, {}
+    for c in sorted(calls, key=lambda c: c["day"]):
+        if not c.get("analyst"):
+            continue
+        k, now = (c["analyst"], c["ticker"]), LEAN.get(c["view"], 0)
+        before = last.get(k)
+        out[_key(c)] = "new" if before is None else "upgraded" if now > before else "downgraded" if now < before else "reiterated"
+        last[k] = now
+    return out
+
+
+def experts_on(t, calls, cache, records, n=8):
+    """Who has been right about this stock: each analyst's calls on it and how they turned out, best record first.
+    The overall stars come along, so a lucky streak on one stock is seen next to the whole record."""
+    by = defaultdict(list)
+    for c in calls:
+        if c["ticker"] == t and c["analyst"]:
+            by[c["analyst"]].append(c)
+    rows = []
+    for name, cs in by.items():
+        scored = [x for x in (insights.score(c, cache) for c in cs) if x]
+        latest = max(cs, key=lambda c: c["day"])
+        rows.append({"analyst": name, "calls": len(cs), "scored": len(scored), "right": sum(x["right"] for x in scored),
+                     "hit_pct": round(100 * sum(x["right"] for x in scored) / len(scored)) if scored else None,
+                     "edge": round(sum(x["edge"] for x in scored) / len(scored), 1) if scored else None,
+                     "latest": {"day": latest["day"], "view": latest["view"], "link": latest["link"]}, "stars": stars(records.get(name))})
+    rows.sort(key=lambda r: (r["scored"] == 0, -(r["hit_pct"] or 0), -(r["edge"] or -99), -r["calls"], r["analyst"]))
+    return rows[:n]
+
+
+def top_view(t, calls, records, today, days=90, at_least=3.5):
+    """Where the best-rated analysts stand on this stock: their latest bullish or bearish calls in the last 90 days."""
+    since = (today - timedelta(days=days)).isoformat()
+    latest = {}
+    for c in sorted((c for c in calls if c["ticker"] == t and c["analyst"] and c["day"] >= since), key=lambda c: c["day"]):
+        latest[c["analyst"]] = c
+    top = [c for a, c in latest.items() if (stars(records.get(a)) or 0) >= at_least and c["view"] in LEAN]
+    if not top:
+        return None
+    return {"bullish": sum(c["view"] == insights.BULL for c in top), "bearish": sum(c["view"] == insights.BEAR for c in top),
+            "analysts": [c["analyst"] for c in sorted(top, key=lambda c: c["day"], reverse=True)][:4], "stars": at_least}
+
+
+def trend(t, calls, today, months=4):
+    """The analysts' calls on this stock month by month: is the mood turning?"""
+    keys, d = [], today.replace(day=1)
+    for _ in range(months):
+        keys.append(d.strftime("%Y-%m"))
+        d = (d - timedelta(days=1)).replace(day=1)
+    out = {k: {"m": k, "bullish": 0, "bearish": 0, "other": 0} for k in keys}
+    for c in calls:
+        if c["ticker"] == t and c["day"][:7] in out:
+            out[c["day"][:7]][c["view"] if c["view"] in LEAN else "other"] += 1
+    rows = [out[k] for k in reversed(keys)]
+    return rows if any(r["bullish"] + r["bearish"] + r["other"] for r in rows) else None
+
+
+def coverage(name, calls, cache, n=12):
+    """An analyst's stocks: their latest call on each, and how their calls on it turned out."""
+    by = defaultdict(list)
+    for c in calls:
+        if c["analyst"] == name:
+            by[c["ticker"]].append(c)
+    rows = []
+    for t, cs in by.items():
+        scored = [x for x in (insights.score(c, cache) for c in cs) if x]
+        latest = max(cs, key=lambda c: c["day"])
+        rows.append({"ticker": t, "calls": len(cs), "day": latest["day"], "view": latest["view"], "action": latest.get("action"),
+                     "scored": len(scored), "right": sum(x["right"] for x in scored),
+                     "hit_pct": round(100 * sum(x["right"] for x in scored) / len(scored)) if scored else None,
+                     "edge": round(sum(x["edge"] for x in scored) / len(scored), 1) if scored else None})
+    rows.sort(key=lambda r: r["day"], reverse=True)
+    return rows[:n]
 
 
 def case(calls, view, n=3):
@@ -124,7 +207,7 @@ def fingerprint(doc):
     return hashlib.sha1(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
-def stock_card(t, calls30, calls90, cache, records, street, events, today, prev):
+def stock_card(t, calls30, calls90, cache, records, street, events, today, prev, calls120=None):
     c = insights.check_stock(t, calls30, cache, records, street, {}, {}, events, today)
     for k in USER_FIELDS:
         c.pop(k, None)
@@ -136,6 +219,10 @@ def stock_card(t, calls30, calls90, cache, records, street, events, today, prev)
     c["pe"] = c.get("pe") if c.get("pe") is not None else st.get("pe")
     c["calls_list"] = [call_row(x, cache, records) for x in sorted(mine90, key=lambda x: x["day"], reverse=True)[:30]]
     c["bulls"], c["bears"] = case(mine90, insights.BULL), case(mine90, insights.BEAR)
+    longer = calls120 if calls120 is not None else calls90
+    c["experts"] = experts_on(t, longer, cache, records)
+    c["top_view"] = top_view(t, longer, records, today)
+    c["trend"] = trend(t, longer, today)
     c["mentions"] = c["calls"][insights.BULL] + c["calls"][insights.BEAR]
     c["unknown"] = c["price"] is None and not mine90 and not st
     c["story"] = None if c["unknown"] else story(c)
@@ -188,8 +275,12 @@ def analysts_doc(calls, cache, followed, pairs, today):
     rows = []
     for a in table[:60]:
         rows.append({**a, "role": role_of.get(a["analyst"], ""), "stars": stars(a),
-                     "recent": [call_row(c, cache, records) for c in by.get(a["analyst"], [])[:10]]})
+                     "recent": [call_row(c, cache, records) for c in by.get(a["analyst"], [])[:10]],
+                     "coverage": coverage(a["analyst"], calls, cache)})
     rows.sort(key=lambda a: (a["stars"] is None, -(a["stars"] or 0), -(a["edge"] or -99), -a["calls"]))
+    rated = [a for a in rows if a["stars"] is not None]
+    for i, a in enumerate(rated):
+        a["rank"], a["of"] = i + 1, len(rated)   # "#3 of 42 rated analysts"
     return {"rows": rows, "updated": today.isoformat()}
 
 
@@ -248,11 +339,14 @@ def build(pairs, cache, street, prev, universe, today, sources, themes=None):
     """Everything to write: ({ticker: card}, {ticker: chart}, {name: market doc})."""
     since = lambda days: [(v, n) for v, n in pairs if local_day(v) >= today - timedelta(days=days)]
     calls30, calls90, calls120 = insights.calls_in(since(30)), insights.calls_in(since(90)), insights.calls_in(since(120))
+    acts = actions(calls120)   # upgraded, downgraded, reiterated or new: from the longest window, for all three
+    for c in (*calls30, *calls90, *calls120):
+        c["action"] = acts.get(_key(c))
     records = {a["analyst"]: a for a in insights.analysts_table(calls120, cache, sources["analysts"])}
     events = insights.upcoming(since(30), today)
     cards, charts = {}, {}
     for t in universe:
-        cards[t] = stock_card(t, calls30, calls90, cache, records, street, events, today, prev.get(t))
+        cards[t] = stock_card(t, calls30, calls90, cache, records, street, events, today, prev.get(t), calls120)
         ch = chart(t, cache)
         if ch:
             charts[t] = ch

@@ -23,9 +23,14 @@ stand on their stocks.
   stand) instead of Yes / No / Wait (an instruction to the reader, which in India could read as investment advice).
   "Should I invest?" is now "Where the experts stand". Emails, help and terms follow.
 - **Google Finance link** on every stock page, for the live price, news and full chart.
+- **Who has been right about this stock** (stock page): every expert who called it in the last four months, ranked
+  by how their calls on that stock turned out, next to their overall stars. Plus **what the top-rated experts say**
+  (3.5 stars and up) and **expert mood by month**. Ideas taken from TipRanks' forecast page, built from our own calls.
+- **Upgraded / Downgraded / Reiterated / New** on every call, against the same expert's call before it.
+- **An expert's page**: their rank among rated experts, and every stock they cover with their record on each.
 - The name Econova everywhere members see it: the site, the emails, the browser tab, the installed app.
 - Fixed: Home showed the word "null" under the date on a day none of your stocks moved 4% or more.
-- Tests: 177 unit tests; the browser test (71 checks) covers the track record, following, the shows, feedback and
+- Tests: 182 unit tests; the browser test (74 checks) covers the track record, following, the shows, feedback and
   the new security rules (feedback can be sent but never read back; follows are capped at 50).
 
 ## Cloud version: private beta (22 Nov 2026)

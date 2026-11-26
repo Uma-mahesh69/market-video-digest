@@ -93,6 +93,9 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   const text = await p.locator('.page').textContent();
   ok('stock page: signal, Wall Street, key numbers, bulls and bears, calls', ['Where the experts stand', 'Wall Street', 'Key numbers', 'Bulls say', 'Bears say', 'Every call'].every(t => text.includes(t)));
   ok('stock page: the signal describes the experts (Bullish, Split or Bearish), never Yes or No', /^(BULLISH|SPLIT|BEARISH|—)$/i.test((await p.locator('.signal .sig').first().textContent()).trim()) && !/Should I invest/.test(text));
+  ok('stock page: who has been right about it, and the mood by month', (await p.locator('.right-about').textContent()).includes('Who has been right about NVDA') && await p.locator('.right-about .list > div').count() >= 2
+    && await p.locator('.mood .mbar').count() === 4);
+  ok('stock page: each call says whether it upgraded, downgraded or reiterated the view', await p.locator('.card.flush tbody .act').count() >= 3);
   ok('stock page: a link out to Google Finance', (await p.locator('a.gf').getAttribute('href')) === 'https://www.google.com/finance?q=NVDA');
   ok('stock page: the stock in plain words first', ((await p.locator('.story p').textContent()) || '').length > 80);
   ok('the side menu lists my stocks, the open one marked', await p.locator('.wl-row').count() === 10 && await p.locator('.wl-row[aria-current=page] b').textContent() === 'NVDA');
@@ -113,6 +116,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   ok('analysts: a ranked table with ratings', await p.locator('tbody tr.link').count() >= 5 && await p.locator('.stars').count() >= 5);
   await p.locator('tbody tr.link').first().click(); await wait(p, 900);
   ok('an analyst\'s page lists their calls with results', (await p.locator('.page').textContent()).includes('Latest calls') && await p.locator('tbody tr').count() >= 3);
+  ok('an analyst\'s page: their rank and the stocks they cover, with their record on each', /#\d+ of \d+ rated experts/.test(await p.locator('.head .sub').textContent()) && await p.locator('.coverage tbody tr').count() >= 2);
   const followed = (await p.locator('.head h1').textContent()).trim();
   await p.click('.follow >> text=Follow'); await wait(p, 1200);
   ok('an analyst can be followed', await p.locator('.follow >> text=Following').count() === 1);

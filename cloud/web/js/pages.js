@@ -206,6 +206,9 @@ export async function ideas(root, refresh) {
 export const tile = (k, v, s, cls) => el('.card.tile', {}, el('.k', { text: k }), el('.v', { class: cls || '', text: v }), el('.s', { text: s || '' }));
 
 // ---------------------------------------------------------------- analysts
+// What a call did to the analyst's view of the stock, against their call before it
+export const ACTION = { upgraded: ['Upgraded', 'up'], downgraded: ['Downgraded', 'down'], reiterated: ['Reiterated', 'mut'], new: ['New', 'mut'] };
+const action = a => ACTION[a] ? el('span.act', { class: 'act ' + ACTION[a][1], text: ACTION[a][0] }) : null;
 function outcome(o) {
   if (!o) return el('span.small', { text: 'too early' });
   return el('span', { class: o.right ? 'up' : 'down', title: `Stock ${pct(o.stock_pct)}, S&P 500 ${pct(o.sp500_pct)} since the call`, text: `${o.right ? 'Right' : 'Wrong'} · ${o.edge > 0 ? '+' : ''}${o.edge} pts` });
@@ -216,7 +219,7 @@ export function callsTable(calls, withStock) {
     body.append(el('tr', {}, el('td', { class: 'small', style: { whiteSpace: 'nowrap' }, text: day(c.day) }),
       withStock ? el('td', {}, el('a.badge', { href: '#/s/' + encodeURIComponent(c.ticker), text: c.ticker })) :
         el('td', {}, c.analyst ? el('a', { href: '#/a/' + encodeURIComponent(c.analyst), style: { fontWeight: 600 }, text: c.analyst }) : el('span', { text: c.channel }), c.analyst_stars != null ? el('div', {}, stars(c.analyst_stars)) : null),
-      el('td', {}, el('span.pill.' + c.view, { text: c.view })), el('td.hide-s', { style: { maxWidth: '380px' }, text: c.reason || '' }),
+      el('td', {}, el('span.pill.' + c.view, { text: c.view }), c.action ? el('div', {}, action(c.action)) : null), el('td.hide-s', { style: { maxWidth: '380px' }, text: c.reason || '' }),
       el('td.r', {}, outcome(c.outcome)),
       el('td.c', {}, el('a.icon-btn', { href: c.link, target: '_blank', rel: 'noopener', title: 'Watch this moment', 'aria-label': 'Watch this moment' }, icon('play')))));
   }
@@ -224,7 +227,7 @@ export function callsTable(calls, withStock) {
     el('th.hide-s', { text: 'Reason' }), el('th.r', { text: 'Result vs S&P 500' }), el('th.c', { text: 'Video' }))), body));
 }
 export async function analysts(root) {
-  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Analysts' }), el('.sub', { text: 'Who makes the calls, and how often they have been right over the last four months.' }))));
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Experts' }), el('.sub', { text: 'Who makes the calls on air, and how often they have been right over the last four months.' }))));
   const hold = el('div', {}, skeleton(360)); root.append(hold);
   const a = await data.market('analysts'); hold.textContent = '';
   if (!a || !a.rows.length) { hold.append(el('.card.empty', {}, el('h3', { text: 'No analysts yet' }), 'This fills in after the first videos are read.')); return; }
@@ -257,7 +260,7 @@ export function showsCard(shows) {
     el('p.small', { style: { padding: '0 20px 16px' }, text: 'Every call made on the show in the last four months, scored the same way as the analysts’ calls. A show with fewer than 5 scored calls is listed last.' }));
 }
 export async function analyst(root, name) {
-  root.append(el('a.crumb', { href: '#/analysts' }, icon('left'), 'Analysts'));
+  root.append(el('a.crumb', { href: '#/analysts' }, icon('left'), 'Experts'));
   const hold = el('div', {}, skeleton(300)); root.append(hold);
   const a = await data.market('analysts'), r = a && a.rows.find(x => x.analyst === name); hold.textContent = '';
   if (!r) { hold.append(el('.card.empty', {}, el('h3', { text: name }), 'No recent calls from this analyst.')); return; }
@@ -266,11 +269,24 @@ export async function analyst(root, name) {
     ? el('button.btn', { onclick: async () => { await data.follow(r.analyst, false); toast(`You no longer follow ${r.analyst}`); drawFollow(); } }, icon('check'), 'Following')
     : el('button.btn.primary', { onclick: async () => { await data.follow(r.analyst, true); toast(`Following ${r.analyst}: their new calls show on Home and in your emails`); drawFollow(); } }, icon('plus'), 'Follow'));
   drawFollow();
-  hold.append(el('.head', {}, el('div', {}, el('h1', {}, r.analyst, ' ', stars(r.stars)), el('.sub', { text: r.role || 'Analyst' })), el('.sp'), followBtn),
+  hold.append(el('.head', {}, el('div', {}, el('h1', {}, r.analyst, ' ', stars(r.stars)), el('.sub', { text: (r.role || 'Analyst') + (r.rank ? ` · #${r.rank} of ${r.of} rated experts` : '') })), el('.sp'), followBtn),
     el('.grid.g4', { style: { marginBottom: '14px' } }, tile('Calls right', r.scored ? r.hit_pct + '%' : '—', r.scored ? `${r.right} of ${r.scored} scored calls` : 'Not enough scored calls yet'),
       tile('Average vs S&P 500', r.edge == null ? '—' : `${r.edge > 0 ? '+' : ''}${r.edge} pts`, 'per call, since it was made', tone(r.edge)),
       tile('Calls', r.calls, `${r.bullish} bullish, ${r.bearish} bearish`), tile('Talks about', r.stocks.slice(0, 3).join(', ') || '—', 'most often')),
-    el('.card.flush', {}, el('h2', { style: { padding: '16px 20px 0' }, text: 'Latest calls' }), callsTable(r.recent, true)));
+    (r.coverage || []).length ? coverageCard(r.coverage) : null,
+    el('.card.flush', { style: { marginTop: '14px' } }, el('h2', { style: { padding: '16px 20px 0' }, text: 'Latest calls' }), callsTable(r.recent, true)));
+}
+// An analyst's stocks: the latest call on each, and how their calls on it turned out
+function coverageCard(rows) {
+  const body = el('tbody');
+  for (const x of rows) body.append(el('tr.link', { tabindex: 0, onclick: () => go('#/s/' + encodeURIComponent(x.ticker)) },
+    el('td', {}, el('span.badge', { text: x.ticker })), el('td', {}, el('span.pill.' + x.view, { text: x.view }), ' ', action(x.action)),
+    el('td.small', { style: { whiteSpace: 'nowrap' }, text: day(x.day) }), el('td.r.hide-s', { text: x.calls }),
+    el('td.r', {}, x.scored ? el('b', { text: x.hit_pct + '%' }) : '—', x.scored ? el('.small', { text: `${x.right} of ${x.scored}` }) : null),
+    el('td.r', { class: tone(x.edge), text: x.edge == null ? '—' : `${x.edge > 0 ? '+' : ''}${x.edge} pts` })));
+  return el('.card.flush.coverage', {}, el('h2', { style: { padding: '16px 20px 0' }, text: 'Stocks covered' }),
+    el('.scroll', {}, el('table', {}, el('thead', {}, el('tr', {}, el('th', { text: 'Stock' }), el('th', { text: 'Latest call' }), el('th', { text: 'Date' }),
+      el('th.r.hide-s', { text: 'Calls' }), el('th.r', { text: 'Right on it' }), el('th.r', { text: 'Avg vs S&P 500' }))), body)));
 }
 
 // ---------------------------------------------------------------- calendar and videos
@@ -321,6 +337,8 @@ const WORDS = [
   ['Earnings', 'The day a company reports its results, four times a year. The price often moves a lot that day.'],
   ['Track record', 'How Econova\u2019s own signal has done: when it said Bullish, did the stock then beat the S&P 500 over the next month? Replayed over the months of videos already read, and followed live since the rules last changed.'],
   ['Shows', 'Each channel\u2019s calls, scored the same way as the analysts\u2019: whose guests are right most often.'],
+  ['Upgraded, downgraded, reiterated', 'What a call did to the analyst\u2019s view of the stock, against their call before it: more bullish (upgraded), more bearish (downgraded), the same (reiterated), or their first call on it we know of (new).'],
+  ['Who has been right about a stock', 'On each stock page: every expert who called it in the last four months, ranked by how their calls on that stock turned out. Their stars are their record on every stock, so a lucky streak on one stock is seen next to the whole record.'],
   ['Following', 'Follow an analyst from their page. Their new calls show on Home and in your daily email, on any stock.'],
 ];
 const FAQ = [

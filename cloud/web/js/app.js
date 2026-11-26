@@ -319,6 +319,9 @@ async function stock(root, t) {
       el('div', { style: { margin: '8px 0 4px' } }, meter([[c.calls.bullish, 'var(--green)'], [c.calls.neutral + c.calls.mixed, 'var(--grey)'], [c.calls.bearish, 'var(--red)']])),
       el('p.small', { text: `Calls in the last 30 days${c.track ? ` · ${c.track.right} of ${c.track.scored} earlier calls proved right` : ''}` }))
       : el('p.small', { text: 'No bullish or bearish call on it in the last 30 days.' }),
+    c.top_view ? el('.topview', {}, el('span.small', { text: `Top-rated experts (${c.top_view.stars}★ and up): ` }),
+      el('b', { class: c.top_view.bullish > c.top_view.bearish ? 'up' : c.top_view.bearish > c.top_view.bullish ? 'down' : '', text: `${c.top_view.bullish} bullish, ${c.top_view.bearish} bearish` }),
+      el('.small', { text: c.top_view.analysts.join(', ') })) : null,
     voices.length ? el('.list', { style: { marginTop: '10px' } }, voices.slice(0, 5).map(v => el('div', { style: { alignItems: 'center' } }, el('.body', {}, el('a', { href: '#/a/' + encodeURIComponent(v.analyst), style: { fontWeight: 600 }, text: v.analyst }), ' ', stars(v.analyst_stars)), el('span.pill.' + v.view, { text: v.view }), el('span.small', { text: day(v.day) })))) : null);
 
   // Wall Street
@@ -356,8 +359,31 @@ async function stock(root, t) {
       el('p.small', { style: { marginTop: '6px' }, text: '▲ ▼ mark the days an analyst made a bullish or bearish call. Click one to watch it.' })), signalCard),
     el('.grid.g3', { style: { marginTop: '14px' } }, videoCard, streetCard, stats),
     el('.grid.g2', { style: { marginTop: '14px' } }, says('Bulls say', c.bulls || [], 'bull'), says('Bears say', c.bears || [], 'bear')),
+    (c.experts || []).length || c.trend ? el('.grid.g2', { style: { marginTop: '14px' } }, rightAbout(t, c.experts || []), moodByMonth(c.trend)) : null,
     calls.length ? el('.card.flush', { style: { marginTop: '14px' } }, el('h2', { style: { padding: '16px 20px 0' }, text: `Every call in the last three months (${calls.length})` }), callsTable(calls, false)) : null,
     el('p.small', { style: { marginTop: '14px' }, text: 'Econova describes what market experts said and how they have done; it is not personal financial advice, and experts are often wrong. Prices are daily closes and can be delayed.' }));
+}
+
+// Who has been right about this stock: each expert's calls on it and how they turned out, next to their overall stars.
+function rightAbout(t, rows) {
+  return el('.card.right-about', {}, el('h2', { text: `Who has been right about ${t}` }),
+    rows.length ? el('.list', {}, rows.map(r => el('div', { style: { alignItems: 'center' } },
+      el('.body', {}, el('a', { href: '#/a/' + encodeURIComponent(r.analyst), style: { fontWeight: 600 }, text: r.analyst }), ' ', stars(r.stars),
+        el('.small', { text: r.scored ? `Right ${r.right} of ${r.scored} times on ${t} · ${r.edge > 0 ? '+' : ''}${r.edge} pts vs S&P 500` : `${r.calls} call${r.calls === 1 ? '' : 's'} on ${t}, too recent to judge` })),
+      el('span.pill.' + r.latest.view, { text: r.latest.view }), el('span.small', { text: day(r.latest.day) }))))
+      : el('p.small', { text: `No expert has called ${t} in the last four months.` }),
+    el('p.small', { style: { marginTop: '10px' }, text: 'Each expert’s calls on this stock in the last four months, best record first. Stars are their record on every stock.' }));
+}
+// The experts' calls on this stock month by month: is the mood turning?
+function moodByMonth(rows) {
+  if (!rows) return el('.card', {}, el('h2', { text: 'Expert mood by month' }), el('p.small', { text: 'No calls in the last four months.' }));
+  const top = Math.max(1, ...rows.map(r => r.bullish + r.bearish + r.other));
+  const name = m => new Date(m + '-15T12:00:00').toLocaleDateString(undefined, { month: 'short' });
+  return el('.card.mood', {}, el('h2', { text: 'Expert mood by month' }),
+    el('.mbars', {}, rows.map(r => el('.mbar', {}, el('.stack-v', { style: { height: Math.round(100 * (r.bullish + r.bearish + r.other) / top) + '%' } },
+      el('i', { style: { flex: r.bullish, background: 'var(--green)' } }), el('i', { style: { flex: r.other, background: 'var(--grey)' } }), el('i', { style: { flex: r.bearish, background: 'var(--red)' } })),
+      el('b', { text: name(r.m) }), el('span.small', { text: `${r.bullish}↑ ${r.bearish}↓` })))),
+    el('p.small', { style: { marginTop: '10px' }, text: 'Bullish (green), bearish (red) and neutral (grey) calls on it in the videos, each month.' }));
 }
 
 // ---------------------------------------------------------------- which page

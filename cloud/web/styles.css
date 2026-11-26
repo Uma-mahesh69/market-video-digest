@@ -233,6 +233,11 @@ tr.link{cursor:pointer}tr.link:hover td{background:var(--hover)}
 .field label{font-weight:600;font-size:13px}
 .input{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;outline:0;width:100%}
 .input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.topview{margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2)}.topview b{margin-left:2px}
+.act{font-size:11px;font-weight:700}.act.up{color:var(--green)}.act.down{color:var(--red)}.act.mut{color:var(--muted)}
+.mbars{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end;height:170px;margin-top:6px}
+.mbar{display:grid;grid-template-rows:1fr auto auto;justify-items:center;height:100%;gap:2px}
+.stack-v{align-self:end;width:42px;display:flex;flex-direction:column;border-radius:6px;overflow:hidden;min-height:4px}.stack-v i{display:block}
 textarea.input{resize:vertical;min-height:110px}
 .opt{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;cursor:pointer}
 .opt:hover{background:var(--hover)}.opt:has(input:checked){border-color:var(--brand);background:var(--brand-soft)}
