@@ -55,6 +55,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TIPRANKS_API_KEY: ${{ secrets.TIPRANKS_API_KEY }}
+          BETA_MEMBERS: ${{ secrets.BETA_MEMBERS }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SITE_URL: ${{ vars.SITE_URL }}

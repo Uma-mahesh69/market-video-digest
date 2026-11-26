@@ -149,6 +149,7 @@ def fill(store, today=None, work=None, log=print):
         store.set("videos", vid, {"published": n["_video"]["published"], "channel": n["_video"]["channel"], "title": n["_video"]["title"],
                                   "notes": json.dumps(n, separators=(",", ":"))})
     store.set("users", "demo-user", DEMO_USER)
+    store.set("members", DEMO_USER["email"], {"email": DEMO_USER["email"], "added": today.isoformat()})   # the private beta
     sources = engine.load_sources()
     sources["base_tickers"] = [s[0] for s in STOCKS]
     sources["analysts"] = [a[0] for a in ANALYSTS[:3]]

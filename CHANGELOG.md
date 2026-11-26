@@ -2,6 +2,17 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
+## Cloud version: private beta (22 Nov 2026)
+
+- **Invitation only.** Only the Google addresses in the `BETA_MEMBERS` secret can use the site. The database rules
+  check the members list on every read and write, so anyone else who signs in reads nothing and saves nothing, and
+  sees a plain "invitation-only" page. Signed-out visitors no longer see any live data: the front page says it is a
+  private beta and shows what members get instead of today's signals.
+- The list is a secret, not a file, because the repository is public. Each engine run copies it into Firestore;
+  taking someone off removes their access on that run, and a broken secret changes nothing.
+- Only members get emails and have their stocks covered.
+- Tests: 168 unit tests; the browser test (60 checks) now covers a stranger, a member, and someone taken off the list.
+
 ## Cloud version: what happened, in plain words (21 Nov 2026)
 
 Ideas taken from Google Finance, made from our own data:

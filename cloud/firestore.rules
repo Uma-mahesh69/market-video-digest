@@ -1,13 +1,23 @@
 rules_version = '2';
 // Who may read and write what. The engine uses an admin key and is not bound by these rules.
-//   stocks, charts, market : the shared pages. Any signed-in user reads; nobody writes.
-//   public                 : the example on the front page. Anyone reads.
-//   users/{uid}            : a user's own list and email choices. Only that user, and only in the expected shape.
-//   requests/{ticker}      : "please start covering this stock". A signed-in user may add one.
+//
+// PRIVATE BETA: only addresses on the members list (members/{email}, written by the engine from the BETA_MEMBERS
+// secret) can see or save anything. Anyone can sign in with Google, but a signed-in address that is not a member
+// reads nothing and writes nothing; it may only check its own membership and see or delete its own old account.
+//   stocks, charts, market : the shared pages. Members read; nobody writes.
+//   public                 : the example on the front page. Members only, while the beta is closed.
+//   members/{email}        : the list. An address may read its own entry (to know whether it is in); nobody writes.
+//   users/{uid}            : a member's own list and email choices. Only that member, and only in the expected shape.
+//   requests/{ticker}      : "please start covering this stock". A member may add one.
 //   videos, mail, engine   : the engine's own. No access from a browser.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function member() {
+      return signedIn() && request.auth.token.email != null && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/members/$(myEmail()));
+    }
     function mine(uid) { return signedIn() && request.auth.uid == uid; }
     function validPrefs(p) {
       return p is map && p.keys().hasOnly(['daily', 'weekly'])
@@ -26,17 +36,19 @@ service cloud.firestore {
         && (!('updated' in d) || d.updated is string);
     }
 
-    match /stocks/{ticker} { allow read: if signedIn(); }
-    match /charts/{ticker} { allow read: if signedIn(); }
-    match /market/{page}   { allow read: if signedIn(); }
-    match /public/{page}   { allow read: if true; }
+    match /stocks/{ticker} { allow read: if member(); }
+    match /charts/{ticker} { allow read: if member(); }
+    match /market/{page}   { allow read: if member(); }
+    match /public/{page}   { allow read: if member(); }
+    match /members/{email} { allow get: if signedIn() && request.auth.token.email != null && email == myEmail(); }
 
     match /users/{uid} {
+      // a former member can still see and delete what they saved; only members can create or change an account
       allow get, delete: if mine(uid);
-      allow create, update: if mine(uid) && validUser(request.resource.data);
+      allow create, update: if mine(uid) && member() && validUser(request.resource.data);
     }
     match /requests/{ticker} {
-      allow create, update: if signedIn() && ticker.matches('^[A-Z0-9._-]{1,15}$')
+      allow create, update: if member() && ticker.matches('^[A-Z0-9._-]{1,15}$')
         && request.resource.data.keys().hasOnly(['by', 'at'])
         && request.resource.data.by == request.auth.uid && request.resource.data.at is string;
     }

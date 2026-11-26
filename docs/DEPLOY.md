@@ -52,6 +52,7 @@ these (the name exactly as written, the value pasted):
 | `TIPRANKS_API_KEY` | The TipRanks key. |
 | `SMTP_USER` | The Gmail address the emails come from. |
 | `SMTP_PASSWORD` | The 16-letter app password. |
+| `BETA_MEMBERS` | Who may use the site (a private beta): their Google email addresses, separated by commas. Put your own first. |
 
 Optional, on the **Variables** tab next to Secrets: `CONTACT_EMAIL` (shown on the privacy and terms pages; the
 sending address is used if you leave it out), `MAIL_FROM_NAME` (default "Market Digest"), `SITE_URL` (only when you
@@ -105,6 +106,13 @@ pick your stocks, and you are on your dashboard.
 - **When the email goes out:** `email.hour_utc` in the same file (2 = 02:00 UTC = 7:30 am in India).
 - **The website:** any change under `cloud/web/` on `master` is published automatically.
 - **Your own domain:** Firebase console > Hosting > Add custom domain, then set the variable `SITE_URL` to it.
+- **Who may use it (the private beta):** edit the secret `BETA_MEMBERS` (Settings > Secrets and variables > Actions >
+  `BETA_MEMBERS` > Update), one Google address per invitee, separated by commas. The next engine run applies it
+  (Actions > Engine > Run workflow, to apply it at once). Someone taken off loses access on that run; what they saved
+  stays theirs to download or delete. Anyone else who signs in sees an "invitation-only" page and can read nothing:
+  the database rules check the list on every read and write, so it cannot be got round from the browser.
+  To open the site to everyone later: set `PRIVATE_BETA = false` in `cloud/web/js/app.js` and change `member()`
+  back to `signedIn()` in `cloud/firestore.rules` (and `public` back to `if true`).
 
 ## If something goes wrong
 
