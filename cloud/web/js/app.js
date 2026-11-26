@@ -1,10 +1,10 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
 import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL, SIGNAL_SAYS, says as signalSays, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
-import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable } from './pages.js';
+import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable, record, feedbackModal } from './pages.js';
 
 const app = document.getElementById('app');
-const NAV = [['', 'My stocks', 'home'], ['ideas', 'Ideas', 'bulb'], ['analysts', 'Analysts', 'users'], ['calendar', 'Calendar', 'cal']];
+const NAV = [['', 'My stocks', 'home'], ['ideas', 'Ideas', 'bulb'], ['analysts', 'Experts', 'users'], ['record', 'Track record', 'trophy'], ['calendar', 'Calendar', 'cal']];
 const signIn = () => data.signIn().catch(e => toast(e.message));
 // The private beta: only invited members get in (the database rules enforce it). While it is on, the front page shows
 // no live data and no example; set it to false (and open public/demo in firestore.rules) to open the doors again.
@@ -12,7 +12,7 @@ const PRIVATE_BETA = true;
 
 // ---------------------------------------------------------------- the front page
 async function landing() {
-  document.title = 'Market Digest: Yes, No or Wait on your stocks, from what analysts say';
+  document.title = 'Econova: who to listen to on your stocks';
   const peek = el('.peek', {}, el('.bar-t', {}, el('i'), el('i'), el('i'), el('span', { text: 'Today’s signals · live' })), skeleton(300));
   const tryExample = async b => { b.disabled = true; try { await data.startExample(); render(); } catch (e) { toast(e.message || friendly(e)); b.disabled = false; } };
   const example = el('button.btn.lg', { onclick: () => tryExample(example) }, 'See a live example');
@@ -22,18 +22,18 @@ async function landing() {
     const item = (ic, text) => el('div', {}, el('span.dot.info', {}, icon(ic)), el('span', { text }));
     peek.classList.add('members');
     peek.replaceChildren(el('.bar-t', {}, el('i'), el('i'), el('i'), el('span', { text: 'What members see' })),
-      el('.member-list', {}, item('check', 'Yes, Wait or No for each of your stocks, and how sure it is'), item('users', 'Every analyst call behind it, scored against the S&P 500'),
-        item('info', '“In short”: what happened to each stock, in plain words'), item('down', 'The day’s big moves in your stocks, first thing'), item('mail', 'A short email after the market closes')));
+      el('.member-list', {}, item('users', 'Every expert’s record: how often their calls on TV and YouTube beat the market'), item('check', 'Where the experts worth listening to stand on each of your stocks'),
+        item('trophy', 'Econova’s own track record, misses included'), item('info', '“In short”: what happened to each stock, in plain words'), item('mail', 'A short email after the market closes, with calls from the experts you follow')));
   }
   const cta = PRIVATE_BETA ? [google('Member sign in')] : [google('Continue with Google'), example];
   app.replaceChildren(el('.land', {},
-    el('header', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+    el('header', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Econova' })), el('span.sp'),
       el('a.hide-m', { href: '#how', class: 'navlink', onclick: e => { e.preventDefault(); document.getElementById('how').scrollIntoView({ behavior: 'smooth' }); } }, 'How it works'),
       el('button.btn', { onclick: signIn }, 'Sign in')),
     el('.hero-l', {},
       el('div', {}, el('span.kicker', {}, el('i'), PRIVATE_BETA ? 'Private beta · by invitation' : 'Free during the beta'),
-        el('h1', {}, 'Yes, No or Wait on every stock you follow, ', el('em', { text: 'from what the analysts actually say.' })),
-        el('p.lede', { text: 'We read the finance shows and Wall Street’s ratings every day and boil them down to one signal per stock, with the calls, the reasons and each analyst’s track record behind it.' }),
+        el('h1', {}, 'Finance TV is full of stock calls. ', el('em', { text: 'We keep score.' })),
+        el('p.lede', { text: 'Econova watches the finance shows on TV and YouTube every day, checks every stock call against the market, and tells you where the experts with real track records stand on the stocks you own.' }),
         el('.cta', {}, ...cta),
         el('p.fine', {}, PRIVATE_BETA ? 'Invited members only: sign in with the Google account your invitation went to. By continuing you agree to the '
           : 'No card · Nothing to install · Ready in 30 seconds. By continuing you agree to the ', el('a', { href: '/terms.html', text: 'terms' }), ' and the ', el('a', { href: '/privacy.html', text: 'privacy policy' }), '.'),
@@ -42,21 +42,21 @@ async function landing() {
     working,
     el('section.how', { id: 'how' }, el('.sec-h', {}, el('.eyebrow', { text: 'How it works' }), el('h2', { text: 'Set up once. Read it in a minute a day.' })),
       el('.how-g', {}, ...[['Pick your stocks', 'Choose a starter list, search any US stock, or paste your Google Finance watchlist. That is the whole setup.'],
-        ['We do the reading', 'Every day we go through the analysts’ calls in the finance videos and Wall Street’s ratings, so you do not have to.'],
-        ['You get a clear signal', 'Yes, No or Wait for each stock, how sure it is, and what changed, on one page and in a short daily email.']]
+        ['We watch and keep score', 'Every day we note each expert’s call in the finance videos, with the reason and the moment, and score it against the S&P 500 as the weeks pass.'],
+        ['You see who to listen to', 'For each stock: Bullish, Split or Bearish, weighted by who has been right, with both sides quoted. On one page and in a short daily email.']]
         .map(([h, p], i) => el('.card', {}, el('.n', { text: i + 1 }), el('h3', { text: h }), el('p', { text: p }))))),
-    el('section.honest', {}, el('.sec-h', {}, el('.eyebrow', { text: 'Honest by design' }), el('h2', { text: 'A signal you can check, not a black box.' })),
-      el('.how-g', {}, ...[['check', 'Every call is scored', 'Each bullish or bearish call is checked against the S&P 500 afterwards. Analysts who keep being right count for more.'],
-        ['swap', 'Both sides, always', 'You see what the bulls and the bears said, in their words, with a link to the moment in the video.'],
-        ['clock', 'Fresh views count most', 'One analyst gets one vote, and a call from yesterday outweighs one from three weeks ago.']]
+    el('section.honest', {}, el('.sec-h', {}, el('.eyebrow', { text: 'Accountable by design' }), el('h2', { text: 'Confidence on screen counts for nothing. The record counts for everything.' })),
+      el('.how-g', {}, ...[['check', 'Every call is scored', 'Each bullish or bearish call is checked against the S&P 500 afterwards. Experts and shows that keep being right count for more.'],
+        ['trophy', 'We grade ourselves too', 'Econova’s own signal has a public track record: when it said Bullish, did the stock beat the market? Misses included.'],
+        ['play', 'Evidence you can check', 'Both sides, in the experts’ own words, each with a link to the second in the video it was said.']]
         .map(([ic, h, p]) => el('div', {}, el('span.dot.info', {}, icon(ic)), el('h3', { text: h }), el('p', { text: p }))))),
     PRIVATE_BETA ? el('section.cta-band', {}, el('div', {}, el('h2', { text: 'Have an invitation?' }), el('p', { text: 'Sign in with the Google account it was sent to, and pick your stocks.' })),
       el('.cta', {}, google('Member sign in')))
-    : el('section.cta-band', {}, el('div', {}, el('h2', { text: 'See where the analysts stand on your stocks.' }), el('p', { text: 'Free during the beta. Sign in with Google and pick your stocks.' })),
+    : el('section.cta-band', {}, el('div', {}, el('h2', { text: 'See who is worth listening to on your stocks.' }), el('p', { text: 'Free during the beta. Sign in with Google and pick your stocks.' })),
       el('.cta', {}, google('Continue with Google'), el('button.btn.lg.ghost-l', { onclick: e => tryExample(e.currentTarget) }, 'See a live example'))),
-    el('footer', {}, el('.foot', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+    el('footer', {}, el('.foot', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Econova' })), el('span.sp'),
       el('a', { href: '/privacy.html', text: 'Privacy' }), el('a', { href: '/terms.html', text: 'Terms' })),
-      el('p', { text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. Ratings from TipRanks; prices are daily closes and can be delayed.' }))));
+      el('p', { text: 'Econova describes what market experts said and how they have done. It is not personal financial advice, and experts are often wrong. Ratings from TipRanks; prices are daily closes and can be delayed.' }))));
   if (PRIVATE_BETA) return;
   try {
     const d = await data.publicExample();
@@ -65,7 +65,7 @@ async function landing() {
     const o = d.overview;
     if (o && o.calls) {
       const stat = (v, k) => el('div', {}, el('b', { text: Number(v).toLocaleString() }), el('span', { text: k }));
-      proof.replaceChildren(stat(o.videos, 'videos read, 30 days'), stat(o.calls, 'analyst calls'), stat(o.analysts, 'analysts tracked'), o.stocks ? stat(o.stocks, 'stocks with a signal') : null);
+      proof.replaceChildren(...[stat(o.videos, 'videos read, 30 days'), stat(o.calls, 'expert calls'), stat(o.analysts, 'experts tracked'), o.stocks ? stat(o.stocks, 'stocks with a view') : null].filter(Boolean));
       proof.hidden = false;
     }
     showWorking(working, d.cards);
@@ -74,12 +74,12 @@ async function landing() {
 
 // Signed in with an address that is not on the members list: say so plainly, and how to get in.
 function notInvited() {
-  document.title = 'Private beta · Market Digest';
+  document.title = 'Private beta · Econova';
   const again = async () => { await data.signOut(); signIn(); };
-  app.replaceChildren(el('.center', {}, el('.card.invite', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })),
-    el('h1', { text: 'Market Digest is invitation-only for now' }),
+  app.replaceChildren(el('.center', {}, el('.card.invite', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Econova' })),
+    el('h1', { text: 'Econova is invitation-only for now' }),
     el('p', {}, 'You are signed in as ', el('b', { text: data.user.email || 'this account' }), ', which is not on the members list.'),
-    el('p.small', { text: 'If you were invited, sign in with the Google account the invitation was sent to. Otherwise, ask the person who told you about Market Digest for a place in the beta.' }),
+    el('p.small', { text: 'If you were invited, sign in with the Google account the invitation was sent to. Otherwise, ask the person who told you about Econova for a place in the beta.' }),
     el('.row', { style: { marginTop: '18px', flexWrap: 'wrap' } }, el('button.btn.primary', { onclick: again }, 'Use another Google account'), el('button.btn', { onclick: () => data.signOut() }, icon('out'), 'Sign out')))));
 }
 
@@ -133,8 +133,9 @@ function shell(active, page) {
       el('a', { href: '#/account', 'aria-label': 'Account', class: 'hide-desktop' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() })));
   const main = el('.main', {}, top, page);
   app.replaceChildren(el('.shell', {},
-    el('aside.side', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Market Digest' })), nav('nav.nav'),
-      el('nav.nav', { style: { marginTop: '10px', borderTop: '1px solid var(--line-2)', paddingTop: '10px' } }, el('a', { href: '#/help', 'aria-current': active === 'help' ? 'page' : null }, icon('info'), el('span', { text: 'How it works' }))),
+    el('aside.side', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Econova' })), nav('nav.nav'),
+      el('nav.nav', { style: { marginTop: '10px', borderTop: '1px solid var(--line-2)', paddingTop: '10px' } }, el('a', { href: '#/help', 'aria-current': active === 'help' ? 'page' : null }, icon('info'), el('span', { text: 'How it works' })),
+        data.example ? null : el('a', { href: '#', class: 'fb-link', onclick: e => { e.preventDefault(); feedbackModal(); } }, icon('chat'), el('span', { text: 'Send feedback' }))),
       watch, freshBox,
       data.example ? el('button.btn.primary', { onclick: signIn }, 'Sign in to save') :
         el('a.me', { href: '#/account' }, data.user && data.user.photoURL ? el('img.avatar', { src: data.user.photoURL, alt: '', referrerpolicy: 'no-referrer' }) : el('.avatar', { text: name[0].toUpperCase() }),
@@ -156,7 +157,7 @@ async function home(root) {
   const hold = el('div', {}, el('.grid.g4', {}, skeleton(96), skeleton(96), skeleton(96), skeleton(96)), el('div', { style: { height: '14px' } }), skeleton(360));
   root.append(hold);
   if (!p.stocks.length) { hold.replaceChildren(el('.card.empty', {}, el('h3', { text: 'Add your stocks to see their signals' }), 'Pick a starter list, search, or paste your watchlist.', el('div', {}, el('button.btn.primary', { onclick: () => addModal(render) }, icon('plus'), 'Add stocks')))); return; }
-  const [cards, overview] = await Promise.all([data.cards(p.stocks.map(s => s.t)), data.market('overview').catch(() => null)]);
+  const [cards, overview, experts] = await Promise.all([data.cards(p.stocks.map(s => s.t)), data.market('overview').catch(() => null), data.example ? null : data.market('analysts').catch(() => null)]);
   const pf = portfolio(p, cards), rows = pf.rows, bull = rows.reduce((a, r) => a + (r.calls.bullish || 0), 0), bear = rows.reduce((a, r) => a + (r.calls.bearish || 0), 0);
   const next = rows.filter(r => r.days_to_earnings != null).sort((a, b) => a.days_to_earnings - b.days_to_earnings)[0];
 
@@ -164,8 +165,8 @@ async function home(root) {
     pf.total != null ? el('.card.tile', {}, el('.k', { text: 'Portfolio value' }), el('.v', { text: money(pf.total, pf.currency) }),
       el('.s', {}, el('span', { class: tone(pf.dayChange), text: pct(pf.dayChange, 2) }), ' today', pf.gain_pct != null ? [' · ', el('span', { class: tone(pf.gain_pct), text: pct(pf.gain_pct) }), ' overall'] : null))
       : el('.card.tile', {}, el('.k', { text: 'Your list' }), el('.v', { text: `${rows.length} stock${rows.length === 1 ? '' : 's'}` }), el('.s', {}, el('a', { href: '#', onclick: e => { e.preventDefault(); holdingModal(rows[0], render); } }, 'Add your shares'), ' to see your portfolio value')),
-    el('.card.tile', {}, el('.k', { text: 'Should I invest?' }),
-      el('.counts', {}, el('div', {}, el('b.up', { text: pf.counts.yes }), el('span.up', { text: 'Yes' })), el('div', {}, el('b', { text: pf.counts.wait }), el('span.mut', { text: 'Wait' })), el('div', {}, el('b.down', { text: pf.counts.no }), el('span.down', { text: 'No' }))),
+    el('.card.tile', {}, el('.k', { text: 'The experts on your stocks' }),
+      el('.counts', {}, el('div', {}, el('b.up', { text: pf.counts.yes }), el('span.up', { text: 'Bullish' })), el('div', {}, el('b', { text: pf.counts.wait }), el('span.mut', { text: 'Split' })), el('div', {}, el('b.down', { text: pf.counts.no }), el('span.down', { text: 'Bearish' }))),
       meter([[pf.counts.yes, 'var(--green)'], [pf.counts.wait, 'var(--grey)'], [pf.counts.no, 'var(--red)']])),
     tile('Analyst mood on your stocks', bull + bear ? Math.round(100 * bull / (bull + bear)) + '% bullish' : '—', bull + bear ? `${bull} bullish, ${bear} bearish calls in 30 days` : 'No calls on your stocks yet', bull + bear ? (bull >= bear ? 'up' : 'down') : ''),
     tile('Next earnings', next ? next.ticker : '—', next ? `${day((next.street || {}).next_earnings)} · ${next.days_to_earnings === 0 ? 'today' : next.days_to_earnings === 1 ? 'tomorrow' : `in ${next.days_to_earnings} days`}` : 'None known for your stocks'));
@@ -186,11 +187,11 @@ async function home(root) {
     const withTarget = owned.filter(r => r.street && r.street.upside_pct != null), tv = withTarget.reduce((a, r) => a + r.value, 0);
     const upside = tv ? withTarget.reduce((a, r) => a + r.value * r.street.upside_pct, 0) / tv : null;
     const biggest = [...owned].sort((x, y) => y.value - x.value)[0];
-    const line = no >= 30 ? [`${Math.round(no)}% of your money is in stocks analysts are against`, 'down'] : yes >= 60 ? [`${Math.round(yes)}% of your money is in stocks analysts favour`, 'up']
-      : ['Your money is spread across mixed signals', ''];
+    const line = no >= 30 ? [`${Math.round(no)}% of your money is in stocks the experts are bearish on`, 'down'] : yes >= 60 ? [`${Math.round(yes)}% of your money is in stocks the experts are bullish on`, 'up']
+      : ['Your money is spread across mixed views', ''];
     healthCard = el('.card', {}, el('h2', { text: 'Portfolio health' }), el('p', { class: line[1], style: { fontWeight: 700, marginBottom: '8px' }, text: line[0] }),
       meter([[yes, 'var(--green)'], [wait, 'var(--grey)'], [no, 'var(--red)']]),
-      el('.small', { style: { margin: '6px 0 12px' }, text: `By value: Yes ${Math.round(yes)}% · Wait ${Math.round(wait)}% · No ${Math.round(no)}%` }),
+      el('.small', { style: { margin: '6px 0 12px' }, text: `By value: Bullish ${Math.round(yes)}% · Split ${Math.round(wait)}% · Bearish ${Math.round(no)}%` }),
       el('.grid.g2', { style: { gap: '4px 28px' } },
         el('.kv.one', {}, kv('Wall Street expects, 12 months', upside == null ? null : pct(upside), tone(upside)), kv('Biggest position', `${biggest.ticker} · ${Math.round(biggest.weight)}%`, biggest.weight >= 35 ? 'down' : ''),
           kv('Your gain so far', pf.gain_pct == null ? null : pct(pf.gain_pct), tone(pf.gain_pct))),
@@ -219,10 +220,16 @@ async function home(root) {
         el('div', { style: { marginTop: '6px' } }, meter([[overview.views.bullish, 'var(--green)'], [overview.views.neutral + overview.views.mixed, 'var(--grey)'], [overview.views.bearish, 'var(--red)']]))),
       overview.themes && overview.themes.length ? el('div', { style: { marginTop: '12px' } }, overview.themes.slice(0, 2).map(t => el('.theme', {}, el('b', { text: t.theme }), el('span', { text: t.detail })))) : null));
     const picks = (overview.lists.yes || []).map(t => overview.rows[t]).filter(r => r && !has(r.ticker)).slice(0, 4);
-    if (picks.length) side.append(el('.card', {}, el('h2', {}, 'Strongest Yes right now', el('span.sp'), el('a.small', { href: '#/ideas', text: 'All ideas' })),
+    if (picks.length) side.append(el('.card', {}, el('h2', {}, 'Most bullish right now', el('span.sp'), el('a.small', { href: '#/ideas', text: 'All ideas' })),
       el('.list', {}, picks.map(r => el('a', { href: '#/s/' + encodeURIComponent(r.ticker), style: { color: 'inherit', alignItems: 'center' } }, el('span.badge', { text: r.ticker }),
         el('span.body', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, text: r.name || '' }), el('b.up', { text: r.confidence_pct + '%' }))))));
   }
+  const followCard = experts && experts.rows ? following(experts.rows) : null;
+  if (followCard) side.prepend(followCard);
+  const rec = overview && overview.record;
+  if (rec) side.append(el('a.card.rec', { href: '#/record', style: { color: 'inherit', display: 'block' } }, el('h2', {}, icon('trophy'), 'Econova’s track record', el('span.sp'), el('span.small', { text: 'See it all' })),
+    el('p', {}, 'When the signal said Bullish, the stock beat the S&P 500 over the next month ', el('b', { class: rec.yes_hit_pct >= 50 ? 'up' : 'down', text: rec.yes_hit_pct + '%' }), ' of the time (', el('b', { class: tone(rec.yes_excess), text: `${rec.yes_excess > 0 ? '+' : ''}${rec.yes_excess} pts` }), ' on average).'),
+    el('p.small', { text: `${rec.n} picks replayed, ${day(rec.from)} to ${day(rec.to)}. Misses included.` })));
   side.classList.add('f3'); tableCard.classList.add('f2');   // on a phone the table comes before the market cards
   hold.classList.add('flow');
   // the day's big moves in your stocks come first, as Google Finance does ("Why is NVDA down 14%?")
@@ -231,11 +238,32 @@ async function home(root) {
   const moverBox = movers.length ? el('.movers', {}, movers.map(r => el('a.mover.' + (r.change_pct_day > 0 ? 'up' : 'down'), { href: '#/s/' + encodeURIComponent(r.ticker) },
     el('span.dot.' + (r.change_pct_day > 0 ? 'good' : 'bad'), {}, icon(r.change_pct_day > 0 ? 'up' : 'down')),
     el('span.tx', {}, el('b', { text: `${r.ticker} ${r.change_pct_day > 0 ? 'rose' : 'fell'} ${Math.abs(r.change_pct_day).toFixed(1)}%${onDay(r)}` }),
-      el('span.small', { text: r.signal === 'none' ? ' · no analyst view yet' : ` · analysts say ${SIGNAL[r.signal]}` })),
-    el('span.go', {}, 'What analysts say', icon('right'))))) : null;
-  hold.replaceChildren(moverBox, tiles, el('.cols', {}, healthCard ? el('.stack', {}, todoCard, healthCard) : todoCard, side), tableCard,
-    el('p.small', { class: 'f4', text: 'The signals sum up what analysts said; they are not personal financial advice and can be wrong.' }));
+      el('span.small', { text: r.signal === 'none' ? ' · no expert view yet' : ` · the experts are ${SIGNAL[r.signal].toLowerCase()}` })),
+    el('span.go', {}, 'What the experts say', icon('right'))))) : null;
+  hold.replaceChildren(...[moverBox].filter(Boolean), tiles, el('.cols', {}, healthCard ? el('.stack', {}, todoCard, healthCard) : todoCard, side), tableCard,
+    el('p.small', { class: 'f4', text: 'Econova describes what market experts said and how they have done; it is not personal financial advice, and experts are often wrong.' }));
   if (!side.children.length) hold.querySelector('.cols').style.gridTemplateColumns = '1fr';
+}
+
+// The analysts you follow and their newest calls, on any stock. Before you follow anyone: the best-rated few, to start.
+function following(rows) {
+  const mine = (data.profile.follows || []).map(n => rows.find(r => r.analyst === n)).filter(Boolean);
+  if (!mine.length) {
+    const best = rows.filter(r => r.stars != null).slice(0, 3);
+    if (!best.length) return null;
+    return el('.card.follows', {}, el('h2', {}, 'Experts worth following', el('span.sp'), el('a.small', { href: '#/analysts', text: 'All experts' })),
+      el('p.small', { style: { marginBottom: '8px' }, text: 'Follow an expert and their new calls, on any stock, show here and in your email.' }),
+      el('.list', {}, best.map(r => el('a', { href: '#/a/' + encodeURIComponent(r.analyst), style: { color: 'inherit', alignItems: 'center' } }, el('span.body', {}, el('b', { text: r.analyst }), ' ', stars(r.stars)),
+        el('span.small', { text: r.hit_pct != null ? `${r.hit_pct}% right` : '' })))));
+  }
+  const since = new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10);
+  const calls = mine.flatMap(r => (r.recent || []).filter(c => c.day >= since && (c.view === 'bullish' || c.view === 'bearish')).map(c => ({ ...c, analyst: r.analyst, stars: r.stars })))
+    .sort((a, b) => b.day.localeCompare(a.day)).slice(0, 6);
+  return el('.card.follows', {}, el('h2', {}, 'From the experts you follow', el('span.sp'), el('a.small', { href: '#/analysts', text: 'Manage' })),
+    calls.length ? el('.list', {}, calls.map(c => el('div', { style: { alignItems: 'center' } }, el('a.badge', { href: '#/s/' + encodeURIComponent(c.ticker), text: c.ticker }),
+      el('.body', {}, el('a', { href: '#/a/' + encodeURIComponent(c.analyst), style: { fontWeight: 600 }, text: c.analyst }), el('.small', { text: (c.reason || '').slice(0, 120) })),
+      el('span.pill.' + c.view, { text: c.view }), el('span.small', { text: day(c.day) }))))
+      : el('p.small', { text: `No new calls from ${mine.map(r => r.analyst).slice(0, 3).join(', ')} in the last three weeks.` }));
 }
 
 // ---------------------------------------------------------------- one stock
@@ -254,7 +282,7 @@ async function stock(root, t) {
       !c && !has(t) && data.profile ? el('div', {}, el('button.btn.primary', { onclick: async () => { await addStocks([t]); toast(`${t} added`); go('#/'); } }, icon('plus'), 'Add to my stocks')) : null));
     return;
   }
-  document.title = `${t} ${SIGNAL_SAYS[c.signal] ? '· ' + (c.signal === 'none' ? 'no signal yet' : c.signal.toUpperCase()) : ''} · Market Digest`;
+  document.title = `${t} ${SIGNAL_SAYS[c.signal] ? '· ' + (c.signal === 'none' ? 'no view yet' : SIGNAL[c.signal]) : ''} · Econova`;
   const st = c.street || {}, mine = data.profile && data.profile.stocks.find(s => s.t === t);
   const act = el('span');
   const drawAct = () => act.replaceChildren(has(t) ? el('button.btn', { onclick: () => holdingModal({ ...c, ticker: t }, () => { drawAct(); render(); }) }, icon('edit'), 'In my stocks') :
@@ -276,10 +304,10 @@ async function stock(root, t) {
 
   // the signal
   const history = (c.history || []).slice(-4);
-  const signalCard = el('.card.signal', {}, el('.eyebrow', { text: 'Should I invest?' }),
+  const signalCard = el('.card.signal', {}, el('.eyebrow', { text: 'Where the experts stand' }),
     el('.ringrow', {}, ring(c.confidence_pct, COLOR[c.signal]), el('div', {}, sig(c.signal, true), el('p', { style: { marginTop: '8px', fontWeight: 600 }, text: signalSays(c.signal, c.confidence_pct) }), el('p.small', { text: c.signal === 'none' ? 'Nobody in the videos or on Wall Street has given a view yet.' : 'Based on ' + c.basis.replace("your channels' videos", 'the videos') + '.' }))),
     el('.factors', {}, (c.factors || []).map(f => el('span.chip.' + f.tone, { text: f.text }))),
-    history.length > 1 ? el('.hist', {}, 'Signal history: ', history.map((h, i) => [i ? ' → ' : '', el('span', { style: { fontWeight: 700, color: COLOR[h.s] }, text: h.s === 'none' ? '—' : h.s.toUpperCase() }), el('span', { text: ' ' + day(h.d) })])) : null,
+    history.length > 1 ? el('.hist', {}, 'Signal history: ', history.map((h, i) => [i ? ' → ' : '', el('span', { style: { fontWeight: 700, color: COLOR[h.s] }, text: h.s === 'none' ? '—' : SIGNAL[h.s] }), el('span', { text: ' ' + day(h.d) })])) : null,
     mine && mine.shares && c.price != null ? el('div', { style: { borderTop: '1px solid var(--line-2)', paddingTop: '12px', marginTop: 'auto' } }, el('.eyebrow', { text: 'Your position', style: { marginBottom: '6px' } }),
       el('.kv', {}, kv('Shares', num(mine.shares, 4)), kv('Value', money(mine.shares * c.price, c.currency)), kv('You paid', mine.cost ? money(mine.cost, c.currency) : null), kv('Your gain', mine.cost ? pct((c.price / mine.cost - 1) * 100) : null, mine.cost ? tone(c.price / mine.cost - 1) : ''))) : null);
 
@@ -291,6 +319,9 @@ async function stock(root, t) {
       el('div', { style: { margin: '8px 0 4px' } }, meter([[c.calls.bullish, 'var(--green)'], [c.calls.neutral + c.calls.mixed, 'var(--grey)'], [c.calls.bearish, 'var(--red)']])),
       el('p.small', { text: `Calls in the last 30 days${c.track ? ` · ${c.track.right} of ${c.track.scored} earlier calls proved right` : ''}` }))
       : el('p.small', { text: 'No bullish or bearish call on it in the last 30 days.' }),
+    c.top_view ? el('.topview', {}, el('span.small', { text: `Top-rated experts (${c.top_view.stars}★ and up): ` }),
+      el('b', { class: c.top_view.bullish > c.top_view.bearish ? 'up' : c.top_view.bearish > c.top_view.bullish ? 'down' : '', text: `${c.top_view.bullish} bullish, ${c.top_view.bearish} bearish` }),
+      el('.small', { text: c.top_view.analysts.join(', ') })) : null,
     voices.length ? el('.list', { style: { marginTop: '10px' } }, voices.slice(0, 5).map(v => el('div', { style: { alignItems: 'center' } }, el('.body', {}, el('a', { href: '#/a/' + encodeURIComponent(v.analyst), style: { fontWeight: 600 }, text: v.analyst }), ' ', stars(v.analyst_stars)), el('span.pill.' + v.view, { text: v.view }), el('span.small', { text: day(v.day) })))) : null);
 
   // Wall Street
@@ -321,14 +352,38 @@ async function stock(root, t) {
 
   hold.replaceChildren(
     el('.quote', {}, el('div', {}, el('.row', {}, el('span.badge', { text: t }), c.sector ? el('span.chip', { text: c.sector }) : null), el('h1', { style: { marginTop: '6px' }, text: c.name || t })), el('span.sp'),
-      el('div', { style: { textAlign: 'right' } }, el('.px', { text: money(c.price, c.currency) }), el('div', {}, el('b', { class: tone(c.change_pct_day), text: pct(c.change_pct_day, 2) }), el('span.small', { text: ` today · close of ${day(c.as_of)}` }))), act),
+      el('div', { style: { textAlign: 'right' } }, el('.px', { text: money(c.price, c.currency) }), el('div', {}, el('b', { class: tone(c.change_pct_day), text: pct(c.change_pct_day, 2) }), el('span.small', { text: ` today · close of ${day(c.as_of)}` })),
+          el('a.small.gf', { href: 'https://www.google.com/finance?q=' + encodeURIComponent(t), target: '_blank', rel: 'noopener', title: 'Live price, news and the full chart on Google Finance' }, 'Google Finance ↗')), act),
     c.story ? el('.story.' + c.signal, {}, el('.eyebrow', { text: 'In short' }), el('p', { text: c.story })) : null,
     el('.hero', {}, el('.card', {}, el('h2', {}, 'Price', move != null ? el('span', { class: tone(move), style: { fontWeight: 600 }, text: pct(move) }) : null, el('span.sp'), seg), chartBox,
       el('p.small', { style: { marginTop: '6px' }, text: '▲ ▼ mark the days an analyst made a bullish or bearish call. Click one to watch it.' })), signalCard),
     el('.grid.g3', { style: { marginTop: '14px' } }, videoCard, streetCard, stats),
     el('.grid.g2', { style: { marginTop: '14px' } }, says('Bulls say', c.bulls || [], 'bull'), says('Bears say', c.bears || [], 'bear')),
+    (c.experts || []).length || c.trend ? el('.grid.g2', { style: { marginTop: '14px' } }, rightAbout(t, c.experts || []), moodByMonth(c.trend)) : null,
     calls.length ? el('.card.flush', { style: { marginTop: '14px' } }, el('h2', { style: { padding: '16px 20px 0' }, text: `Every call in the last three months (${calls.length})` }), callsTable(calls, false)) : null,
-    el('p.small', { style: { marginTop: '14px' }, text: 'The signal sums up what analysts said; it is not personal financial advice and can be wrong. Prices are daily closes and can be delayed.' }));
+    el('p.small', { style: { marginTop: '14px' }, text: 'Econova describes what market experts said and how they have done; it is not personal financial advice, and experts are often wrong. Prices are daily closes and can be delayed.' }));
+}
+
+// Who has been right about this stock: each expert's calls on it and how they turned out, next to their overall stars.
+function rightAbout(t, rows) {
+  return el('.card.right-about', {}, el('h2', { text: `Who has been right about ${t}` }),
+    rows.length ? el('.list', {}, rows.map(r => el('div', { style: { alignItems: 'center' } },
+      el('.body', {}, el('a', { href: '#/a/' + encodeURIComponent(r.analyst), style: { fontWeight: 600 }, text: r.analyst }), ' ', stars(r.stars),
+        el('.small', { text: r.scored ? `Right ${r.right} of ${r.scored} times on ${t} · ${r.edge > 0 ? '+' : ''}${r.edge} pts vs S&P 500` : `${r.calls} call${r.calls === 1 ? '' : 's'} on ${t}, too recent to judge` })),
+      el('span.pill.' + r.latest.view, { text: r.latest.view }), el('span.small', { text: day(r.latest.day) }))))
+      : el('p.small', { text: `No expert has called ${t} in the last four months.` }),
+    el('p.small', { style: { marginTop: '10px' }, text: 'Each expert’s calls on this stock in the last four months, best record first. Stars are their record on every stock.' }));
+}
+// The experts' calls on this stock month by month: is the mood turning?
+function moodByMonth(rows) {
+  if (!rows) return el('.card', {}, el('h2', { text: 'Expert mood by month' }), el('p.small', { text: 'No calls in the last four months.' }));
+  const top = Math.max(1, ...rows.map(r => r.bullish + r.bearish + r.other));
+  const name = m => new Date(m + '-15T12:00:00').toLocaleDateString(undefined, { month: 'short' });
+  return el('.card.mood', {}, el('h2', { text: 'Expert mood by month' }),
+    el('.mbars', {}, rows.map(r => el('.mbar', {}, el('.stack-v', { style: { height: Math.round(100 * (r.bullish + r.bearish + r.other) / top) + '%' } },
+      el('i', { style: { flex: r.bullish, background: 'var(--green)' } }), el('i', { style: { flex: r.other, background: 'var(--grey)' } }), el('i', { style: { flex: r.bearish, background: 'var(--red)' } })),
+      el('b', { text: name(r.m) }), el('span.small', { text: `${r.bullish}↑ ${r.bearish}↓` })))),
+    el('p.small', { style: { marginTop: '10px' }, text: 'Bullish (green), bearish (red) and neutral (grey) calls on it in the videos, each month.' }));
 }
 
 // ---------------------------------------------------------------- which page
@@ -340,22 +395,23 @@ export function render() {
   if (data.user && data.denied) { notInvited(); return; }
   if (!data.user && !data.example) { landing(); return; }
   if (!data.profile) { app.replaceChildren(el('.center', {}, skeleton(40))); return; }
-  if (data.user && !data.profile.onboarded && !data.profile.stocks.length) { app.replaceChildren(el('div')); welcome(app.firstChild, () => { go('#/'); render(); }); document.title = 'Welcome · Market Digest'; return; }
+  if (data.user && !data.profile.onboarded && !data.profile.stocks.length) { app.replaceChildren(el('div')); welcome(app.firstChild, () => { go('#/'); render(); }); document.title = 'Welcome · Econova'; return; }
   const [name, ...rest] = location.hash.replace(/^#\/?/, '').split('/'), arg = decodeURIComponent(rest.join('/'));
   const page = el('.page');
   const active = name === 's' ? '' : name === 'a' ? 'analysts' : name;
   shell(active, page);
   window.scrollTo(0, 0);
-  const titles = { '': 'My stocks', ideas: 'Ideas', analysts: 'Analysts', calendar: 'Calendar', account: 'Account', help: 'How it works', status: 'Service status' };
-  document.title = `${titles[name] || arg || 'Market Digest'} · Market Digest`;
+  const titles = { '': 'My stocks', ideas: 'Ideas', analysts: 'Experts', record: 'Track record', calendar: 'Calendar', account: 'Account', help: 'How it works', status: 'Service status' };
+  document.title = `${titles[name] || arg || 'Econova'} · Econova`;
   const run = fn => Promise.resolve(fn()).catch(e => { console.error(e); page.append(el('.card.empty', {}, el('h3', { text: 'This page could not load' }), friendly(e), el('div', {}, el('button.btn', { onclick: render }, 'Try again')))); });
   if (name === 's') run(() => stock(page, arg));
   else if (name === 'account') run(() => account(page, render));
   else if (name === 'help' && data.example) run(() => help(page));
-  else if (data.example && name) gate(page, { ideas: 'ideas beyond this list', analysts: 'the analysts and their records', a: 'this analyst', calendar: 'the calendar' }[name] || 'this page');
+  else if (data.example && name) gate(page, { ideas: 'ideas beyond this list', analysts: 'the experts and their records', a: 'this analyst', record: 'Econova’s track record', calendar: 'the calendar' }[name] || 'this page');
   else if (name === 'ideas') run(() => ideas(page, render));
   else if (name === 'analysts') run(() => analysts(page));
   else if (name === 'a') run(() => analyst(page, arg));
+  else if (name === 'record') run(() => record(page));
   else if (name === 'calendar') run(() => calendar(page));
   else if (name === 'status') run(() => status(page));
   else if (name === 'help') run(() => help(page));

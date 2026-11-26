@@ -1,10 +1,16 @@
-# Market Digest
+# Econova
 
-> **Two versions live in this repository.**
-> - **The cloud version** (`cloud/`): one hosted website for every customer. Sign in with Google, pick your stocks,
->   done. This is the product going forward. Start at **[cloud/README.md](cloud/README.md)**; to put it online,
->   **[docs/DEPLOY.md](docs/DEPLOY.md)**.
-> - **The desktop version** (`app/`, described below): runs on one person's own computer with their own keys.
+**Finance TV is full of stock calls. Econova keeps score.** It watches the finance shows on TV and YouTube every day,
+checks every stock call against the market, and tells members where the experts with real track records stand on
+the stocks they own: Bullish, Split or Bearish, with the calls, the reasons and each expert's record behind it.
+Econova grades its own signal too, misses included.
+
+- **What it is, for whom, and why it is different:** [docs/PRODUCT.md](docs/PRODUCT.md)
+- **The web app** (`cloud/`): live at https://econova-digest.web.app/, invitation-only during the private beta.
+  Start at [cloud/README.md](cloud/README.md); to put it online, [docs/DEPLOY.md](docs/DEPLOY.md).
+
+> **The desktop version** (`app/`, described below, under its old name Market Digest) is being retired. The web app
+> still uses some of its modules (`app/insights.py`, `app/prices.py`, `app/tipranks.py`, `app/digest.py`).
 
 
 **Should I invest? A Yes / No signal for each of your own stocks, every morning, from what the analysts are saying.** Market Digest reads the finance

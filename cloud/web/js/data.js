@@ -16,7 +16,7 @@ const cache = { cards: new Map(), market: new Map(), charts: new Map() };
 
 export const data = {
   user: null,        // the Firebase user, or null
-  profile: null,     // { email, name, photo, stocks: [{t, shares, cost}], prefs, onboarded }
+  profile: null,     // { email, name, photo, stocks: [{t, shares, cost}], follows: [analyst names], prefs, onboarded }
   example: false,    // true while looking at the public example without signing in
   problem: null,     // why the service could not be reached, if it could not
   denied: false,     // signed in, but not on the private beta's members list
@@ -37,7 +37,7 @@ export const data = {
         window.__mdSignInAs = (email, name) => signInWithCredential(auth, GoogleAuthProvider.credential(JSON.stringify({ sub: 'u-' + email, email, email_verified: true, name })));
       }
     } catch (e) {
-      this.problem = 'Market Digest could not start. Check your connection and reload the page.';
+      this.problem = 'Econova could not start. Check your connection and reload the page.';
       onChange(); return;
     }
     onAuthStateChanged(auth, async user => {
@@ -80,10 +80,10 @@ export const data = {
 
   async loadProfile() {
     const ref = doc(db, 'users', this.user.uid), snap = await getDoc(ref);
-    if (snap.exists()) { this.profile = { stocks: [], prefs: {}, ...snap.data() }; return; }
+    if (snap.exists()) { this.profile = { stocks: [], follows: [], prefs: {}, ...snap.data() }; return; }
     const kept = readLocal();   // stocks picked in the example before signing in come along
     this.profile = { email: this.user.email, name: this.user.displayName || '', photo: this.user.photoURL || '',
-      stocks: kept, prefs: { daily: 'every', weekly: true }, onboarded: kept.length > 0, created: new Date().toISOString() };
+      stocks: kept, follows: [], prefs: { daily: 'every', weekly: true }, onboarded: kept.length > 0, created: new Date().toISOString() };
     await setDoc(ref, this.profile);
     localStorage.removeItem('md.example');
   },
@@ -94,12 +94,24 @@ export const data = {
     if (this.example) { localStorage.setItem('md.example', JSON.stringify(this.profile.stocks)); return; }
     const p = this.profile;
     const clean = { email: this.user.email, name: String(p.name || '').slice(0, 80), photo: String(p.photo || '').slice(0, 600),
-      stocks: (p.stocks || []).slice(0, 60).map(tidy), prefs: { daily: p.prefs.daily || 'every', weekly: p.prefs.weekly !== false },
+      stocks: (p.stocks || []).slice(0, 60).map(tidy), follows: [...new Set((p.follows || []).filter(f => typeof f === 'string' && f))].slice(0, 50).map(f => f.slice(0, 80)), prefs: { daily: p.prefs.daily || 'every', weekly: p.prefs.weekly !== false },
       onboarded: !!p.onboarded, created: p.created || new Date().toISOString(), updated: new Date().toISOString() };
     await setDoc(doc(db, 'users', this.user.uid), clean);
     // ask the engine to start covering any stock it does not know yet
     const got = await this.cards(clean.stocks.map(s => s.t)).catch(() => ({}));
     for (const t of Object.keys(got).filter(t => !got[t]).slice(0, 20)) this.request(t);
+  },
+
+  // Follow an analyst (or stop): their new calls show on Home and in the emails.
+  follows(name) { return !!(this.profile && (this.profile.follows || []).includes(name)); },
+  async follow(name, on) {
+    const now = (this.profile.follows || []).filter(f => f !== name);
+    await this.save({ follows: on ? [...now, name].slice(-50) : now });
+  },
+  // A note from the feedback box: the engine emails it to the team.
+  async feedback(text, page) {
+    const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9]/g, '').slice(0, 32);
+    await setDoc(doc(db, 'feedback', id), { by: this.user.uid, email: this.user.email, text: String(text).slice(0, 2000), page: String(page || '').slice(0, 200), at: new Date().toISOString() });
   },
 
   _example: null,
@@ -184,7 +196,7 @@ function friendly(e) {
   if (/popup-blocked/.test(code)) return 'Your browser blocked the sign-in window. Allow pop-ups for this site and try again.';
   if (/network/.test(code)) return 'No connection. Check the internet and try again.';
   if (/permission-denied/.test(code)) return 'That is not allowed for this account.';
-  if (/resource-exhausted/.test(code)) return 'Market Digest is very busy right now. Please try again in a few minutes.';
+  if (/resource-exhausted/.test(code)) return 'Econova is very busy right now. Please try again in a few minutes.';
   return 'Something went wrong. Please try again.';
 }
 export { friendly };
@@ -210,19 +222,19 @@ export function portfolio(profile, cards) {
 
 // The few things worth a user's attention today, most pressing first. Each is one short line about one stock.
 export function forYou(rows) {
-  const W = { yes: 'YES', no: 'NO', wait: 'WAIT', none: '—' }, out = [];
+  const W = { yes: 'Bullish', no: 'Bearish', wait: 'Split', none: 'no view' }, out = [];
   for (const r of rows) {
     const add = (pri, tone, icon, text) => out.push({ pri, tone, icon, text, ticker: r.ticker });
     if (r.changed && Date.now() - new Date(r.changed.on + 'T00:00:00Z') < 4 * 86400000) add(100, r.changed.to === 'yes' ? 'good' : r.changed.to === 'no' ? 'bad' : 'warn', 'swap', `turned ${W[r.changed.to]} (was ${W[r.changed.from]})`);
-    if (r.owned && r.signal === 'no') add(90, 'bad', 'alert', 'You own it and analysts say No');
+    if (r.owned && r.signal === 'no') add(90, 'bad', 'alert', 'You own it and the experts are bearish on it');
     if (r.days_to_earnings != null && r.days_to_earnings <= 7) {
       const d = Math.round(r.days_to_earnings);
       add(80 - d, 'warn', 'clock', `reports earnings ${d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}: expect a bigger move`);
     }
     if (r.weight != null && r.weight >= 35) add(70, 'warn', 'pie', `is ${Math.round(r.weight)}% of your portfolio: a lot on one stock`);
-    if (r.signal === 'yes' && (r.confidence_pct || 0) >= 75 && !r.owned) add(55 + r.confidence_pct / 10, 'good', 'up', `Strong Yes (${r.confidence_pct}%) and you do not own it`);
+    if (r.signal === 'yes' && (r.confidence_pct || 0) >= 75 && !r.owned) add(55 + r.confidence_pct / 10, 'good', 'up', `Experts strongly bullish (${r.confidence_pct}%) and you do not own it`);
     // big moves (4% and more) have their own banner at the top of Home
-    if ((r.factors || []).some(f => /disagree/i.test(f.text))) add(40, 'info', 'info', 'Video analysts and Wall Street disagree');
+    if ((r.factors || []).some(f => /disagree/i.test(f.text))) add(40, 'info', 'info', 'The experts on air and Wall Street disagree');
   }
   out.sort((a, b) => b.pri - a.pri);
   const kinds = {};   // at most two of a kind, so three earnings dates do not crowd out everything else

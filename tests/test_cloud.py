@@ -12,7 +12,7 @@ import digest
 import prices
 import tipranks
 
-from cloud.engine import cards, mail, run as engine, street, videos
+from cloud.engine import cards, mail, record, run as engine, street, videos
 from cloud.engine.store import MemoryStore, check, doc_id
 from cloud.tools import demo_data, make_symbols
 
@@ -200,7 +200,7 @@ class Engine(Globals):
     def test_a_run_writes_cards_charts_and_the_market_pages(self):
         store, status = self.fill()
         self.assertTrue(status["ok"], status["errors"])
-        self.assertEqual(sorted(store.all("market")), ["analysts", "calendar", "meta", "overview", "status", "videos"])
+        self.assertEqual(sorted(store.all("market")), ["analysts", "calendar", "meta", "overview", "record", "status", "videos"])
         card = store.get("stocks", "NVDA")
         for key in ("ticker", "name", "price", "signal", "confidence_pct", "factors", "calls", "calls_list", "bulls", "bears", "spark", "street",
                     "history", "low_52w", "high_52w", "days_to_earnings", "sector", "h", "updated"):
@@ -373,7 +373,7 @@ class Emails(Globals):
         view = mail.user_view(user, all_cards)
         self.assertEqual([r["ticker"] for r in view["rows"]], [no, "KO"])
         texts = [n["text"] for n in view["notes"]]
-        self.assertIn(f"You own {no}: analysts say No", texts)
+        self.assertIn(f"You own {no} and the experts are bearish on it", texts)
         self.assertIn(f"{no} is 100% of your portfolio", texts)
 
     def test_who_gets_which_email(self):
@@ -396,9 +396,9 @@ class Emails(Globals):
         all_cards["KO"]["changed"] = {"from": "wait", "to": "yes", "on": "2026-11-16"}
         user = {"email": "a@b.c", "stocks": [{"t": "KO"}]}
         changed = lambda today, days: [n["text"] for n in mail.user_view(user, all_cards, today, days)["notes"] if n.get("changed")]
-        self.assertEqual(changed(date(2026, 11, 17), 1), ["KO turned YES (was WAIT)"])   # the morning after: reported, and first
+        self.assertEqual(changed(date(2026, 11, 17), 1), ["KO turned Bullish (was Split)"])   # the morning after: reported, and first
         self.assertEqual(changed(date(2026, 11, 18), 1), [])                              # not again
-        self.assertEqual(changed(date(2026, 11, 21), 7), ["KO turned YES (was WAIT)"])   # the weekly summary still has it
+        self.assertEqual(changed(date(2026, 11, 21), 7), ["KO turned Bullish (was Split)"])   # the weekly summary still has it
 
     def test_an_account_with_broken_data_is_skipped_not_fatal(self):
         _, all_cards = self.cards()
@@ -411,7 +411,7 @@ class Emails(Globals):
         _, all_cards = self.cards()
         user = {"email": "a@b.c", "name": "Uma <b>Mahesh</b>", "stocks": [{"t": "NVDA", "shares": 123457, "cost": 98765}, {"t": "AAPL"}]}
         subject, page, text = mail.compose(user, mail.user_view(user, all_cards), "daily", self.TODAY, "https://md.example/")
-        self.assertIn("Market Digest", subject)
+        self.assertIn("Econova", subject)
         for needle in ("NVDA", "AAPL", "https://md.example/#/account", "not personal financial advice"):
             self.assertIn(needle, page)
             self.assertIn(needle, text)
@@ -550,6 +550,152 @@ class Sources(unittest.TestCase):
         tickers = s["base_tickers"] + [t for p in s["packs"] for t in p["tickers"]]
         self.assertTrue(all(prices.clean(t) == t for t in tickers))
         self.assertTrue(all(t in s["base_tickers"] for p in s["packs"] for t in p["tickers"]), "every pack stock should be covered from day one")
+
+
+class TrackRecord(unittest.TestCase):
+    """Econova grading itself: the replayed signal, the live one, and the shows."""
+    END = date(2026, 11, 13)
+
+    def setUp(self):
+        self.days = [d.isoformat() for d in demo_data.trading_days(self.END, 80)]
+        grow = lambda rate: [[d, round(100 * (1 + rate) ** i, 4)] for i, d in enumerate(self.days)]
+        self.cache = {"^GSPC": {"closes": grow(0)}, "UP": {"closes": grow(0.004)}, "DOWN": {"closes": grow(-0.004)}, "FLAT": {"closes": grow(0)}}
+
+    def call(self, t, view, analyst, day, channel="Show A"):
+        return {"ticker": t, "view": view, "analyst": analyst, "day": day, "channel": channel, "video_id": analyst + day, "reason": "", "link": ""}
+
+    def test_bullish_picks_that_rose_and_bearish_picks_that_fell_are_right(self):
+        d = self.days
+        calls = [self.call("UP", "bullish", a, d[i]) for a in ("Ann", "Bo") for i in range(0, 60, 4)]
+        calls += [self.call("DOWN", "bearish", a, d[i]) for a in ("Ann", "Bo") for i in range(0, 60, 4)]
+        r = record.replay(calls, self.cache)
+        self.assertGreaterEqual(len(r["checks"]), 5)
+        self.assertEqual((r["yes"]["hit_pct"], r["no"]["hit_pct"]), (100, 100))
+        self.assertGreater(r["yes"]["excess"], 5)
+        self.assertLess(r["no"]["excess"], -5)
+        self.assertTrue(all(c["e"] <= d[-1] for c in r["checks"]), "every check is judged on prices that exist")
+        self.assertEqual(r["checks"][-1]["e"], d[-1], "the newest month is always in")
+
+    def test_a_check_uses_only_the_calls_made_before_it(self):
+        d = self.days
+        late = [self.call("UP", "bullish", a, d[60]) for a in ("Ann", "Bo")]   # said after every check that can be judged
+        early = [self.call("FLAT", "bullish", "Cy", d[0]), self.call("FLAT", "bearish", "Di", d[0])]
+        r = record.replay(early + late, self.cache)
+        self.assertNotIn("UP", {t for c in r["checks"] for t in c["picks"]})
+
+    def test_one_or_no_call_is_not_a_signal_and_a_neutral_call_withdraws_a_vote(self):
+        d0 = date.fromisoformat(self.days[10])
+        self.assertIsNone(record.signal_of([], d0))
+        self.assertEqual(record.signal_of([self.call("X", "bullish", "Ann", self.days[1]), self.call("X", "bullish", "Bo", self.days[2])], d0), "yes")
+        turned = [self.call("X", "bullish", "Ann", self.days[1]), self.call("X", "neutral", "Ann", self.days[5]), self.call("X", "bearish", "Bo", self.days[2])]
+        self.assertEqual(record.signal_of(turned, d0), "no")
+
+    def test_the_live_record_judges_each_signal_until_it_changed(self):
+        d = self.days
+        card = {"history": [{"d": d[40], "s": "yes", "c": 70}, {"d": d[50], "s": "wait", "c": 30}, {"d": d[60], "s": "yes", "c": 60}, {"d": d[78], "s": "no", "c": 40}]}
+        lv = record.live({"UP": card}, self.cache, self.END)
+        by = {r["from"]: r for r in lv["rows"]}
+        self.assertTrue(by[d[40]]["right"] and by[d[40]]["to"] == d[50])
+        self.assertTrue(by[d[60]]["right"])
+        self.assertNotIn("excess", by[d[78]], "a day old: too new to judge")
+        self.assertTrue(by[d[78]]["open"])
+        self.assertEqual((lv["yes"]["n"], lv["yes"]["right"], lv["waiting"], lv["since"]), (2, 2, 1, d[40]))
+
+    def test_shows_with_too_few_scored_calls_come_last(self):
+        d = self.days
+        calls = [self.call("UP", "bullish", "Ann", d[i], "Big Show") for i in range(0, 40, 4)] + [self.call("UP", "bullish", "Bo", d[0], "Tiny Show")]
+        rows = record.shows(calls, self.cache)
+        self.assertEqual([r["channel"] for r in rows], ["Big Show", "Tiny Show"])
+        self.assertEqual((rows[0]["hit_pct"], rows[0]["analysts"]), (100, 1))
+
+    def test_the_headline_waits_for_enough_picks(self):
+        self.assertIsNone(record.headline({"replay": {"yes": {"n": 4, "excess": 3.0}}}))
+        h = record.headline({"replay": {"yes": {"n": 20, "hit_pct": 60, "excess": 1.5}, "no": {"n": 5, "excess": -1.0}, "from": "a", "to": "b"}})
+        self.assertEqual((h["yes_hit_pct"], h["n"]), (60, 25))
+
+
+class WhoWasRight(unittest.TestCase):
+    """Per stock and per analyst: who has been right about it, the top-rated view, the mood by month, and actions."""
+    END, setUp, call = TrackRecord.END, TrackRecord.setUp, TrackRecord.call
+
+    def test_each_call_is_new_upgraded_downgraded_or_reiterated(self):
+        d = self.days
+        calls = [self.call("UP", "bearish", "Ann", d[1]), self.call("UP", "neutral", "Ann", d[2]), self.call("UP", "bullish", "Ann", d[3]),
+                 self.call("UP", "bullish", "Ann", d[4]), self.call("UP", "bearish", "Ann", d[5]), self.call("DOWN", "bullish", "Ann", d[5])]
+        acts = cards.actions(calls)
+        self.assertEqual([acts[cards._key(c)] for c in calls], ["new", "upgraded", "upgraded", "reiterated", "downgraded", "new"])
+
+    def test_who_has_been_right_about_a_stock_comes_first(self):
+        d = self.days
+        calls = [self.call("UP", "bullish", "Right", d[i]) for i in (0, 5, 10)] + [self.call("UP", "bearish", "Wrong", d[i]) for i in (0, 5, 10, 15)]
+        calls += [self.call("UP", "bullish", "Fresh", d[-1]), self.call("DOWN", "bullish", "Right", d[0])]
+        rows = cards.experts_on("UP", calls, self.cache, {})
+        self.assertEqual([r["analyst"] for r in rows], ["Right", "Wrong", "Fresh"])   # too recent to judge comes last
+        self.assertEqual((rows[0]["right"], rows[0]["scored"], rows[0]["calls"]), (3, 3, 3))   # calls on other stocks are not counted
+        self.assertEqual((rows[1]["hit_pct"], rows[2]["scored"]), (0, 0))
+
+    def test_the_top_rated_view_counts_only_well_rated_analysts_latest_calls(self):
+        d, today = self.days, date.fromisoformat(self.days[-1])
+        good = {"scored": 10, "hit_pct": 80, "edge": 8}
+        records = {"Star": good, "Star2": good, "Weak": {"scored": 10, "hit_pct": 20, "edge": -8}}
+        calls = [self.call("UP", "bearish", "Star", d[60]), self.call("UP", "bullish", "Star", d[70]), self.call("UP", "bullish", "Star2", d[65]),
+                 self.call("UP", "bearish", "Weak", d[70])]
+        v = cards.top_view("UP", calls, records, today)
+        self.assertEqual((v["bullish"], v["bearish"], v["analysts"]), (2, 0, ["Star", "Star2"]))
+        self.assertIsNone(cards.top_view("UP", calls[-1:], records, today))
+
+    def test_the_mood_by_month_covers_the_last_four_months(self):
+        today = date(2026, 11, 13)
+        calls = [self.call("UP", "bullish", "A", "2026-11-02"), self.call("UP", "bearish", "B", "2026-09-10"), self.call("UP", "neutral", "C", "2026-09-11"),
+                 self.call("UP", "bullish", "D", "2026-06-01"), self.call("DOWN", "bullish", "E", "2026-11-03")]
+        rows = cards.trend("UP", calls, today)
+        self.assertEqual([r["m"] for r in rows], ["2026-08", "2026-09", "2026-10", "2026-11"])
+        self.assertEqual([(r["bullish"], r["bearish"], r["other"]) for r in rows], [(0, 0, 0), (0, 1, 1), (0, 0, 0), (1, 0, 0)])
+        self.assertIsNone(cards.trend("FLAT", calls, today))
+
+    def test_an_analysts_coverage_newest_first_with_the_record_on_each(self):
+        d = self.days
+        calls = [self.call("UP", "bullish", "Ann", d[0]), self.call("UP", "bullish", "Ann", d[10]), self.call("DOWN", "bearish", "Ann", d[20]), self.call("UP", "bearish", "Bo", d[30])]
+        rows = cards.coverage("Ann", calls, self.cache)
+        self.assertEqual([(r["ticker"], r["calls"], r["hit_pct"]) for r in rows], [("DOWN", 1, 100), ("UP", 2, 100)])
+
+
+class FollowsAndFeedback(unittest.TestCase):
+    TODAY = date(2026, 11, 17)
+    EXPERTS = [{"analyst": "Dan Ives", "stars": 4.5, "recent": [{"day": "2026-11-16", "view": "bullish", "ticker": "TSLA"}, {"day": "2026-11-01", "view": "bullish", "ticker": "AAPL"}]},
+               {"analyst": "Tom Lee", "stars": None, "recent": [{"day": "2026-11-16", "view": "neutral", "ticker": "SPY"}]}]
+
+    def test_new_calls_from_followed_analysts_are_news(self):
+        user = {"email": "a@b.c", "follows": ["Dan Ives", "Tom Lee", 7], "stocks": [{"t": "KO"}]}
+        got = mail.followed_calls(user, self.EXPERTS, self.TODAY)
+        self.assertEqual([n["text"] for n in got], ["Dan Ives (4.5 stars) is bullish on TSLA"])   # an old call and a neutral one are not news
+        self.assertEqual(mail.followed_calls({"follows": "Dan Ives"}, self.EXPERTS, self.TODAY), [])
+        cards_ = {"KO": {"ticker": "KO", "name": "Coca-Cola", "price": 60, "currency": "USD", "signal": "wait", "confidence_pct": 30, "calls": {}}}
+        view = mail.user_view({**user, "prefs": {"daily": "changes"}}, cards_, self.TODAY, analysts=self.EXPERTS)
+        self.assertTrue(mail.wants({**user, "prefs": {"daily": "changes"}}, "daily", view, self.TODAY), "a followed analyst's call is reason enough")
+        subject, page, text = mail.compose(user, view, "daily", self.TODAY, "https://x.example/")
+        self.assertIn("Dan Ives (4.5 stars) is bullish on TSLA", page)
+
+    def test_feedback_is_emailed_to_the_team_then_removed(self):
+        store, sent = MemoryStore(), []
+        store.set("feedback", "abc12345", {"by": "u1", "email": "m@x.y", "text": "Love it <b>but</b>", "page": "#/", "at": "2026-11-17T10:00:00"})
+        settings = {"smtp_user": "team@x.y", "smtp_password": "pw", "site": "https://x.example/"}
+        self.assertEqual(mail.forward_feedback(store, {**settings, "smtp_password": ""}, log=lambda m: None, sender=lambda *a: sent.append(a)), 0)
+        self.assertEqual(len(store.all("feedback")), 1, "kept while email is not set up")
+        self.assertEqual(mail.forward_feedback(store, settings, log=lambda m: None, sender=lambda *a: sent.append(a)), 1)
+        to, subject, html_body = sent[0][1], sent[0][2], sent[0][3]
+        self.assertEqual((to, subject), ("team@x.y", "Econova feedback: 1 new note"))
+        self.assertIn("&lt;b&gt;but&lt;/b&gt;", html_body)
+        self.assertEqual(store.all("feedback"), {})
+
+    def test_feedback_that_fails_to_send_stays(self):
+        store = MemoryStore()
+        store.set("feedback", "abc12345", {"text": "hi"})
+        def broken(*a):
+            raise OSError("no network")
+        with self.assertRaises(OSError):
+            mail.forward_feedback(store, {"smtp_user": "t@x.y", "smtp_password": "pw"}, log=lambda m: None, sender=broken)
+        self.assertEqual(len(store.all("feedback")), 1)
 
 
 def digest_channel(url):
