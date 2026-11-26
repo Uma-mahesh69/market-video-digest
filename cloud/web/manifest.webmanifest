@@ -1,7 +1,7 @@
 {
- "name": "Market Digest",
- "short_name": "Market Digest",
- "description": "Yes, No or Wait on your stocks, from what analysts say.",
+ "name": "Econova",
+ "short_name": "Econova",
+ "description": "Who to listen to on your stocks: every expert call on finance TV and YouTube, scored.",
  "start_url": "/",
  "display": "standalone",
  "background_color": "#F3F5F9",

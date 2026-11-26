@@ -212,8 +212,12 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
             weekly_day = today.weekday() == sources.get("email", {}).get("weekly_weekday", 5)
             kinds = [force_mail] if force_mail else (["weekly"] if weekly_day else []) + ["daily"]
             for kind in kinds:
-                step("Email", lambda k=kind: mail.send_all(store, settings, users, new_cards, k, today, log, sender=mail_sender, session=session))
+                step("Email", lambda k=kind: mail.send_all(store, settings, users, new_cards, k, today, log, sender=mail_sender, session=session,
+                                                           analysts=docs["analysts"]["rows"]))
             state["mail_day"] = today.isoformat()
+
+    # members' notes from the feedback box, to the team
+    step("Feedback", lambda: mail.forward_feedback(store, settings, log, sender=mail_sender))
 
     state["last_run"] = now.isoformat(timespec="seconds")
     step("State", lambda: store.set("engine", "state", state))

@@ -43,15 +43,16 @@ export function ago(iso) {
   return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 }
 export const safeUrl = u => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : null);   // links from data: https only
-export const SIGNAL = { yes: 'YES', no: 'NO', wait: 'WAIT', none: '—' };
-export const SIGNAL_SAYS = { yes: 'Analysts clearly favour it', no: 'Analysts are clearly against it', wait: 'Analysts are split', none: 'No analyst views yet' };
+// The experts' view, in words that describe them rather than tell anyone what to do (see docs/PRODUCT.md).
+export const SIGNAL = { yes: 'Bullish', no: 'Bearish', wait: 'Split', none: '—' };
+export const SIGNAL_SAYS = { yes: 'Experts clearly favour it', no: 'Experts are clearly against it', wait: 'Experts are split', none: 'No expert views yet' };
 // The sentence under a signal, as strong as the confidence behind it: "clearly" only when it is.
 export function says(signal, conf) {
   if (signal !== 'yes' && signal !== 'no') return SIGNAL_SAYS[signal] || SIGNAL_SAYS.none;
   const yes = signal === 'yes';
   if (conf == null || conf >= 70) return SIGNAL_SAYS[signal];
-  if (conf >= 45) return yes ? 'Analysts lean in favour' : 'Analysts lean against it';
-  return yes ? 'A tentative Yes: the evidence is thin or mixed' : 'A tentative No: the evidence is thin or mixed';
+  if (conf >= 45) return yes ? 'Experts lean in favour' : 'Experts lean against it';
+  return yes ? 'Leaning bullish, on thin or mixed evidence' : 'Leaning bearish, on thin or mixed evidence';
 }
 export const COLOR = { yes: 'var(--green)', no: 'var(--red)', wait: 'var(--amber)', none: 'var(--grey)' };
 
@@ -83,6 +84,8 @@ const P = {
   edit: '<path d="M12 20h9M16.500 3.500a2.100 2.100 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   trash: '<path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
 };
 export function icon(name) {
   const s = svg('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });

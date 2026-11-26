@@ -7,11 +7,12 @@ import json
 import os
 import smtplib
 import ssl
-from datetime import date
+from datetime import date, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr
 
-SIGNAL = {"yes": ("YES", "#1A7F37"), "no": ("NO", "#B42318"), "wait": ("WAIT", "#8A5A00"), "none": ("—", "#5C6878")}
+# The experts' view, in words that describe them rather than tell anyone what to do (see docs/PRODUCT.md)
+SIGNAL = {"yes": ("Bullish", "#1A7F37"), "no": ("Bearish", "#B42318"), "wait": ("Split", "#8A5A00"), "none": ("—", "#5C6878")}
 e = lambda x: html.escape(str(x if x is not None else ""))
 
 
@@ -26,9 +27,10 @@ def money(x, cur="USD"):
     return f"{sym}{x:,.0f}" if abs(x) >= 1000 else f"{sym}{x:,.2f}"
 
 
-def user_view(user, cards, today=None, days=1):
+def user_view(user, cards, today=None, days=1, analysts=None):
     """The user's stocks with their cards, what they hold, and the short notes worth their attention.
-    A signal change is news for `days` days (1 for the daily email, 7 for the weekly one)."""
+    A signal change is news for `days` days (1 for the daily email, 7 for the weekly one). `analysts` (the analysts
+    page's rows) gives the new calls of the analysts the user follows."""
     rows, total = [], 0.0
     stocks = user.get("stocks") if isinstance(user.get("stocks"), list) else []
     for s in stocks[:80]:
@@ -50,17 +52,37 @@ def user_view(user, cards, today=None, days=1):
                           "text": f"{r['ticker']} turned {SIGNAL[ch['to']][0]} (was {SIGNAL[ch['from']][0]})"})
         move = r.get("change_pct_day")
         if days == 1 and isinstance(move, (int, float)) and abs(move) >= 4:   # the day's big moves, as on Home
-            notes.append({"tone": "good" if move > 0 else "bad", "text": f"{r['ticker']} {'rose' if move > 0 else 'fell'} {abs(move):.1f}% (analysts say {SIGNAL[r['signal']][0]})"})
+            view = "no expert view yet" if r["signal"] == "none" else f"the experts are {SIGNAL[r['signal']][0].lower()}"
+            notes.append({"tone": "good" if move > 0 else "bad", "text": f"{r['ticker']} {'rose' if move > 0 else 'fell'} {abs(move):.1f}% ({view})"})
         if r["shares"] and r["signal"] == "no":
-            notes.append({"tone": "bad", "text": f"You own {r['ticker']}: analysts say No"})
+            notes.append({"tone": "bad", "text": f"You own {r['ticker']} and the experts are bearish on it"})
         if r.get("days_to_earnings") is not None and r["days_to_earnings"] <= 5:
             d = int(r["days_to_earnings"])
             notes.append({"tone": "warn", "text": f"{r['ticker']} reports earnings {'today' if d == 0 else 'tomorrow' if d == 1 else f'in {d} days'}"})
         if r["weight"] and r["weight"] >= 35:
             notes.append({"tone": "warn", "text": f"{r['ticker']} is {r['weight']}% of your portfolio"})
-    order = {"bad": 1, "good": 1, "warn": 2}
+    notes += followed_calls(user, analysts, today, days)
+    order = {"bad": 1, "good": 1, "warn": 2, "info": 3}
     notes.sort(key=lambda n: (not n.get("changed"), order.get(n["tone"], 3)))   # what changed first, then what needs care
     return {"rows": rows, "total": total or None, "notes": notes}
+
+
+def followed_calls(user, analysts, today, days=1, n=4):
+    """The newest bullish or bearish calls of the analysts this user follows: "Dan Ives (4.5 stars) is bullish on NVDA"."""
+    follows = [f for f in (user.get("follows") or []) if isinstance(f, str)][:50] if isinstance(user.get("follows"), list) else []
+    if not follows or not analysts or not today:
+        return []
+    since = (today - timedelta(days=days + 1)).isoformat()   # the daily email goes out the morning after
+    by = {a.get("analyst"): a for a in analysts}
+    out = []
+    for name in follows:
+        a = by.get(name) or {}
+        for c in a.get("recent") or []:
+            if c.get("day", "") >= since and c.get("view") in ("bullish", "bearish"):
+                rated = f" ({a['stars']:g} stars)" if a.get("stars") is not None else ""
+                out.append({"tone": "info", "follow": True, "day": c["day"], "text": f"{name}{rated} is {c['view']} on {c['ticker']}"})
+    out.sort(key=lambda x: x["day"], reverse=True)
+    return out[:n]
 
 
 def wants(user, kind, view, session):
@@ -73,8 +95,8 @@ def wants(user, kind, view, session):
     choice = prefs.get("daily", "every")
     if choice == "off":
         return False
-    if choice == "changes":
-        return any(n.get("changed") for n in view["notes"])
+    if choice == "changes":   # a signal that changed, or a call from an analyst they follow
+        return any(n.get("changed") or n.get("follow") for n in view["notes"])
     return session.weekday() < 5   # nothing new to say after a day the market was closed
 
 
@@ -83,9 +105,9 @@ def compose(user, view, kind, today, site):
     rows, notes = view["rows"], view["notes"]
     changed = [n for n in notes if n.get("changed")]
     counts = {k: sum(r["signal"] == k for r in rows) for k in ("yes", "wait", "no")}
-    lead = changed[0]["text"] if changed else f"{counts['yes']} Yes, {counts['wait']} Wait, {counts['no']} No on your stocks"
-    subject = (f"Your week: {lead}" if kind == "weekly" else lead + (f" and {len(notes) - 1} more" if changed and len(notes) > 1 else "")) + " · Market Digest"
-    tone = {"good": ("#E6F4EA", "#1A7F37"), "bad": ("#FDECEA", "#B42318"), "warn": ("#FFF4D6", "#8A5A00")}
+    lead = changed[0]["text"] if changed else f"{counts['yes']} bullish, {counts['wait']} split, {counts['no']} bearish on your stocks"
+    subject = (f"Your week: {lead}" if kind == "weekly" else lead + (f" and {len(notes) - 1} more" if changed and len(notes) > 1 else "")) + " · Econova"
+    tone = {"good": ("#E6F4EA", "#1A7F37"), "bad": ("#FDECEA", "#B42318"), "warn": ("#FFF4D6", "#8A5A00"), "info": ("#EEF1FD", "#2F4FD8")}
     chips = "".join(f'<div style="margin:0 0 6px;padding:8px 12px;border-radius:8px;background:{tone[n["tone"]][0]};color:{tone[n["tone"]][1]};font-size:14px;font-weight:600">{e(n["text"])}</div>'
                     for n in notes[:6])
     td = 'style="padding:9px 8px;border-bottom:1px solid #E5E9F0;font-size:14px"'
@@ -95,38 +117,38 @@ def compose(user, view, kind, today, site):
         move = r.get("change_pct_week") if kind == "weekly" else r.get("change_pct_day")
         link = f'{e(site)}#/s/{e(r["ticker"])}'
         body += (f'<tr><td {td}><a href="{link}" style="color:#16202E;text-decoration:none"><b>{e(r["ticker"])}</b></a><div style="color:#5C6878;font-size:12px">{e((r.get("name") or "")[:28])}</div></td>'
-                 f'<td {td} align="center"><span style="display:inline-block;min-width:44px;padding:3px 8px;border-radius:6px;background:{color};color:#fff;font-weight:700;font-size:12px">{word}</span></td>'
+                 f'<td {td} align="center"><span style="display:inline-block;min-width:58px;padding:3px 8px;border-radius:6px;background:{color};color:#fff;font-weight:700;font-size:12px">{word}</span></td>'
                  f'<td {td} align="right">{str(r["confidence_pct"]) + "%" if r.get("confidence_pct") is not None else "—"}</td>'
                  f'<td {td} align="right">{e(money(r.get("price"), r.get("currency")))}</td>'
                  f'<td align="right" style="padding:9px 8px;border-bottom:1px solid #E5E9F0;font-size:14px;color:{"#1A7F37" if (move or 0) > 0 else "#B42318" if (move or 0) < 0 else "#5C6878"}">{pct(move)}</td></tr>')
     th = 'style="padding:6px 8px;font-size:11px;color:#5C6878;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #E5E9F0"'
     name = (user.get("name") or "").split(" ")[0]
-    preview = " · ".join(n["text"] for n in notes[:3]) or f"{counts['yes']} Yes, {counts['wait']} Wait, {counts['no']} No"
+    preview = " · ".join(n["text"] for n in notes[:3]) or f"{counts['yes']} bullish, {counts['wait']} split, {counts['no']} bearish"
     page = f"""<div style="display:none;max-height:0;overflow:hidden;opacity:0">{e(preview)}</div>
 <div style="background:#F4F6F9;padding:24px 12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#16202E">
 <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #DCE2EA;border-radius:12px;padding:22px">
-<div style="font-weight:700;font-size:16px;margin-bottom:14px"><span style="display:inline-block;width:20px;height:20px;border-radius:6px;background:#2F4FD8;vertical-align:-4px;margin-right:8px"></span>Market Digest</div>
+<div style="font-weight:700;font-size:16px;margin-bottom:14px"><span style="display:inline-block;width:20px;height:20px;border-radius:6px;background:#2F4FD8;vertical-align:-4px;margin-right:8px"></span>Econova</div>
 <div style="font-size:20px;font-weight:700;margin-bottom:4px">{e('Your week in stocks' if kind == 'weekly' else 'Your stocks today')}{', ' + e(name) if name else ''}</div>
-<div style="color:#5C6878;font-size:13px;margin-bottom:14px">{today:%A %d %B %Y} · {counts['yes']} Yes · {counts['wait']} Wait · {counts['no']} No</div>
+<div style="color:#5C6878;font-size:13px;margin-bottom:14px">{today:%A %d %B %Y} · {counts['yes']} bullish · {counts['wait']} split · {counts['no']} bearish</div>
 {chips}
 <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:8px">
-<tr><th {th} align="left">Stock</th><th {th}>Invest?</th><th {th} align="right">Confidence</th><th {th} align="right">Price</th><th {th} align="right">{'Week' if kind == 'weekly' else 'Today'}</th></tr>
+<tr><th {th} align="left">Stock</th><th {th}>Experts</th><th {th} align="right">Confidence</th><th {th} align="right">Price</th><th {th} align="right">{'Week' if kind == 'weekly' else 'Today'}</th></tr>
 {body}</table>
 <div style="margin:18px 0 6px"><a href="{e(site)}" style="display:inline-block;background:#2F4FD8;color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px">Open my dashboard</a></div>
-<div style="color:#5C6878;font-size:12px;margin-top:16px;line-height:1.5">The signals sum up what analysts said; they are not personal financial advice and can be wrong.<br>
-You get this because you signed up to Market Digest. <a href="{e(site)}#/account" style="color:#2F4FD8">Change or stop these emails</a>.</div>
+<div style="color:#5C6878;font-size:12px;margin-top:16px;line-height:1.5">Econova sums up what market experts said and how they have done. It is not personal financial advice, and experts are often wrong.<br>
+You get this because you are an Econova member. <a href="{e(site)}#/account" style="color:#2F4FD8">Change or stop these emails</a>.</div>
 </div></div>"""
     text = "\n".join([lead, ""] + [n["text"] for n in notes[:6]] + [""] +
                      [f"{r['ticker']:<7} {SIGNAL[r['signal']][0]:<5} {str(r.get('confidence_pct') or '—'):>3}%  {money(r.get('price'), r.get('currency'))}" for r in rows[:30]] +
                      ["", f"Open your dashboard: {site}", f"Change or stop these emails: {site}#/account",
-                      "The signals sum up what analysts said; they are not personal financial advice."])
+                      "Econova sums up what market experts said; it is not personal financial advice."])
     return subject, page, text
 
 
 def send(settings, to, subject, html_body, text_body):
     msg = EmailMessage()
     msg["Subject"], msg["To"] = subject, to
-    msg["From"] = formataddr((settings.get("mail_from_name") or "Market Digest", settings["smtp_user"]))
+    msg["From"] = formataddr((settings.get("mail_from_name") or "Econova", settings["smtp_user"]))
     msg["List-Unsubscribe"] = f"<{settings['site']}#/account>"
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
@@ -136,7 +158,7 @@ def send(settings, to, subject, html_body, text_body):
         smtp.send_message(msg)
 
 
-def send_all(store, settings, users, cards, kind, today, log=print, sender=send, session=None):
+def send_all(store, settings, users, cards, kind, today, log=print, sender=send, session=None, analysts=None):
     """Send this kind of email to every user who wants it and has not had one today. Returns how many went out.
     `session` is the market day it is about (yesterday, for an email sent in the small hours)."""
     if not settings.get("smtp_user") or not settings.get("smtp_password"):
@@ -146,7 +168,7 @@ def send_all(store, settings, users, cards, kind, today, log=print, sender=send,
     sent = failed = 0
     for uid, user in users.items():
         try:
-            view = user_view(user, cards, today, days=7 if kind == "weekly" else 1)
+            view = user_view(user, cards, today, days=7 if kind == "weekly" else 1, analysts=analysts)
             if not wants(user, kind, view, session):
                 continue
             record = store.get("mail", uid) or {}
@@ -165,6 +187,29 @@ def send_all(store, settings, users, cards, kind, today, log=print, sender=send,
     return sent
 
 
+def forward_feedback(store, settings, log=print, sender=send):
+    """Members' notes from the feedback box, in one email to the team's mailbox (FEEDBACK_TO, else the sending address).
+    Each note is removed once the email has gone, so nothing piles up and nothing is lost. Returns how many went."""
+    notes = store.all("feedback")
+    if not notes:
+        return 0
+    if not settings.get("smtp_user") or not settings.get("smtp_password"):
+        log(f"Feedback: {len(notes)} waiting; email is not set up, so they stay in Firestore")
+        return 0
+    rows = sorted(notes.items(), key=lambda kv: str(kv[1].get("at") or ""))[:100]
+    text = "\n\n".join(f"{n.get('email') or 'a member'} · {str(n.get('at') or '')[:16]} · {n.get('page') or ''}\n{n.get('text') or ''}" for _, n in rows)
+    page = "".join(f'<div style="margin:0 0 14px;padding:12px 14px;border:1px solid #DCE2EA;border-radius:8px"><div style="color:#5C6878;font-size:12px;margin-bottom:6px">'
+                   f'{e(n.get("email") or "a member")} · {e(str(n.get("at") or "")[:16])} · {e(n.get("page") or "")}</div>'
+                   f'<div style="white-space:pre-wrap;font-size:14px">{e(n.get("text") or "")}</div></div>' for _, n in rows)
+    to = settings.get("feedback_to") or settings["smtp_user"]
+    sender(settings, to, f"Econova feedback: {len(rows)} new note{'s' if len(rows) != 1 else ''}",
+           f'<div style="font-family:system-ui,sans-serif;color:#16202E;max-width:600px">{page}</div>', text)
+    for key, _ in rows:
+        store.delete("feedback", key)
+    log(f"Feedback: {len(rows)} forwarded")
+    return len(rows)
+
+
 def site_from_env():
     """Where the web app lives: SITE_URL when set (a custom domain), else the Firebase project's own address."""
     site = os.environ.get("SITE_URL", "").strip()
@@ -179,4 +224,5 @@ def site_from_env():
 def settings_from_env():
     env = os.environ.get
     return {"smtp_user": env("SMTP_USER", "").strip(), "smtp_password": env("SMTP_PASSWORD", "").replace(" ", ""), "smtp_host": env("SMTP_HOST", ""),
-            "smtp_port": env("SMTP_PORT", ""), "mail_from_name": env("MAIL_FROM_NAME", ""), "site": site_from_env()}
+            "smtp_port": env("SMTP_PORT", ""), "mail_from_name": env("MAIL_FROM_NAME", ""), "feedback_to": env("FEEDBACK_TO", "").strip(),
+            "site": site_from_env()}

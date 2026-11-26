@@ -1,5 +1,5 @@
 // The pages other than Home and the stock page, and two pieces they share with them: the stock table and the picker.
-import { el, icon, logoMark, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL } from './ui.js';
+import { el, icon, logoMark, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL, COLOR } from './ui.js';
 import { data, cleanTicker, tickersIn, friendly } from './data.js';
 
 export const go = hash => { location.hash = hash; };
@@ -8,7 +8,7 @@ export const has = t => !!(data.profile && data.profile.stocks.some(s => s.t ===
 // ---------------------------------------------------------------- the stock table
 const COLS = [
   ['Stock', '', r => r.ticker], ['Price', 'r', r => r.price, 'The latest closing price'], ['Today', 'r hide-s', r => r.change_pct_day, 'The change on the latest market day'],
-  ['Invest?', 'c', r => ({ yes: 3, wait: 2, no: 1, none: 0 })[r.signal], 'What the analysts\' views add up to: Yes, No, or Wait when they are split'],
+  ['Experts', 'c', r => ({ yes: 3, wait: 2, no: 1, none: 0 })[r.signal], 'Where the experts\' views add up: Bullish, Bearish, or Split when they disagree'],
   ['Confidence', 'conf-h', r => r.confidence_pct, 'How much stands behind the signal, from 5% to 95%'],
   ['Analysts', 'hide-x4', r => (r.calls.bullish || 0) - (r.calls.bearish || 0), 'Bullish and bearish calls in the videos, last 30 days'],
   ['Wall St', 'hide-x3', r => (r.street || {}).consensus || '', 'The consensus of professional analysts, from TipRanks'],
@@ -164,7 +164,7 @@ export function welcome(root, done) {
     catch (e) { toast(friendly(e)); next.disabled = false; }
   } }, 'Show my dashboard');
   const first = (data.profile.name || '').split(' ')[0];
-  root.append(el('.onb', {}, el('.row', { style: { marginBottom: '28px' } }, el('a.logo', { href: '#/', style: { padding: 0 } }, logoMark(), el('span', { text: 'Market Digest' })), el('span.sp'),
+  root.append(el('.onb', {}, el('.row', { style: { marginBottom: '28px' } }, el('a.logo', { href: '#/', style: { padding: 0 } }, logoMark(), el('span', { text: 'Econova' })), el('span.sp'),
       el('span.small', { text: data.profile.email || '' }), el('button.btn.ghost.sm', { onclick: () => data.signOut() }, 'Not you?')),
     el('.eyebrow', { text: 'One step to your dashboard' }), el('h1', { text: first ? `Welcome, ${first}. Which stocks do you follow?` : 'Which stocks do you follow?' }),
     el('p.mut', { style: { margin: '6px 0 22px', fontSize: '15px' }, text: 'Pick a list, search, or paste your watchlist. You can change this any time, and add how many shares you own later.' }),
@@ -174,11 +174,11 @@ export function welcome(root, done) {
 
 // ---------------------------------------------------------------- ideas
 export async function ideas(root, refresh) {
-  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Ideas' }), el('.sub', { text: 'What the analysts are saying about stocks beyond your list.' }))));
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Ideas' }), el('.sub', { text: 'What the experts are saying about stocks beyond your list.' }))));
   const hold = el('div', {}, skeleton(320)); root.append(hold);
   const o = await data.market('overview'); hold.textContent = '';
   if (!o) { hold.append(el('.card.empty', {}, el('h3', { text: 'Nothing here yet' }), 'This fills in after the first videos are read.')); return; }
-  const tabs = [['yes', 'Strongest Yes'], ['no', 'Strongest No'], ['discussed', 'Most discussed'], ['split', 'Analysts split'], ['changed', 'Just changed']];
+  const tabs = [['yes', 'Most bullish'], ['no', 'Most bearish'], ['discussed', 'Most discussed'], ['split', 'Experts split'], ['changed', 'Just changed']];
   let tab = sessionStorage.getItem('md.ideas') || 'yes';
   if (!(o.lists[tab] || []).length) tab = (tabs.find(([k]) => (o.lists[k] || []).length) || tabs[0])[0];   // open on a list that has something
   const seg = el('.seg', { role: 'group', 'aria-label': 'Which ideas' }), card = el('.card.flush');
@@ -231,7 +231,7 @@ export async function analysts(root) {
   const body = el('tbody');
   a.rows.forEach((r, i) => body.append(el('tr.link', { tabindex: 0, onclick: () => go('#/a/' + encodeURIComponent(r.analyst)), onkeydown: e => { if (e.key === 'Enter') go('#/a/' + encodeURIComponent(r.analyst)); } },
     el('td.c.mut.hide-s', { text: i + 1 }),
-    el('td', {}, el('div', { style: { fontWeight: 700 }, text: r.analyst }), el('.small', { text: r.role || '' })),
+    el('td', {}, el('div', { style: { fontWeight: 700 } }, r.analyst, data.follows(r.analyst) ? el('span.chip.info', { style: { marginLeft: '6px' }, text: 'Following' }) : null), el('.small', { text: r.role || '' })),
     el('td', {}, stars(r.stars) || el('span.small', { text: 'Not rated yet', title: 'Needs at least 3 calls old enough to judge' })),
     el('td.r', {}, r.scored ? el('b', { text: r.hit_pct + '%' }) : '—', r.scored ? el('.small', { text: `${r.right} of ${r.scored}` }) : null),
     el('td.r', { class: tone(r.edge), text: r.edge == null ? '—' : `${r.edge > 0 ? '+' : ''}${r.edge} pts` }),
@@ -239,14 +239,34 @@ export async function analysts(root) {
     el('td.hide-m', {}, r.stocks.slice(0, 4).map(t => el('span.badge', { style: { marginRight: '4px' }, text: t }))))));
   hold.append(el('.card.flush', {}, el('.scroll', {}, el('table', {}, el('thead', {}, el('tr', {}, el('th.c.hide-s', { text: '#' }), el('th', { text: 'Analyst' }), el('th', { text: 'Rating' }),
     el('th.r', { text: 'Calls right' }), el('th.r', { text: 'Avg vs S&P 500' }), el('th.r.hide-s', { text: 'Calls' }), el('th.hide-m', { text: 'Bull / bear' }), el('th.hide-m', { text: 'Talks about' }))), body))),
-  el('p.small', { style: { marginTop: '10px' }, text: 'A call is right when the stock then did better than the S&P 500 (bullish) or worse (bearish), from the next close after the video. The rating needs at least 3 scored calls.' }));
+  el('p.small', { style: { marginTop: '10px' }, text: 'A call is right when the stock then did better than the S&P 500 (bullish) or worse (bearish), from the next close after the video. The rating needs at least 3 scored calls. Open an analyst to follow them.' }));
+  const rec = await data.market('record').catch(() => null);
+  if (rec && rec.shows && rec.shows.length) hold.append(showsCard(rec.shows));
+}
+
+// Which shows' guests are right most often: is it worth watching?
+export function showsCard(shows) {
+  const body = el('tbody');
+  for (const r of shows) body.append(el('tr', {}, el('td', {}, el('b', { text: r.channel }), el('.small', { text: `${r.analysts} analyst${r.analysts === 1 ? '' : 's'}` })),
+    el('td.r', {}, r.scored ? el('b', { text: r.hit_pct + '%' }) : '—', r.scored ? el('.small', { text: `${r.right} of ${r.scored}` }) : null),
+    el('td.r', { class: tone(r.edge), text: r.edge == null ? '—' : `${r.edge > 0 ? '+' : ''}${r.edge} pts` }),
+    el('td.r.hide-s', { text: r.calls }), el('td.hide-m', {}, split({ bullish: r.bullish, bearish: r.bearish, neutral: Math.max(0, r.calls - r.bullish - r.bearish) }))));
+  return el('.card.flush.shows', { style: { marginTop: '14px' } }, el('h2', { style: { padding: '16px 20px 0' }, text: 'Shows: whose guests are right most often' }),
+    el('.scroll', {}, el('table', {}, el('thead', {}, el('tr', {}, el('th', { text: 'Show' }), el('th.r', { text: 'Calls right' }), el('th.r', { text: 'Avg vs S&P 500' }),
+      el('th.r.hide-s', { text: 'Calls' }), el('th.hide-m', { text: 'Bull / bear' }))), body)),
+    el('p.small', { style: { padding: '0 20px 16px' }, text: 'Every call made on the show in the last four months, scored the same way as the analysts’ calls. A show with fewer than 5 scored calls is listed last.' }));
 }
 export async function analyst(root, name) {
   root.append(el('a.crumb', { href: '#/analysts' }, icon('left'), 'Analysts'));
   const hold = el('div', {}, skeleton(300)); root.append(hold);
   const a = await data.market('analysts'), r = a && a.rows.find(x => x.analyst === name); hold.textContent = '';
   if (!r) { hold.append(el('.card.empty', {}, el('h3', { text: name }), 'No recent calls from this analyst.')); return; }
-  hold.append(el('.head', {}, el('div', {}, el('h1', { text: r.analyst }), el('.sub', { text: r.role || 'Analyst' })), el('.sp'), stars(r.stars)),
+  const followBtn = el('span.follow');
+  const drawFollow = () => followBtn.replaceChildren(data.example || !data.profile ? el('span') : data.follows(r.analyst)
+    ? el('button.btn', { onclick: async () => { await data.follow(r.analyst, false); toast(`You no longer follow ${r.analyst}`); drawFollow(); } }, icon('check'), 'Following')
+    : el('button.btn.primary', { onclick: async () => { await data.follow(r.analyst, true); toast(`Following ${r.analyst}: their new calls show on Home and in your emails`); drawFollow(); } }, icon('plus'), 'Follow'));
+  drawFollow();
+  hold.append(el('.head', {}, el('div', {}, el('h1', {}, r.analyst, ' ', stars(r.stars)), el('.sub', { text: r.role || 'Analyst' })), el('.sp'), followBtn),
     el('.grid.g4', { style: { marginBottom: '14px' } }, tile('Calls right', r.scored ? r.hit_pct + '%' : '—', r.scored ? `${r.right} of ${r.scored} scored calls` : 'Not enough scored calls yet'),
       tile('Average vs S&P 500', r.edge == null ? '—' : `${r.edge > 0 ? '+' : ''}${r.edge} pts`, 'per call, since it was made', tone(r.edge)),
       tile('Calls', r.calls, `${r.bullish} bullish, ${r.bearish} bearish`), tile('Talks about', r.stocks.slice(0, 3).join(', ') || '—', 'most often')),
@@ -285,9 +305,9 @@ export async function calendar(root) {
 
 // ---------------------------------------------------------------- how to read it
 const WORDS = [
-  ['Invest? Yes / No / Wait', 'What the analysts\u2019 views on a stock add up to. YES: they clearly favour it. NO: they are clearly against it. WAIT: they are split. A dash means nobody has given a view yet. It is the same for everyone who follows that stock; it does not know your finances.'],
-  ['Confidence', 'How much stands behind the signal, from 5% to 95%. Above all it measures how one-sided the views are: many calls split 55/45 is not a confident Yes. It also rises with the number of analysts, when the video analysts and Wall Street clearly agree, and when earlier calls on that stock turned out right. For WAIT, it is how sure we are that the views really are split.'],
-  ['How calls are counted', 'Each analyst gets one vote on a stock: their latest call. Recent calls count most (a call loses half its weight every ten days), and calls from analysts with a good record count more. Wall Street’s rating is weighed in, but a plain Buy is only a mild plus, because most large companies are rated Buy; only Strong Buy is a Yes on its own.'],
+  ['Experts: Bullish / Split / Bearish', 'Where the experts\u2019 views on a stock add up. BULLISH: they clearly favour it. BEARISH: they are clearly against it. SPLIT: they disagree. A dash means nobody has given a view yet. It describes what the experts think, the same for everyone; it is not a recommendation to you and does not know your finances.'],
+  ['Confidence', 'How much stands behind the signal, from 5% to 95%. Above all it measures how one-sided the views are: many calls split 55/45 is not a confident Bullish. It also rises with the number of analysts, when the video analysts and Wall Street clearly agree, and when earlier calls on that stock turned out right. For SPLIT, it is how sure we are that the views really are divided.'],
+  ['How calls are counted', 'Each analyst gets one vote on a stock: their latest call. Recent calls count most (a call loses half its weight every ten days), and calls from analysts with a good record count more. Wall Street’s rating is weighed in, but a plain Buy is only a mild plus, because most large companies are rated Buy; only Strong Buy makes a stock Bullish on its own.'],
   ['Bullish, bearish', 'A bullish call expects the stock to rise; a bearish call expects it to fall.'],
   ['Analyst rating (stars)', 'How an analyst\u2019s past calls did: how often they were right, and by how much they beat the market. It needs at least 3 calls old enough to judge. A call counts more toward the signal when it comes from a well-rated analyst.'],
   ['Right or wrong, vs S&P 500', 'A bullish call is right when the stock then did better than the S&P 500 (an index of 500 large US companies: the usual yardstick for "the market"); a bearish call, when it did worse. "+4 pts" means it beat the market by 4 percentage points.'],
@@ -299,16 +319,20 @@ const WORDS = [
   ['Market cap', 'What the whole company is worth at today\u2019s share price.'],
   ['Dividend yield', 'The yearly dividend as a share of the price. 2% means 2 back each year for every 100 invested, on top of any price change.'],
   ['Earnings', 'The day a company reports its results, four times a year. The price often moves a lot that day.'],
+  ['Track record', 'How Econova\u2019s own signal has done: when it said Bullish, did the stock then beat the S&P 500 over the next month? Replayed over the months of videos already read, and followed live since the rules last changed.'],
+  ['Shows', 'Each channel\u2019s calls, scored the same way as the analysts\u2019: whose guests are right most often.'],
+  ['Following', 'Follow an analyst from their page. Their new calls show on Home and in your daily email, on any stock.'],
 ];
 const FAQ = [
+  ['What is Econova?', 'Econova keeps score of what market experts say on TV and YouTube. It notes every stock call, checks how each one turned out against the market, and tells you where the experts worth listening to stand on your stocks.'],
   ['Where do the signals come from?', 'Every day we go through new videos on the main finance channels and note each call an analyst makes on a stock, with the reason and the moment it was said. We add Wall Street\u2019s rating from TipRanks and the price. Code, not opinion, turns that into the signal, and the same rules apply to every stock.'],
   ['How fresh is it?', 'Videos are read through the day. Prices are daily closing prices. Wall Street\u2019s ratings are refreshed every few days, the stocks in people\u2019s lists first. The side menu shows when the last update ran.'],
-  ['Why does my stock say "Fetching\u2026" or show a dash?', 'A stock nobody followed before is picked up within the hour. A dash under Invest? means no analyst has made a call on it lately and there is no Wall Street rating yet; smaller and non-US companies are covered less.'],
-  ['Is this financial advice?', 'No. It sums up what analysts said, for everyone alike. Analysts are often wrong, and the reading of videos is automatic and can mishear. Use it to decide what to look at, then make your own decision or talk to a licensed adviser.'],
+  ['Why does my stock say "Fetching\u2026" or show a dash?', 'A stock nobody followed before is picked up within the hour. A dash under Experts means no analyst has made a call on it lately and there is no Wall Street rating yet; smaller and non-US companies are covered less.'],
+  ['Is this financial advice?', 'No. It describes what market experts said and how they have done, for everyone alike. It never tells you to buy or sell. Analysts are often wrong, and the reading of videos is automatic and can mishear. Use it to decide what to look at, then make your own decision or talk to a licensed adviser.'],
   ['What do you know about me?', 'Your Google name and email, your list, and the shares and prices you choose to type. Nothing else, and it is never sold. You can download or delete it under Account.'],
 ];
 export function help(root) {
-  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'How it works' }), el('.sub', { text: 'What every number on Market Digest means, in plain words.' }))),
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'How it works' }), el('.sub', { text: 'What every number on Econova means, in plain words.' }))),
     el('.grid.g2', {}, el('.card', {}, el('h2', { text: 'Questions' }), FAQ.map(([q, a]) => el('.theme', {}, el('b', { text: q }), el('span', { text: a })))),
       el('.card', {}, el('h2', { text: 'The words' }), WORDS.map(([w, d]) => el('.theme', {}, el('b', { text: w }), el('span', { text: d }))))));
 }
@@ -336,7 +360,7 @@ export function account(root, refresh) {
   root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Account' }), el('.sub', { text: 'Your emails and your data.' }))));
   if (data.example) { root.append(el('.card.empty', {}, el('h3', { text: 'This is the example' }), 'Sign in to save your stocks and get your emails.', el('div', {}, el('button.btn.primary', { onclick: () => data.signIn().catch(e => toast(e.message)) }, 'Continue with Google')))); return; }
   const save = async patch => { try { await data.save({ prefs: { ...data.profile.prefs, ...patch } }); toast('Saved'); } catch (e) { toast(friendly(e)); } };
-  const daily = [['every', 'Every weekday', 'A short table of your stocks after the US market closes.'], ['changes', 'Only when a signal changes', 'Nothing unless one of your stocks turns Yes, No or Wait.'], ['off', 'Never', 'No daily email.']];
+  const daily = [['every', 'Every weekday', 'A short table of your stocks after the US market closes.'], ['changes', 'Only when something changes', 'Nothing unless one of your stocks turns Bullish, Bearish or Split, or an analyst you follow makes a call.'], ['off', 'Never', 'No daily email.']];
   root.append(el('.grid.g2', {},
     el('.card', {}, el('h2', { text: 'Profile' }), el('.row', {}, u.photoURL ? el('img.avatar', { src: u.photoURL, alt: '', referrerpolicy: 'no-referrer', style: { width: '44px', height: '44px' } }) : el('.avatar', { style: { width: '44px', height: '44px' }, text: (p.name || p.email || '?')[0].toUpperCase() }),
       el('div', {}, el('b', { text: p.name || 'You' }), el('.small', { text: p.email }))),
@@ -345,19 +369,97 @@ export function account(root, refresh) {
       (() => { const now = localStorage.getItem('md.theme') || ''; const seg = el('.seg', { style: { marginBottom: '16px' } });
         for (const [k, label] of [['', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']]) seg.append(el('button', { 'aria-pressed': String(k === now), onclick: e => { setTheme(k); seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === e.currentTarget))); } }, label));
         return seg; })(),
-      el('div', {}, el('button.btn', { onclick: () => data.signOut() }, icon('out'), 'Sign out'))),
+      el('.row', { style: { flexWrap: 'wrap' } }, el('button.btn', { onclick: () => feedbackModal() }, icon('chat'), 'Send feedback'), el('button.btn', { onclick: () => data.signOut() }, icon('out'), 'Sign out'))),
     el('.card', {}, el('h2', { text: 'Emails' }), el('p.small', { style: { marginBottom: '12px' }, text: `Sent to ${p.email}. Nothing else to set up.` }),
       el('.eyebrow', { text: 'Daily brief', style: { marginBottom: '8px' } }),
       daily.map(([k, label, hint]) => el('label.opt', {}, el('input', { type: 'radio', name: 'daily', checked: (p.prefs.daily || 'every') === k, onchange: () => save({ daily: k }) }), el('div', {}, el('b', { text: label }), el('span', { text: hint })))),
       el('label.switch', { style: { marginTop: '14px' } }, el('input', { type: 'checkbox', checked: p.prefs.weekly !== false, onchange: e => save({ weekly: e.target.checked }) }), el('div', {}, el('b', { text: 'Weekly summary' }), el('.small', { text: 'Every Saturday: the week on your stocks.' })))),
-    el('.card', {}, el('h2', { text: 'Your data' }), el('p.small', { style: { marginBottom: '12px' }, text: 'We keep your email, your list of stocks, the shares and prices you typed, and your email choices. Nothing else.' }),
+    el('.card', {}, el('h2', { text: 'Your data' }), el('p.small', { style: { marginBottom: '12px' }, text: 'We keep your email, your list of stocks, the shares and prices you typed, the analysts you follow, and your email choices. Nothing else.' }),
       el('.row', { style: { flexWrap: 'wrap' } }, el('button.btn', { onclick: () => {
-        const blob = new Blob([JSON.stringify({ email: p.email, name: p.name, stocks: p.stocks, emails: p.prefs, created: p.created }, null, 2)], { type: 'application/json' });
-        const a = el('a', { href: URL.createObjectURL(blob), download: 'market-digest-my-data.json' }); a.click(); URL.revokeObjectURL(a.href);
+        const blob = new Blob([JSON.stringify({ email: p.email, name: p.name, stocks: p.stocks, follows: p.follows || [], emails: p.prefs, created: p.created }, null, 2)], { type: 'application/json' });
+        const a = el('a', { href: URL.createObjectURL(blob), download: 'econova-my-data.json' }); a.click(); URL.revokeObjectURL(a.href);
       } }, 'Download my data'), el('button.btn.danger', { onclick: () => modal('Delete your account?', el('p', { style: { marginTop: '8px' }, text: 'Your list, your holdings and your email choices are deleted now and cannot be brought back. The emails stop.' }),
         done => [el('button.btn', { onclick: done }, 'Keep my account'), el('button.btn.danger', { onclick: async () => { try { await data.deleteAccount(); done(); } catch (e) { toast(friendly(e)); } } }, 'Delete everything')]) }, 'Delete my account'))),
     el('.card', {}, el('h2', { text: 'How the signals work' }),
-      el('p.small', { style: { lineHeight: 1.6 }, text: 'We read the finance channels every day and note each analyst call on a stock. A stock gets YES when the calls and Wall Street’s rating clearly favour it, NO when they are clearly against it, and WAIT when they are split. Each analyst gets one vote (their latest call), recent calls count most, and a call counts more from an analyst whose past calls beat the market. Confidence (5% to 95%) is mostly how one-sided the views are, then how many there are and how earlier calls on that stock turned out.' }),
-      el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'The signals sum up what analysts said. They are not personal financial advice, and analysts are often wrong. For decisions that matter, talk to a licensed adviser.' }),
-      el('p.small', { style: { marginTop: '10px' } }, el('a', { href: '#/help', text: 'How it works, in full' }), ' · ', el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }), ' · ', el('a', { href: '#/status', text: 'Service status' })))));
+      el('p.small', { style: { lineHeight: 1.6 }, text: 'We read the finance channels every day and note each analyst call on a stock. A stock is Bullish when the calls and Wall Street’s rating clearly favour it, Bearish when they are clearly against it, and Split when they disagree. Each analyst gets one vote (their latest call), recent calls count most, and a call counts more from an analyst whose past calls beat the market. Confidence (5% to 95%) is mostly how one-sided the views are, then how many there are and how earlier calls on that stock turned out.' }),
+      el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'Econova describes what market experts said and how they have done. It is not personal financial advice, and experts are often wrong. For decisions that matter, talk to a licensed adviser.' }),
+      el('p.small', { style: { marginTop: '10px' } }, el('a', { href: '#/help', text: 'How it works, in full' }), ' · ', el('a', { href: '#/record', text: 'Track record' }), ' · ', el('a', { href: '/privacy.html', text: 'Privacy' }), ' · ', el('a', { href: '/terms.html', text: 'Terms' }), ' · ', el('a', { href: '#/status', text: 'Service status' })))));
+}
+
+// ---------------------------------------------------------------- the feedback box (members, during the beta)
+export function feedbackModal() {
+  if (!data.user || data.example) { toast('Sign in to send feedback'); return; }
+  const text = el('textarea.input', { rows: 6, maxlength: 2000, placeholder: 'What is confusing, missing or wrong? What would make you open Econova every day?' });
+  modal('Send feedback', el('div', { style: { marginTop: '10px' } }, text,
+    el('p.small', { style: { marginTop: '8px' }, text: 'It goes straight to the team, with your email so we can reply. Thank you: the beta is shaped by these notes.' })),
+  done => {
+    const send = el('button.btn.primary', { onclick: async () => {
+      if (!text.value.trim()) { text.focus(); return; }
+      send.disabled = true;
+      try { await data.feedback(text.value.trim(), location.hash || '#/'); done(); toast('Thank you. Your note is on its way to the team.'); }
+      catch (e) { send.disabled = false; toast(friendly(e)); }
+    } }, 'Send');
+    return [el('button.btn', { onclick: done }, 'Cancel'), send];
+  });
+}
+
+// ---------------------------------------------------------------- Econova's own track record
+const pts = x => x == null ? '—' : `${x > 0 ? '+' : ''}${x} pts`;
+export async function record(root) {
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Track record' }),
+    el('.sub', { text: 'How Econova’s own signal has done. We score ourselves the way we score the experts, misses included.' }))));
+  const hold = el('div', {}, skeleton(360)); root.append(hold);
+  const r = await data.market('record'); hold.textContent = '';
+  if (!r) { hold.append(el('.card.empty', {}, el('h3', { text: 'No record yet' }), 'This fills in after the next update.')); return; }
+  const rp = r.replay || {}, y = rp.yes || {}, n = rp.no || {}, all = rp.all || {}, lv = r.live || {};
+  const spread = y.excess != null && n.excess != null ? Math.round((y.excess - n.excess) * 10) / 10 : null;
+  hold.append(el('.grid.g4', {},
+    tile('Bullish signals that beat the S&P 500', y.hit_pct == null ? '—' : y.hit_pct + '%', y.n ? `${y.right} of ${y.n} picks, over the next month` : 'Not enough history yet', y.hit_pct == null ? '' : y.hit_pct >= 50 ? 'up' : 'down'),
+    tile('Bullish picks vs the S&P 500', pts(y.excess), 'on average, the month after', tone(y.excess)),
+    tile('Bearish picks vs the S&P 500', pts(n.excess), n.n ? `average of ${n.n} picks; below zero means right` : 'No bearish picks yet', tone(n.excess == null ? null : -n.excess)),
+    tile('Bullish minus Bearish', pts(spread), `Every stock discussed: ${pts(all.excess)}`, tone(spread))));
+
+  // the replay, check by check
+  const checks = (rp.checks || []).slice().reverse();
+  const bar = v => { if (v == null) return el('span.small', { text: '—' });
+    const w = Math.min(50, Math.abs(v) * 4);
+    return el('.rbar', {}, el('span.rtrack', {}, el('i', { style: { width: w + '%', [v >= 0 ? 'left' : 'right']: '50%', background: v >= 0 ? 'var(--green)' : 'var(--red)' } })), el('b', { class: tone(v), text: pts(v) })); };
+  const body = el('tbody');
+  for (const c of checks) body.append(el('tr', {}, el('td', { class: 'small', style: { whiteSpace: 'nowrap' }, text: `${day(c.d)} → ${day(c.e)}` }),
+    el('td', {}, bar(c.yes), el('.small', { text: c.n_yes ? `${c.n_yes} stock${c.n_yes === 1 ? '' : 's'}: ${c.picks.slice(0, 6).join(', ')}${c.n_yes > 6 ? '…' : ''}` : 'none' })),
+    el('td', {}, bar(c.no), el('.small', { text: c.n_no ? `${c.n_no} stock${c.n_no === 1 ? '' : 's'}` : 'none' })),
+    el('td.r.hide-s', { class: tone(c.sp500), text: pct(c.sp500) })));
+  hold.append(el('.card.flush.replay', { style: { marginTop: '14px' } }, el('h2', { style: { padding: '16px 20px 0' }, text: 'The signal, replayed week by week' }),
+    el('p.small', { style: { padding: '4px 20px 0' }, text: 'At each weekly check: the stocks the signal called Bullish and Bearish from the 30 days of calls before it, and how they did over the next month against the S&P 500.' }),
+    checks.length ? el('.scroll', {}, el('table', {}, el('thead', {}, el('tr', {}, el('th', { text: 'Check → a month later' }), el('th', { text: 'Bullish picks vs S&P 500' }), el('th', { text: 'Bearish picks vs S&P 500' }), el('th.r.hide-s', { text: 'S&P 500' }))), body))
+      : el('.empty', { text: 'Needs about six weeks of videos: the first check comes two weeks after the first video, and each is judged a month later.' })));
+
+  // the live record
+  const lrows = (lv.rows || []).slice(0, 20);
+  const lbody = el('tbody');
+  for (const x of lrows) lbody.append(el('tr.link', { tabindex: 0, onclick: () => go('#/s/' + encodeURIComponent(x.t)) }, el('td', {}, el('span.badge', { text: x.t })), el('td', {}, sig(x.s)),
+    el('td', { class: 'small', text: `${day(x.from)} → ${x.to ? day(x.to) : 'now'}` }),
+    el('td.r', {}, x.excess == null ? el('span.small', { text: 'too early' }) : el('span', { class: x.right ? 'up' : 'down', text: `${x.right ? 'Right' : 'Wrong'} · ${pts(x.excess)}` }))));
+  const ly = lv.yes || {}, ln = lv.no || {};
+  hold.append(el('.grid.g2', { style: { marginTop: '14px' } },
+    el('.card.flush.live', {}, el('h2', { style: { padding: '16px 20px 0' }, text: 'Live: the real signals since ' + (lv.since ? day(lv.since) : 'the last rules change') }),
+      el('p.small', { style: { padding: '4px 20px 0' }, text: lv.judged ? `Bullish right ${ly.right || 0} of ${ly.n || 0}, Bearish right ${ln.right || 0} of ${ln.n || 0}. ${lv.waiting || 0} more are too new to judge (under 3 market days).` : `${lv.waiting || 0} signals given so far; each is judged after 3 market days.` }),
+      lrows.length ? el('.scroll', {}, el('table', {}, el('thead', {}, el('tr', {}, el('th', { text: 'Stock' }), el('th', { text: 'Signal' }), el('th', { text: 'Held' }), el('th.r', { text: 'vs S&P 500' }))), lbody)) : el('.empty', { text: 'No Bullish or Bearish signal yet.' })),
+    el('.card', {}, el('h2', { text: 'Every expert call, scored' }),
+      el('.kv.one', {}, ...[['Bullish calls that beat the S&P 500', r.calls && r.calls.bullish], ['Bearish calls that proved right', r.calls && r.calls.bearish]].map(([k, v]) =>
+        el('div', {}, el('span', { text: k }), el('b', { text: v && v.hit_pct != null ? `${v.hit_pct}% (${v.right} of ${v.scored})` : '—' })))),
+      el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: 'The last four months of calls in the videos, each from the close after the video to the latest close. Taken all together, experts on air are right not much more often than a coin toss, which is why Econova weighs each one by their record instead of counting them all alike.' }),
+      el('h2', { style: { marginTop: '18px' }, text: 'How this is worked out' }),
+      el('ul.small.notes', {}, ...[
+        'Replay: the signal from the video calls alone, by the same rules as the live one (one vote an analyst, fresh calls count most). Wall Street’s rating and the analysts’ stars are left out, because using today’s values for past weeks would be cheating.',
+        'A Bullish pick is right when the stock beat the S&P 500 over the next 21 market days; a Bearish pick, when it trailed it.',
+        'A stock is counted once at each weekly check, so a stock that stays Bullish for a month is counted several times.',
+        'Small samples swing a lot. Treat a few weeks of record as a first look, not proof.'].map(t => el('li', { text: t }))))));
+  if (r.shows && r.shows.length) hold.append(showsCard(r.shows));
+  if ((rp.best || []).length) {
+    const line = p => el('a', { href: '#/s/' + encodeURIComponent(p.t), style: { color: 'inherit', alignItems: 'center' } }, el('span.badge', { text: p.t }), el('span.body.small', { text: `${day(p.d)} → ${day(p.e)}` }), el('b', { class: tone(p.excess), text: pts(p.excess) }));
+    hold.append(el('.grid.g2', { style: { marginTop: '14px' } }, el('.card', {}, el('h2', { text: 'Best Bullish picks' }), el('.list', {}, rp.best.map(line))),
+      el('.card', {}, el('h2', { text: 'Worst Bullish picks' }), (rp.worst || []).length ? el('.list', {}, rp.worst.map(line)) : el('p.small', { text: 'None trailed the market.' }))));
+  }
+  hold.append(el('p.small', { style: { marginTop: '14px' }, text: 'Past results do not promise future ones. Econova describes what experts said; it is not personal financial advice.' }));
 }

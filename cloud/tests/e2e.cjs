@@ -51,6 +51,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
     && denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'public', 'demo'))).exists())));
   ok('rules: a stranger cannot make an account or ask for a stock', denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'users', auth.currentUser.uid), { email: auth.currentUser.email, stocks: [] })))
     && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'requests', 'AAPL'), { by: auth.currentUser.uid, at: 'x' }))));
+  ok('rules: a stranger cannot send feedback', denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'feedback', 'stranger0001'), { by: auth.currentUser.uid, email: auth.currentUser.email, text: 'hi', page: '#/', at: 'x' }))));
   ok('rules: nobody can see the list or add themselves to it', (await fire(p, async (fs, db, auth) => (await fs.getDoc(fs.doc(db, 'members', auth.currentUser.email))).exists())) === false
     && denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'members', 'you@example.com'))).exists())) && denied(await fire(p, async (fs, db) => (await fs.getDocs(fs.collection(db, 'members'))).size))
     && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'members', auth.currentUser.email), { email: auth.currentUser.email }))));
@@ -77,7 +78,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await p.locator('.card.flush tbody tr.link').first().locator('.icon-btn').click(); await p.click('text=Edit what I hold');
   await p.locator('.modal input').nth(0).fill('10'); await p.locator('.modal input').nth(1).fill('100'); await p.click('.modal >> text=Save'); await wait(p, 1200);
   ok('typing shares shows the portfolio value', (await p.locator('.tile .k').first().textContent()).includes('Portfolio value'));
-  ok('and a portfolio health card: by signal, by sector, what Wall Street expects', await (async () => { const t = await p.locator('.page').textContent(); return ['Portfolio health', 'By value: Yes', 'Wall Street expects', 'Biggest position'].every(x => t.includes(x)); })());
+  ok('and a portfolio health card: by signal, by sector, what Wall Street expects', await (async () => { const t = await p.locator('.page').textContent(); return ['Portfolio health', 'By value: Bullish', 'Wall Street expects', 'Biggest position'].every(x => t.includes(x)); })());
   await p.click('text=Add stocks'); await p.fill('.modal input.input', 'costco'); await wait(p, 400); await p.locator('.modal .results button').first().click();
   await p.click('.modal >> text=Add to my stocks'); await wait(p, 1500);
   ok('a stock can be added from the dashboard', await rows(p) === 11);
@@ -90,7 +91,9 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await p.fill('.search input', 'nvid'); await wait(p, 400); await p.locator('.search .results button').first().click(); await p.waitForSelector('.signal'); await wait(p);
   ok('search opens a stock page', (await p.evaluate(() => location.hash)) === '#/s/NVDA');
   const text = await p.locator('.page').textContent();
-  ok('stock page: signal, Wall Street, key numbers, bulls and bears, calls', ['Should I invest?', 'Wall Street', 'Key numbers', 'Bulls say', 'Bears say', 'Every call'].every(t => text.includes(t)));
+  ok('stock page: signal, Wall Street, key numbers, bulls and bears, calls', ['Where the experts stand', 'Wall Street', 'Key numbers', 'Bulls say', 'Bears say', 'Every call'].every(t => text.includes(t)));
+  ok('stock page: the signal describes the experts (Bullish, Split or Bearish), never Yes or No', /^(BULLISH|SPLIT|BEARISH|—)$/i.test((await p.locator('.signal .sig').first().textContent()).trim()) && !/Should I invest/.test(text));
+  ok('stock page: a link out to Google Finance', (await p.locator('a.gf').getAttribute('href')) === 'https://www.google.com/finance?q=NVDA');
   ok('stock page: the stock in plain words first', ((await p.locator('.story p').textContent()) || '').length > 80);
   ok('the side menu lists my stocks, the open one marked', await p.locator('.wl-row').count() === 10 && await p.locator('.wl-row[aria-current=page] b').textContent() === 'NVDA');
   ok('stock page: the chart marks analyst calls', await p.locator('.chart a').count() >= 1);
@@ -110,6 +113,20 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   ok('analysts: a ranked table with ratings', await p.locator('tbody tr.link').count() >= 5 && await p.locator('.stars').count() >= 5);
   await p.locator('tbody tr.link').first().click(); await wait(p, 900);
   ok('an analyst\'s page lists their calls with results', (await p.locator('.page').textContent()).includes('Latest calls') && await p.locator('tbody tr').count() >= 3);
+  const followed = (await p.locator('.head h1').textContent()).trim();
+  await p.click('.follow >> text=Follow'); await wait(p, 1200);
+  ok('an analyst can be followed', await p.locator('.follow >> text=Following').count() === 1);
+  await p.goto(BASE + '/#/analysts'); await p.waitForSelector('tbody tr.link'); await wait(p);
+  ok('analysts: the ones I follow are marked, and the shows are scored', await p.locator('.chip.info >> text=Following').count() === 1 && (await p.locator('.shows').textContent()).includes('whose guests are right most often') && await p.locator('.shows tbody tr').count() >= 2);
+  await p.goto(BASE + '/#/'); await p.waitForSelector('.follows'); await wait(p, 900);
+  ok('Home: calls from the experts I follow', (await p.locator('.follows').textContent()).includes('From the experts you follow'), followed);
+  ok('Home: Econova\'s own track record, with a link to it all', await p.locator('a.rec[href="#/record"]').count() === 1);
+  await p.goto(BASE + '/#/record'); await p.waitForSelector('.replay'); await wait(p, 900);
+  const rec = await p.locator('.page').textContent();
+  ok('track record: the replay, the live record, the expert calls and the method', ['Bullish signals that beat the S&P 500', 'The signal, replayed week by week', 'Live: the real signals', 'Every expert call, scored', 'How this is worked out'].every(x => rec.includes(x))
+    && await p.locator('.replay tbody tr').count() >= 3, (await p.locator('.replay tbody tr').count()) + ' checks');
+  await p.click('text=Send feedback'); await p.fill('.modal textarea', 'The track record page is the best part. More channels, please!'); await p.click('.modal .btn.primary'); await wait(p, 1200);
+  ok('feedback: a member can send a note to the team', (await p.locator('.toast').textContent()).includes('on its way') && await p.locator('.modal').count() === 0);
   await p.goto(BASE + '/#/calendar'); await wait(p, 1200);
   ok('calendar: earnings for my stocks and the latest videos', await p.locator('.list a .badge').count() >= 3 && (await p.locator('.page').textContent()).includes('Latest videos read'));
   await p.goto(BASE + '/#/help'); await wait(p, 600);
@@ -119,7 +136,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
 
   // ---- 5. the account
   await p.goto(BASE + '/#/account'); await wait(p, 900);
-  await p.click('text=Only when a signal changes'); await wait(p, 900);
+  await p.click('text=Only when something changes'); await wait(p, 900);
   await p.reload(); await p.waitForSelector('.shell'); await wait(p, 1200);
   ok('email choices are saved', await p.locator('input[name=daily]').nth(1).isChecked());
   await p.click('.seg >> text=Dark'); await wait(p, 200);
@@ -127,7 +144,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await p.click('.seg >> text=Match my device');
   ok('appearance: dark can be chosen', dark[0] === 'dark' && dark[1] !== 'rgb(243, 245, 249)', dark.join(' '));
   const [download] = await Promise.all([p.waitForEvent('download'), p.click('text=Download my data')]);
-  ok('my data can be downloaded', download.suggestedFilename() === 'market-digest-my-data.json');
+  ok('my data can be downloaded', download.suggestedFilename() === 'econova-my-data.json');
 
   // ---- 6. the security rules, as this signed-in user
   const uid = await fire(p, async (fs, db, auth) => auth.currentUser.uid);
@@ -145,6 +162,12 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
     && denied(await fire(p, async (fs, db) => (await fs.getDocs(fs.collection(db, 'videos'))).size)));
   ok('rules: a request must be in my name and a real ticker', denied(await fire(p, async (fs, db) => fs.setDoc(fs.doc(db, 'requests', 'HACK'), { by: 'someone-else', at: 'x' })))
     && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'requests', 'not a ticker'), { by: auth.currentUser.uid, at: 'x' }))));
+  ok('rules: the analysts I follow are saved with my account, at most 50', (await fire(p, async (fs, db, auth) => (await fs.getDoc(fs.doc(db, 'users', auth.currentUser.uid))).data().follows.length)) === 1
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'users', auth.currentUser.uid), { email: auth.currentUser.email, follows: Array.from({ length: 51 }, (_, i) => 'A' + i) }))));
+  ok('rules: feedback can be sent but never read back, and only in my own name', denied(await fire(p, async (fs, db) => (await fs.getDocs(fs.collection(db, 'feedback'))).size))
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'feedback', 'spoofed00001'), { by: auth.currentUser.uid, email: 'victim@example.com', text: 'hi', page: '#/', at: 'x' })))
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'feedback', 'toolong00001'), { by: auth.currentUser.uid, email: auth.currentUser.email, text: 'x'.repeat(2001), page: '#/', at: 'x' })))
+    && (await fire(p, async (fs, db, auth) => { await fs.setDoc(fs.doc(db, 'feedback', 'fine00000001'), { by: auth.currentUser.uid, email: auth.currentUser.email, text: 'ok', page: '#/', at: 'x' }); return 'sent'; })) === 'sent');
   ok('rules: the ticker I looked up was asked for', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'requests', 'ZZZZZ'))).exists())) );   // written, and not readable back
 
   // ---- 7. a phone
@@ -152,7 +175,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await signIn(phone);
   const fits = async () => !(await phone.evaluate(() => document.documentElement.scrollWidth > innerWidth));
   let allFit = await fits();
-  for (const h of ['#/s/NVDA', '#/ideas', '#/analysts', '#/calendar', '#/account']) { await phone.goto(BASE + '/' + h); await wait(phone, 1100); allFit = allFit && await fits(); }
+  for (const h of ['#/s/NVDA', '#/ideas', '#/analysts', '#/record', '#/calendar', '#/account']) { await phone.goto(BASE + '/' + h); await wait(phone, 1100); allFit = allFit && await fits(); }
   ok('phone: no page scrolls sideways', allFit);
   ok('phone: the tab bar replaces the side menu', await phone.locator('.tabbar').isVisible() && !(await phone.locator('.side').isVisible()));
   await phone.context().close();

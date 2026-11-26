@@ -9,7 +9,7 @@ from .store import FirestoreStore
 
 
 def main():
-    ap = argparse.ArgumentParser(description="The shared Market Digest engine.")
+    ap = argparse.ArgumentParser(description="The shared Econova engine.")
     ap.add_argument("--no-videos", action="store_true", help="do not read new videos this run")
     ap.add_argument("--mail", choices=["daily", "weekly"], help="send this email now")
     args = ap.parse_args()

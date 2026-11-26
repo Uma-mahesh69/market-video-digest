@@ -8,6 +8,7 @@ from collections import Counter
 from datetime import timedelta
 
 from . import ROOT  # noqa: F401
+from . import record as record_mod
 import digest as dg
 import insights
 import prices
@@ -258,6 +259,8 @@ def build(pairs, cache, street, prev, universe, today, sources, themes=None):
     docs = market_docs(cards, pairs, calls30, cache, sources, today, themes)
     docs["analysts"] = analysts_doc(calls120, cache, sources["analysts"], pairs, today)
     docs["overview"]["top_calls"] = top_calls(docs["analysts"]["rows"], cards, today)
+    docs["record"] = record_mod.build(insights.calls_in(pairs), cards, cache, today)
+    docs["overview"]["record"] = record_mod.headline(docs["record"])
     return cards, charts, docs
 
 
@@ -270,7 +273,7 @@ def public_overview(docs, cards):
             "analysts": len((docs.get("analysts") or {}).get("rows") or []), "rated": rated,
             "stocks": sum(1 for c in cards.values() if c.get("signal") != "none"),
             "mood_pct": o.get("mood_pct"), "views": o.get("views") or {}, "sp500": o.get("sp500"), "scorecard": o.get("scorecard"),
-            "themes": (o.get("themes") or [])[:3], "counts": o.get("counts") or {}, "lists": {}, "rows": {}}
+            "themes": (o.get("themes") or [])[:3], "counts": o.get("counts") or {}, "lists": {}, "rows": {}, "record": o.get("record")}
 
 
 def top_calls(analysts, cards, today, days=21, n=10):

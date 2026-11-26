@@ -2,6 +2,32 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
+## Econova: the product takes shape (26 Nov 2026)
+
+The product is now called **Econova**, and what it is for is written down in [docs/PRODUCT.md](docs/PRODUCT.md):
+it keeps score of what market experts say on TV and YouTube, and tells members where the ones worth listening to
+stand on their stocks.
+
+- **Track record** (new page): Econova grades its own signal. The replay works out the signal at a check every week
+  over the months of videos already read (video calls only, no hindsight) and judges each Bullish and Bearish pick
+  on the month after, against the S&P 500. The live record follows each real signal from the day it was given. Home
+  shows the headline; misses are listed next to hits.
+- **Shows scorecard**: every channel's calls scored like the analysts', so members can see whose guests are right
+  most often (Experts page and Track record).
+- **Follow an expert**: a Follow button on each analyst's page. Their new calls, on any stock, show on Home and in
+  the daily email; "only when something changes" now includes them. Before you follow anyone, Home suggests the
+  best-rated few.
+- **Feedback box**: "Send feedback" in the side menu and on Account. Members' notes are emailed to the team's
+  mailbox (the sending address, or `FEEDBACK_TO`) by the next engine run, then removed from the database.
+- **Wording that describes, not instructs**: the signal reads **Bullish / Split / Bearish** (where the experts
+  stand) instead of Yes / No / Wait (an instruction to the reader, which in India could read as investment advice).
+  "Should I invest?" is now "Where the experts stand". Emails, help and terms follow.
+- **Google Finance link** on every stock page, for the live price, news and full chart.
+- The name Econova everywhere members see it: the site, the emails, the browser tab, the installed app.
+- Fixed: Home showed the word "null" under the date on a day none of your stocks moved 4% or more.
+- Tests: 177 unit tests; the browser test (71 checks) covers the track record, following, the shows, feedback and
+  the new security rules (feedback can be sent but never read back; follows are capped at 50).
+
 ## Cloud version: private beta (22 Nov 2026)
 
 - **Invitation only.** Only the Google addresses in the `BETA_MEMBERS` secret can use the site. The database rules

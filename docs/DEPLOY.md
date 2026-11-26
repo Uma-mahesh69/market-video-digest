@@ -1,4 +1,4 @@
-# Putting Market Digest online
+# Putting Econova online
 
 This takes about 30 minutes, once. Everything used is free. You need the Google account that will own the product
 and this GitHub repository. Do the steps in order; each says exactly where to click.
@@ -55,7 +55,7 @@ these (the name exactly as written, the value pasted):
 | `BETA_MEMBERS` | Who may use the site (a private beta): their Google email addresses, separated by commas. Put your own first. |
 
 Optional, on the **Variables** tab next to Secrets: `CONTACT_EMAIL` (shown on the privacy and terms pages; the
-sending address is used if you leave it out), `MAIL_FROM_NAME` (default "Market Digest"), `SITE_URL` (only when you
+sending address is used if you leave it out), `MAIL_FROM_NAME` (default "Econova"), `SITE_URL` (only when you
 add your own domain later).
 
 Then delete the `.json` file from your Downloads folder.
