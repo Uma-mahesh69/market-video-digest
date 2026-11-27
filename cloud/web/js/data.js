@@ -96,6 +96,7 @@ export const data = {
     const clean = { email: this.user.email, name: String(p.name || '').slice(0, 80), photo: String(p.photo || '').slice(0, 600),
       stocks: (p.stocks || []).slice(0, 60).map(tidy), follows: [...new Set((p.follows || []).filter(f => typeof f === 'string' && f))].slice(0, 50).map(f => f.slice(0, 80)), prefs: { daily: p.prefs.daily || 'every', weekly: p.prefs.weekly !== false },
       onboarded: !!p.onboarded, created: p.created || new Date().toISOString(), updated: new Date().toISOString() };
+    if (p.paper) clean.paper = p.paper;
     await setDoc(doc(db, 'users', this.user.uid), clean);
     // ask the engine to start covering any stock it does not know yet
     const got = await this.cards(clean.stocks.map(s => s.t)).catch(() => ({}));
@@ -108,6 +109,32 @@ export const data = {
     const now = (this.profile.follows || []).filter(f => f !== name);
     await this.save({ follows: on ? [...now, name].slice(-50) : now });
   },
+  // The practice portfolio: $10,000 of pretend money, saved with the account. Prices are the latest closes.
+  async paperStart(sp0) {
+    await this.save({ paper: { start_cash: 10000, cash: 10000, start: new Date().toISOString().slice(0, 10), sp0: Number(sp0) || null, positions: [], trades: [] } });
+  },
+  async paperTrade(t, side, shares, px, asOf) {
+    const P = this.profile.paper, sh = Math.round(shares * 1e4) / 1e4, cost = Math.round(sh * px * 100) / 100;
+    if (!P) throw new Error('Start the practice portfolio first.');
+    if (!(sh > 0) || !(px > 0)) throw new Error('That trade is too small.');
+    const positions = P.positions.map(x => ({ ...x })), at = positions.findIndex(x => x.t === t);
+    let cash = P.cash;
+    if (side === 'buy') {
+      if (cost > cash + 0.005) throw new Error('Not enough pretend cash.');
+      if (at < 0 && positions.length >= 60) throw new Error('At most 60 stocks in the practice portfolio.');
+      cash -= cost;
+      if (at < 0) positions.push({ t, sh, cost: px });
+      else { const x = positions[at], n = x.sh + sh; positions[at] = { t, sh: Math.round(n * 1e4) / 1e4, cost: Math.round((x.sh * x.cost + sh * px) / n * 1e4) / 1e4 }; }
+    } else {
+      if (at < 0 || sh > positions[at].sh + 1e-6) throw new Error('You do not hold that many shares.');
+      cash += cost;
+      const left = Math.round((positions[at].sh - sh) * 1e4) / 1e4;
+      if (left <= 0) positions.splice(at, 1); else positions[at] = { ...positions[at], sh: left };
+    }
+    const trades = [...(P.trades || []), { t, side, sh, px, d: asOf || new Date().toISOString().slice(0, 10) }].slice(-200);
+    await this.save({ paper: { ...P, cash: Math.round(cash * 100) / 100, positions, trades } });
+  },
+
   // A note from the feedback box: the engine emails it to the team.
   async feedback(text, page) {
     const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9]/g, '').slice(0, 32);

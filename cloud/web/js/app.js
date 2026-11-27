@@ -1,7 +1,7 @@
 // The app: the front page, the frame around every page, Home ("My stocks") and the stock page.
 import { el, icon, logoMark, googleMark, pct, tone, money, num, day, ago, sig, confidence, split, spark, ring, meter, stars, priceChart, toast, skeleton, safeUrl, SIGNAL, SIGNAL_SAYS, says as signalSays, COLOR } from './ui.js';
 import { data, portfolio, forYou, cleanTicker, friendly } from './data.js';
-import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable, record, feedbackModal } from './pages.js';
+import { go, has, stockTable, rowMenu, addModal, holdingModal, addStocks, search, welcome, ideas, analysts, analyst, calendar, account, status, help, tile, callsTable, record, feedbackModal, oddsCard, practice } from './pages.js';
 
 const app = document.getElementById('app');
 const NAV = [['', 'My stocks', 'home'], ['ideas', 'Ideas', 'bulb'], ['analysts', 'Experts', 'users'], ['record', 'Track record', 'trophy'], ['calendar', 'Calendar', 'cal']];
@@ -135,6 +135,7 @@ function shell(active, page) {
   app.replaceChildren(el('.shell', {},
     el('aside.side', {}, el('a.logo', { href: '#/' }, logoMark(), el('span', { text: 'Econova' })), nav('nav.nav'),
       el('nav.nav', { style: { marginTop: '10px', borderTop: '1px solid var(--line-2)', paddingTop: '10px' } }, el('a', { href: '#/help', 'aria-current': active === 'help' ? 'page' : null }, icon('info'), el('span', { text: 'How it works' })),
+        data.example ? null : el('a', { href: '#/practice', 'aria-current': active === 'practice' ? 'page' : null }, icon('wallet'), el('span', { text: 'Practice portfolio' })),
         data.example ? null : el('a', { href: '#', class: 'fb-link', onclick: e => { e.preventDefault(); feedbackModal(); } }, icon('chat'), el('span', { text: 'Send feedback' }))),
       watch, freshBox,
       data.example ? el('button.btn.primary', { onclick: signIn }, 'Sign in to save') :
@@ -157,7 +158,8 @@ async function home(root) {
   const hold = el('div', {}, el('.grid.g4', {}, skeleton(96), skeleton(96), skeleton(96), skeleton(96)), el('div', { style: { height: '14px' } }), skeleton(360));
   root.append(hold);
   if (!p.stocks.length) { hold.replaceChildren(el('.card.empty', {}, el('h3', { text: 'Add your stocks to see their signals' }), 'Pick a starter list, search, or paste your watchlist.', el('div', {}, el('button.btn.primary', { onclick: () => addModal(render) }, icon('plus'), 'Add stocks')))); return; }
-  const [cards, overview, experts] = await Promise.all([data.cards(p.stocks.map(s => s.t)), data.market('overview').catch(() => null), data.example ? null : data.market('analysts').catch(() => null)]);
+  const [cards, overview, experts, odds] = await Promise.all([data.cards(p.stocks.map(s => s.t)), data.market('overview').catch(() => null), data.example ? null : data.market('analysts').catch(() => null),
+    data.example ? null : data.market('odds').catch(() => null)]);
   const pf = portfolio(p, cards), rows = pf.rows, bull = rows.reduce((a, r) => a + (r.calls.bullish || 0), 0), bear = rows.reduce((a, r) => a + (r.calls.bearish || 0), 0);
   const next = rows.filter(r => r.days_to_earnings != null).sort((a, b) => a.days_to_earnings - b.days_to_earnings)[0];
 
@@ -226,9 +228,17 @@ async function home(root) {
   }
   const followCard = experts && experts.rows ? following(experts.rows) : null;
   if (followCard) side.prepend(followCard);
+  const oc = oddsCard(odds, true);
+  if (oc) side.append(oc);
+  if (!data.example) {
+    const P = p.paper;
+    side.append(el('a.card.practice-cta', { href: '#/practice', style: { color: 'inherit', display: 'block' } }, el('h2', {}, icon('wallet'), 'Practice portfolio', el('span.sp'), el('span.small', { text: P ? 'Open' : 'Start' })),
+      el('p.small', { text: P ? `Your $10,000 of pretend money, at real prices. Started ${day(P.start)}.` : 'Try your ideas with $10,000 of pretend money at real prices, and see how they do against the S&P 500.' })));
+  }
   const rec = overview && overview.record;
   if (rec) side.append(el('a.card.rec', { href: '#/record', style: { color: 'inherit', display: 'block' } }, el('h2', {}, icon('trophy'), 'Econova’s track record', el('span.sp'), el('span.small', { text: 'See it all' })),
     el('p', {}, 'When the signal said Bullish, the stock beat the S&P 500 over the next month ', el('b', { class: rec.yes_hit_pct >= 50 ? 'up' : 'down', text: rec.yes_hit_pct + '%' }), ' of the time (', el('b', { class: tone(rec.yes_excess), text: `${rec.yes_excess > 0 ? '+' : ''}${rec.yes_excess} pts` }), ' on average).'),
+    rec.growth ? el('p.small', { style: { marginTop: '4px' } }, '$10,000 following those picks: ', el('b', { text: money(rec.growth.value, 'USD') }), ` (the S&P 500: ${money(rec.growth.sp500, 'USD')}).`) : null,
     el('p.small', { text: `${rec.n} picks replayed, ${day(rec.from)} to ${day(rec.to)}. Misses included.` })));
   side.classList.add('f3'); tableCard.classList.add('f2');   // on a phone the table comes before the market cards
   hold.classList.add('flow');
@@ -288,6 +298,10 @@ async function stock(root, t) {
   const drawAct = () => act.replaceChildren(has(t) ? el('button.btn', { onclick: () => holdingModal({ ...c, ticker: t }, () => { drawAct(); render(); }) }, icon('edit'), 'In my stocks') :
     el('button.btn.primary', { onclick: async () => { await addStocks([t]); toast(`${t} added to your stocks`); drawAct(); } }, icon('plus'), 'Add to my stocks'));
   drawAct();
+
+  // Before you decide: the evidence, question by question (filled in once the rest of the user's stocks are known)
+  const decideBox = el('div');
+  beforeYouDecide(c, t).then(box => decideBox.replaceWith(box)).catch(() => {});
 
   // the chart, with a choice of period
   const chartBox = el('div'); let span = 66;
@@ -355,6 +369,7 @@ async function stock(root, t) {
       el('div', { style: { textAlign: 'right' } }, el('.px', { text: money(c.price, c.currency) }), el('div', {}, el('b', { class: tone(c.change_pct_day), text: pct(c.change_pct_day, 2) }), el('span.small', { text: ` today · close of ${day(c.as_of)}` })),
           el('a.small.gf', { href: 'https://www.google.com/finance?q=' + encodeURIComponent(t), target: '_blank', rel: 'noopener', title: 'Live price, news and the full chart on Google Finance' }, 'Google Finance ↗')), act),
     c.story ? el('.story.' + c.signal, {}, el('.eyebrow', { text: 'In short' }), el('p', { text: c.story })) : null,
+    decideBox,
     el('.hero', {}, el('.card', {}, el('h2', {}, 'Price', move != null ? el('span', { class: tone(move), style: { fontWeight: 600 }, text: pct(move) }) : null, el('span.sp'), seg), chartBox,
       el('p.small', { style: { marginTop: '6px' }, text: '▲ ▼ mark the days an analyst made a bullish or bearish call. Click one to watch it.' })), signalCard),
     el('.grid.g3', { style: { marginTop: '14px' } }, videoCard, streetCard, stats),
@@ -362,6 +377,40 @@ async function stock(root, t) {
     (c.experts || []).length || c.trend ? el('.grid.g2', { style: { marginTop: '14px' } }, rightAbout(t, c.experts || []), moodByMonth(c.trend)) : null,
     calls.length ? el('.card.flush', { style: { marginTop: '14px' } }, el('h2', { style: { padding: '16px 20px 0' }, text: `Every call in the last three months (${calls.length})` }), callsTable(calls, false)) : null,
     el('p.small', { style: { marginTop: '14px' }, text: 'Econova describes what market experts said and how they have done; it is not personal financial advice, and experts are often wrong. Prices are daily closes and can be delayed.' }));
+}
+
+// Before you decide: a first-principles checklist. Econova does not say what to do; it lines up the evidence an
+// investor would want, question by question, each answered from the stock's own data.
+async function beforeYouDecide(c, t) {
+  const st = c.street || {}, Q = [];
+  const ask = (q, a, tone) => Q.push({ q, a, tone });
+  const n = (c.calls.bullish || 0) + (c.calls.bearish || 0);
+  ask('What do the experts say?', c.signal === 'none' ? 'Nobody has given a view lately: there is little evidence either way.'
+    : `${SIGNAL[c.signal]}, with ${c.confidence_pct}% confidence, from ${n} call${n === 1 ? '' : 's'} in the videos${st.consensus ? ' and Wall Street’s rating' : ''}.`
+      + (c.top_view ? ` The top-rated experts: ${c.top_view.bullish} bullish, ${c.top_view.bearish} bearish.` : ''),
+    c.signal === 'yes' ? 'good' : c.signal === 'no' ? 'bad' : 'info');
+  const best = (c.experts || []).find(e => e.scored >= 2);
+  ask('Have they been right about it before?', c.track && c.track.scored >= 3 ? `Earlier calls on ${t} were right ${c.track.right} of ${c.track.scored} times.` + (best ? ` Best record on it: ${best.analyst}, ${best.right} of ${best.scored}.` : '')
+    : best ? `${best.analyst} has been right ${best.right} of ${best.scored} times on ${t}; too few calls overall to judge the rest.` : 'Too few of the calls on it are old enough to judge yet.',
+    c.track && c.track.scored >= 3 ? (c.track.right * 2 > c.track.scored ? 'good' : 'bad') : 'info');
+  const disagree = (c.factors || []).some(f => /disagree/i.test(f.text));
+  ask('Do the experts on air and Wall Street agree?', !st.consensus ? 'There is no Wall Street rating to compare with yet.' : disagree ? `No: the videos lean one way and Wall Street (${st.consensus}) the other. Treat the signal with care.`
+    : `Wall Street rates it ${st.consensus}${st.upside_pct != null ? `, with a 12-month target ${pct(st.upside_pct)} from today` : ''}.`, disagree ? 'warn' : 'info');
+  const stretched = [];
+  if (c.change_pct_month != null && Math.abs(c.change_pct_month) >= 15) stretched.push(`${c.change_pct_month > 0 ? 'up' : 'down'} ${Math.abs(Math.round(c.change_pct_month))}% in a month`);
+  if (c.from_high_pct != null && c.from_high_pct <= -25) stretched.push(`${Math.abs(Math.round(c.from_high_pct))}% below its 1-year high`);
+  if (c.pe != null) stretched.push(`P/E ${num(c.pe)}${c.pe >= 50 ? ': a lot of growth is already expected' : ''}`);
+  ask('How has the price moved?', stretched.length ? stretched.join('; ') + '.' : 'Nothing unusual: no big move this month.', c.change_pct_month != null && Math.abs(c.change_pct_month) >= 15 ? 'warn' : 'info');
+  const d = c.days_to_earnings;
+  ask('What could move it soon?', d != null && d <= 21 ? `Results ${d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}: the price can jump either way that day.` : 'No company results in the next three weeks that we know of.', d != null && d <= 21 ? 'warn' : 'info');
+  const mine = data.profile && (data.profile.stocks || []).find(s => s.t === t);
+  if (mine && mine.shares && c.price != null) {
+    const all = await data.cards(data.profile.stocks.map(s => s.t)), pf = portfolio(data.profile, all), row = pf.rows.find(r => r.ticker === t);
+    ask('How much of your money is in it?', row && row.weight != null ? `${Math.round(row.weight)}% of your portfolio.${row.weight >= 25 ? ' That is a lot on one stock: one bad day here moves everything.' : ''}` : 'You hold it; add your other holdings to see its share.', row && row.weight >= 25 ? 'warn' : 'info');
+  } else ask('How much of your money would it be?', 'You do not hold it. Many investors keep any one stock to a small part of their money. You can try it first in the practice portfolio.', 'info');
+  return el('.card.decide', {}, el('h2', {}, 'Before you decide', el('span.sp'), el('a.small', { href: '#/practice', text: 'Try it with pretend money' })),
+    el('.qs', {}, Q.map(x => el('.q', {}, el('span.dot.' + x.tone, {}, icon(x.tone === 'good' ? 'check' : x.tone === 'bad' ? 'down' : x.tone === 'warn' ? 'alert' : 'info')), el('div', {}, el('b', { text: x.q }), el('p', { text: x.a }))))),
+    el('p.small', { style: { marginTop: '10px' }, text: 'Econova lines up the evidence; the decision is yours. Not personal financial advice.' }));
 }
 
 // Who has been right about this stock: each expert's calls on it and how they turned out, next to their overall stars.
@@ -401,17 +450,18 @@ export function render() {
   const active = name === 's' ? '' : name === 'a' ? 'analysts' : name;
   shell(active, page);
   window.scrollTo(0, 0);
-  const titles = { '': 'My stocks', ideas: 'Ideas', analysts: 'Experts', record: 'Track record', calendar: 'Calendar', account: 'Account', help: 'How it works', status: 'Service status' };
+  const titles = { '': 'My stocks', ideas: 'Ideas', analysts: 'Experts', record: 'Track record', practice: 'Practice portfolio', calendar: 'Calendar', account: 'Account', help: 'How it works', status: 'Service status' };
   document.title = `${titles[name] || arg || 'Econova'} · Econova`;
   const run = fn => Promise.resolve(fn()).catch(e => { console.error(e); page.append(el('.card.empty', {}, el('h3', { text: 'This page could not load' }), friendly(e), el('div', {}, el('button.btn', { onclick: render }, 'Try again')))); });
   if (name === 's') run(() => stock(page, arg));
   else if (name === 'account') run(() => account(page, render));
   else if (name === 'help' && data.example) run(() => help(page));
-  else if (data.example && name) gate(page, { ideas: 'ideas beyond this list', analysts: 'the experts and their records', a: 'this analyst', record: 'Econova’s track record', calendar: 'the calendar' }[name] || 'this page');
+  else if (data.example && name) gate(page, { ideas: 'ideas beyond this list', analysts: 'the experts and their records', a: 'this analyst', record: 'Econova’s track record', practice: 'the practice portfolio', calendar: 'the calendar' }[name] || 'this page');
   else if (name === 'ideas') run(() => ideas(page, render));
   else if (name === 'analysts') run(() => analysts(page));
   else if (name === 'a') run(() => analyst(page, arg));
   else if (name === 'record') run(() => record(page));
+  else if (name === 'practice') run(() => practice(page, render));
   else if (name === 'calendar') run(() => calendar(page));
   else if (name === 'status') run(() => status(page));
   else if (name === 'help') run(() => help(page));

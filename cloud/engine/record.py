@@ -60,7 +60,7 @@ def replay(calls, cache):
     """The signal replayed at weekly checks over the videos already read, each judged on the month after."""
     sp = prices.series(prices.SP500, cache)
     empty = {"checks": [], "yes": summary([], "yes"), "no": summary([], "no"), "wait": summary([], "wait"), "all": summary([], "all"),
-             "best": [], "worst": [], "from": None, "to": None, "horizon": HORIZON}
+             "best": [], "worst": [], "from": None, "to": None, "horizon": HORIZON, "growth": None}
     if not calls or len(sp) <= HORIZON:
         return empty
     days = [d for d, _ in sp]
@@ -86,14 +86,32 @@ def replay(calls, cache):
                 continue
             here.append({"t": t, "d": d, "e": e, "s": s, "ret": round(got[0], 1), "excess": round(got[0] - market, 1)})
         picks += here
-        avg = lambda s: (lambda xs: round(sum(xs) / len(xs), 1) if xs else None)([p["excess"] for p in here if p["s"] == s])
-        rows.append({"d": d, "e": e, "sp500": round(market, 1), "yes": avg("yes"), "no": avg("no"),
+        avg = lambda s, k="excess", n=1: (lambda xs: round(sum(xs) / len(xs), n) if xs else None)([p[k] for p in here if p["s"] == s])
+        rows.append({"d": d, "e": e, "sp500": round(market, 2), "yes": avg("yes"), "no": avg("no"), "yes_ret": avg("yes", "ret", 2),
                      "n_yes": sum(p["s"] == "yes" for p in here), "n_no": sum(p["s"] == "no" for p in here),
                      "picks": sorted([p["t"] for p in here if p["s"] == "yes"])[:12]})
     yes = sorted((p for p in picks if p["s"] == "yes"), key=lambda p: -p["excess"])
     return {"checks": rows, "yes": summary(picks, "yes"), "no": summary(picks, "no"), "wait": summary(picks, "wait"),
             "all": summary([{**p, "s": "all"} for p in picks], "all"), "best": yes[:5], "worst": [p for p in yes[::-1][:5] if p["excess"] < 0],
-            "from": rows[0]["d"] if rows else None, "to": rows[-1]["e"] if rows else None, "horizon": HORIZON}
+            "from": rows[0]["d"] if rows else None, "to": rows[-1]["e"] if rows else None, "horizon": HORIZON, "growth": growth(rows)}
+
+
+def growth(checks, start=10_000):
+    """What $10,000 would have become following the Bullish picks: at a check, split it equally across the stocks the
+    signal called Bullish, hold them a month, then do it again at the next check after that month (no overlap). With no
+    Bullish pick the money waits in cash. Next to the same $10,000 left in the S&P 500. No costs or taxes counted."""
+    path, mine, market, until = [], float(start), float(start), ""
+    for c in sorted(checks, key=lambda c: c["d"]):
+        if c["d"] < until:
+            continue
+        if c.get("n_yes") and c.get("yes_ret") is not None:
+            mine *= 1 + c["yes_ret"] / 100
+        market *= 1 + c["sp500"] / 100
+        path.append({"d": c["d"], "e": c["e"], "v": round(mine), "sp": round(market), "n": c.get("n_yes", 0)})
+        until = c["e"]
+    if not path:
+        return None
+    return {"start": start, "value": round(mine), "sp500": round(market), "from": path[0]["d"], "to": path[-1]["e"], "path": path}
 
 
 def live(cards, cache, today):
@@ -152,4 +170,4 @@ def headline(doc):
     if (y.get("n") or 0) < 10 or y.get("excess") is None:
         return None
     return {"yes_hit_pct": y.get("hit_pct"), "yes_excess": y.get("excess"), "no_excess": n.get("excess"), "n": y["n"] + (n.get("n") or 0),
-            "from": r.get("from"), "to": r.get("to")}
+            "from": r.get("from"), "to": r.get("to"), "growth": {k: (r.get("growth") or {}).get(k) for k in ("start", "value", "sp500", "from", "to")} if r.get("growth") else None}

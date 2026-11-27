@@ -96,6 +96,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   ok('stock page: who has been right about it, and the mood by month', (await p.locator('.right-about').textContent()).includes('Who has been right about NVDA') && await p.locator('.right-about .list > div').count() >= 2
     && await p.locator('.mood .mbar').count() === 4);
   ok('stock page: each call says whether it upgraded, downgraded or reiterated the view', await p.locator('.card.flush tbody .act').count() >= 3);
+  ok('stock page: "Before you decide" lines up the evidence in six questions', await p.locator('.decide .q').count() === 6 && (await p.locator('.decide').textContent()).includes('Have they been right about it before?'));
   ok('stock page: a link out to Google Finance', (await p.locator('a.gf').getAttribute('href')) === 'https://www.google.com/finance?q=NVDA');
   ok('stock page: the stock in plain words first', ((await p.locator('.story p').textContent()) || '').length > 80);
   ok('the side menu lists my stocks, the open one marked', await p.locator('.wl-row').count() === 10 && await p.locator('.wl-row[aria-current=page] b').textContent() === 'NVDA');
@@ -125,10 +126,22 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await p.goto(BASE + '/#/'); await p.waitForSelector('.follows'); await wait(p, 900);
   ok('Home: calls from the experts I follow', (await p.locator('.follows').textContent()).includes('From the experts you follow'), followed);
   ok('Home: Econova\'s own track record, with a link to it all', await p.locator('a.rec[href="#/record"]').count() === 1);
+  ok('Home: what the money says (prediction-market odds) and the practice portfolio', (await p.locator('.odds').textContent()).includes('What the money says') && await p.locator('a.practice-cta').count() === 1);
   await p.goto(BASE + '/#/record'); await p.waitForSelector('.replay'); await wait(p, 900);
   const rec = await p.locator('.page').textContent();
   ok('track record: the replay, the live record, the expert calls and the method', ['Bullish signals that beat the S&P 500', 'The signal, replayed week by week', 'Live: the real signals', 'Every expert call, scored', 'How this is worked out'].every(x => rec.includes(x))
     && await p.locator('.replay tbody tr').count() >= 3, (await p.locator('.replay tbody tr').count()) + ' checks');
+  ok('track record: what $10,000 would have become, next to the S&P 500', (await p.locator('.growth').textContent()).includes('Left in the S&P 500') && await p.locator('.growth .list > div').count() >= 2);
+  await p.goto(BASE + '/#/practice'); await p.waitForSelector('text=Start with $10,000'); await p.click('text=Start with $10,000'); await p.waitForSelector('.paper-buy');
+  ok('practice: starts with $10,000 of pretend money', (await p.locator('.tile .v').first().textContent()).includes('10,000'));
+  await p.fill('.paper-buy input.input >> nth=0', 'nvda'); await wait(p, 500); await p.locator('.paper-buy .results button').first().click();
+  await p.fill('.paper-buy input[type=number]', '1000'); await p.click('.paper-buy >> text=Buy'); await p.waitForSelector('.card.flush tbody tr'); await wait(p, 600);
+  const paperText = await p.locator('.page').textContent();
+  ok('practice: buying puts the stock in the holdings, with the experts\' view, and takes the cash', await p.locator('.card.flush tbody tr').count() === 1 && paperText.includes('$9,000') && await p.locator('.card.flush tbody .sig').count() === 1);
+  await p.click('.card.flush tbody >> text=Sell'); await p.click('.modal .btn.primary'); await wait(p, 1200);
+  ok('practice: selling it all empties the holdings and lists both trades', (await p.locator('.page').textContent()).includes('Nothing bought yet') && await p.locator('.list .pill').count() === 2);
+  await p.goto(BASE + '/#/calendar'); await wait(p, 1200);
+  ok('calendar: the market odds next to the dates', (await p.locator('.odds').textContent()).includes('The Fed'));
   await p.click('text=Send feedback'); await p.fill('.modal textarea', 'The track record page is the best part. More channels, please!'); await p.click('.modal .btn.primary'); await wait(p, 1200);
   ok('feedback: a member can send a note to the team', (await p.locator('.toast').textContent()).includes('on its way') && await p.locator('.modal').count() === 0);
   await p.goto(BASE + '/#/calendar'); await wait(p, 1200);
@@ -172,6 +185,9 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
     && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'feedback', 'spoofed00001'), { by: auth.currentUser.uid, email: 'victim@example.com', text: 'hi', page: '#/', at: 'x' })))
     && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'feedback', 'toolong00001'), { by: auth.currentUser.uid, email: auth.currentUser.email, text: 'x'.repeat(2001), page: '#/', at: 'x' })))
     && (await fire(p, async (fs, db, auth) => { await fs.setDoc(fs.doc(db, 'feedback', 'fine00000001'), { by: auth.currentUser.uid, email: auth.currentUser.email, text: 'ok', page: '#/', at: 'x' }); return 'sent'; })) === 'sent');
+  ok('rules: the practice portfolio is saved, and kept to its shape', (await fire(p, async (fs, db, auth) => (await fs.getDoc(fs.doc(db, 'users', auth.currentUser.uid))).data().paper.trades.length)) === 2
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'users', auth.currentUser.uid), { email: auth.currentUser.email, paper: { cash: 1e9, positions: [], trades: [], bonus: true } })))
+    && denied(await fire(p, async (fs, db, auth) => fs.setDoc(fs.doc(db, 'users', auth.currentUser.uid), { email: auth.currentUser.email, paper: { cash: 1, positions: [], trades: Array.from({ length: 201 }, () => ({ t: 'A' })) } }))));
   ok('rules: the ticker I looked up was asked for', denied(await fire(p, async (fs, db) => (await fs.getDoc(fs.doc(db, 'requests', 'ZZZZZ'))).exists())) );   // written, and not readable back
 
   // ---- 7. a phone
@@ -179,7 +195,7 @@ const ok = (name, pass, note = '') => { results.push(pass); console.log(`${pass 
   await signIn(phone);
   const fits = async () => !(await phone.evaluate(() => document.documentElement.scrollWidth > innerWidth));
   let allFit = await fits();
-  for (const h of ['#/s/NVDA', '#/ideas', '#/analysts', '#/record', '#/calendar', '#/account']) { await phone.goto(BASE + '/' + h); await wait(phone, 1100); allFit = allFit && await fits(); }
+  for (const h of ['#/s/NVDA', '#/ideas', '#/analysts', '#/record', '#/practice', '#/calendar', '#/account']) { await phone.goto(BASE + '/' + h); await wait(phone, 1100); allFit = allFit && await fits(); }
   ok('phone: no page scrolls sideways', allFit);
   ok('phone: the tab bar replaces the side menu', await phone.locator('.tabbar').isVisible() && !(await phone.locator('.side').isVisible()));
   await phone.context().close();

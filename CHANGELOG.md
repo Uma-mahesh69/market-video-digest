@@ -2,6 +2,24 @@
 
 Installed copies update themselves: Market Digest shows **Update now** on its Home page when a new version is out.
 
+## Econova: the mentor's list (27 Nov 2026)
+
+What we found for each item is in [docs/EXPLORATIONS.md](docs/EXPLORATIONS.md).
+
+- **Before you decide** (stock page): six questions an investor would ask, each answered from the stock's own data:
+  what the experts say, whether they have been right about it, whether Wall Street agrees, how the price has moved,
+  what could move it soon, and how much of your money it is. Evidence, never advice.
+- **Practice portfolio**: $10,000 of pretend money at real prices, saved with the account. Buy and sell, see the
+  result against the S&P 500 and the experts' view on each holding; a warning when one stock is too big a part.
+- **What $10,000 would have become** (Track record and Home): following the Bullish picks month by month, next to the
+  S&P 500.
+- **What the money says**: prediction-market odds from Kalshi (regulated by the CFTC) on the Fed's next decision,
+  inflation, jobs and a recession, read once a day. Home and Calendar.
+- Trading APIs were looked at and left out for now: Robinhood has no official stock API, Public.com's is for
+  personal use only, and placing trades would need a broker's licence.
+- A manual test plan for real devices: [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
+- Tests: 188 unit tests; the browser test (82 checks).
+
 ## Econova: the product takes shape (26 Nov 2026)
 
 The product is now called **Econova**, and what it is for is written down in [docs/PRODUCT.md](docs/PRODUCT.md):

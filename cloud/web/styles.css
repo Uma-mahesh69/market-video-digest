@@ -238,6 +238,14 @@ tr.link{cursor:pointer}tr.link:hover td{background:var(--hover)}
 .mbars{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end;height:170px;margin-top:6px}
 .mbar{display:grid;grid-template-rows:1fr auto auto;justify-items:center;height:100%;gap:2px}
 .stack-v{align-self:end;width:42px;display:flex;flex-direction:column;border-radius:6px;overflow:hidden;min-height:4px}.stack-v i{display:block}
+.odds-ev{padding:10px 0;border-top:1px solid var(--line-2)}.odds-ev:first-of-type{border-top:0}
+.odds-row{display:grid;grid-template-columns:minmax(0,1fr) 90px 40px;gap:8px;align-items:center;font-size:13px;margin-top:6px}
+.odds-bar{height:8px;border-radius:4px;background:var(--line-2);overflow:hidden}.odds-bar i{display:block;height:100%;background:var(--brand)}.odds-row b{text-align:right}
+.decide .qs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 22px}.decide .q{display:flex;gap:10px;align-items:flex-start}
+.decide .q p{margin:2px 0 0;font-size:13px;color:var(--ink-2);line-height:1.5}.decide{margin-bottom:14px}
+.paper-buy{display:grid;grid-template-columns:minmax(0,1fr) 140px auto;gap:8px;align-items:center}.paper-buy .search{position:relative}
+.practice-cta h2 svg,.odds h2 svg{width:18px;height:18px;margin-right:6px;vertical-align:-3px}
+@media (max-width:640px){.paper-buy{grid-template-columns:1fr}}
 textarea.input{resize:vertical;min-height:110px}
 .opt{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;cursor:pointer}
 .opt:hover{background:var(--hover)}.opt:has(input:checked){border-color:var(--brand);background:var(--brand-soft)}

@@ -8,7 +8,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import CLOUD, ROOT, access, cards as cards_mod, mail, street as street_mod, videos
+from . import CLOUD, ROOT, access, cards as cards_mod, mail, odds as odds_mod, street as street_mod, videos
 from .store import doc_id
 import digest as dg
 import prices
@@ -94,7 +94,7 @@ def themes_of(cfg, made_today, log):
 
 
 def run(store, settings, sources=None, now=None, log=print, work=None, read_videos=True, force_mail=None, reader=videos.read,
-        price_fetcher=None, tipranks_client=None, mail_sender=mail.send):
+        price_fetcher=None, tipranks_client=None, mail_sender=mail.send, odds_reader=None):
     now = now or datetime.now(timezone.utc)
     today = now.date()
     sources = sources or load_sources()
@@ -215,6 +215,13 @@ def run(store, settings, sources=None, now=None, log=print, work=None, read_vide
                 step("Email", lambda k=kind: mail.send_all(store, settings, users, new_cards, k, today, log, sender=mail_sender, session=session,
                                                            analysts=docs["analysts"]["rows"]))
             state["mail_day"] = today.isoformat()
+
+    # what the money says: prediction-market odds on the big events, once a day
+    if odds_reader and state.get("odds_day") != today.isoformat():
+        got = step("Odds", lambda: odds_reader(now=now, log=log))
+        if got:
+            store.set("market", "odds", got)
+            state["odds_day"] = today.isoformat()
 
     # members' notes from the feedback box, to the team
     step("Feedback", lambda: mail.forward_feedback(store, settings, log, sender=mail_sender))
