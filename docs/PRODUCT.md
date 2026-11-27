@@ -94,6 +94,9 @@ exactly this for written research; nobody has done it for what is said on air.
 | **My stocks** | Watchlist and holdings, portfolio health, big moves, "For you today", earnings dates | Built |
 | **Emails** | Daily brief after the close, weekly summary, only-when-it-changes option; calls from analysts you follow | Built (follows: new) |
 | **Econova's track record** | How the signal itself has done against the S&P 500: replayed over past months, and live | New |
+| **Before you decide** | Six questions an investor would ask, each answered from the stock's data: evidence, not advice | New |
+| **Practice portfolio** | $10,000 of pretend money at real prices, measured against the S&P 500 | New |
+| **What the money says** | Prediction-market odds (Kalshi) on the Fed, inflation, jobs and recession, next to the experts | New |
 | **Private beta** | Invitation-only access for 10 to 15 members; members' feedback straight to the team | Built (feedback: new) |
 | **Trust and compliance** | Describes what experts say, never "buy this"; no personal advice; data kept to the minimum | Wording: new |
 

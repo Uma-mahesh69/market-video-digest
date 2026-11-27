@@ -164,7 +164,19 @@ def fill(store, today=None, work=None, log=print):
             raise engine.prices.PriceError(f"no example prices for {symbol}")
         return closes[symbol]
     return engine.run(store, {"site": "http://localhost:5000/"}, sources=sources, now=now, log=log, work=work, read_videos=False,
-                      price_fetcher=fetch, tipranks_client=FakeTipRanks(street))
+                      price_fetcher=fetch, tipranks_client=FakeTipRanks(street), odds_reader=fake_odds)
+
+
+def fake_odds(now=None, log=print):
+    """Example prediction-market odds, in the shape odds.read gives (invented numbers, no network)."""
+    row = lambda label, pct: {"label": label, "pct": pct}
+    ev = lambda key, what, closes, rows: {"key": key, "what": what, "title": what, "closes": closes, "rows": rows, "event": key.upper(),
+                                          "link": "https://kalshi.com/"}
+    return {"events": [ev("fed", "The Fed's next rate decision", "2026-12-09", [row("Fed maintains rate", 62), row("Cut 25bps", 35), row("Hike 25bps", 3)]),
+                       ev("cpi", "Inflation (CPI), the next monthly reading", "2026-12-10", [row("Above 0.1%", 84), row("Above 0.2%", 51), row("Above 0.3%", 17)]),
+                       ev("jobs", "Jobs added, the next monthly report", "2026-12-04", [row("Above 50,000", 83), row("Above 125,000", 49), row("Above 200,000", 14)]),
+                       ev("recession", "A US recession next year", "2028-01-31", [row("Yes", 22)])],
+            "at": (now.isoformat(timespec="minutes") if now else ""), "source": "Kalshi"}
 
 
 if __name__ == "__main__":

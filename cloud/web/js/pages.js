@@ -1,5 +1,5 @@
 // The pages other than Home and the stock page, and two pieces they share with them: the stock table and the picker.
-import { el, icon, logoMark, pct, tone, money, day, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL, COLOR } from './ui.js';
+import { el, icon, logoMark, pct, tone, money, num, day, ago, sig, confidence, split, range, spark, stars, modal, toast, menu, skeleton, SIGNAL, COLOR } from './ui.js';
 import { data, cleanTicker, tickersIn, friendly } from './data.js';
 
 export const go = hash => { location.hash = hash; };
@@ -293,7 +293,9 @@ function coverageCard(rows) {
 export async function calendar(root) {
   root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Calendar' }), el('.sub', { text: 'Earnings dates, market events and the latest videos read.' }))));
   const hold = el('div', {}, skeleton(300)); root.append(hold);
-  const [cal, vids] = await Promise.all([data.market('calendar'), data.market('videos')]); hold.textContent = '';
+  const [cal, vids, odds] = await Promise.all([data.market('calendar'), data.market('videos'), data.market('odds').catch(() => null)]); hold.textContent = '';
+  const oc = oddsCard(odds);
+  if (oc) { oc.style.marginBottom = '14px'; hold.append(oc); }
   const mine = new Set((data.profile.stocks || []).map(s => s.t));
   let all = sessionStorage.getItem('md.cal') === 'all';
   const earn = el('.list');
@@ -437,6 +439,17 @@ export async function record(root) {
     tile('Bearish picks vs the S&P 500', pts(n.excess), n.n ? `average of ${n.n} picks; below zero means right` : 'No bearish picks yet', tone(n.excess == null ? null : -n.excess)),
     tile('Bullish minus Bearish', pts(spread), `Every stock discussed: ${pts(all.excess)}`, tone(spread))));
 
+  // what $10,000 would have become
+  const g = rp.growth;
+  if (g) hold.append(el('.card.growth', { style: { marginTop: '14px' } }, el('h2', { text: 'What $10,000 would have become' }),
+    el('.grid.g2', { style: { gap: '8px 28px' } },
+      el('div', {}, el('.small', { text: 'Following the Bullish picks' }), el('.big', { class: tone(g.value - g.start), text: money(g.value, 'USD') }), el('span', { class: tone(g.value - g.start), text: pct((g.value / g.start - 1) * 100) })),
+      el('div', {}, el('.small', { text: 'Left in the S&P 500' }), el('.big', { class: tone(g.sp500 - g.start), text: money(g.sp500, 'USD') }), el('span', { class: tone(g.sp500 - g.start), text: pct((g.sp500 / g.start - 1) * 100) }))),
+    el('.list', { style: { marginTop: '10px' } }, g.path.map(x => el('div', {}, el('span.small', { style: { flex: 1 }, text: `${day(x.d)} → ${day(x.e)}: split across ${x.n} Bullish stock${x.n === 1 ? '' : 's'}` }),
+      el('b', { text: money(x.v, 'USD') }), el('span.small', { text: `S&P 500 ${money(x.sp, 'USD')}` })))),
+    el('p.small', { style: { marginTop: '10px', lineHeight: 1.6 }, text: `From ${day(g.from)} to ${day(g.to)}: at each step the money is split equally across the stocks the signal called Bullish, held for a month, then moved to the next month’s picks. No trading costs or taxes. A few months is a small sample: treat it as a first look, not a promise.` }),
+    el('p.small', {}, 'Want to try your own picks? ', el('a', { href: '#/practice', text: 'Open the practice portfolio' }), '.')));
+
   // the replay, check by check
   const checks = (rp.checks || []).slice().reverse();
   const bar = v => { if (v == null) return el('span.small', { text: '—' });
@@ -480,4 +493,107 @@ export async function record(root) {
       el('.card', {}, el('h2', { text: 'Worst Bullish picks' }), (rp.worst || []).length ? el('.list', {}, rp.worst.map(line)) : el('p.small', { text: 'None trailed the market.' }))));
   }
   hold.append(el('p.small', { style: { marginTop: '14px' }, text: 'Past results do not promise future ones. Econova describes what experts said; it is not personal financial advice.' }));
+}
+
+// ---------------------------------------------------------------- what the money says (prediction markets)
+export function oddsCard(o, compact) {
+  if (!o || !(o.events || []).length) return null;
+  const when = d => d ? new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.slice(0, 4) !== String(new Date().getFullYear()) ? 'numeric' : undefined }) : '';
+  const ev = e => el('.odds-ev', {}, el('.row', { style: { justifyContent: 'space-between', alignItems: 'baseline' } }, el('b', { text: e.what }), el('span.small', { text: (e.key === 'recession' ? 'settles ' : 'by ') + when(e.closes) })),
+    (compact ? e.rows.slice(0, 2) : e.rows).map(r => el('.odds-row', {}, el('span', { text: r.label }), el('span.odds-bar', {}, el('i', { style: { width: r.pct + '%' } })), el('b', { text: r.pct + '%' }))));
+  return el('.card.odds', {}, el('h2', {}, 'What the money says', el('span.sp'), el('a.small', { href: 'https://kalshi.com/', target: '_blank', rel: 'noopener', text: o.source || 'Kalshi' })),
+    el('p.small', { style: { marginBottom: '8px' }, text: 'Odds from people betting real money on what happens next. A second opinion next to the experts on TV: it can be wrong too.' }),
+    (compact ? o.events.slice(0, 3) : o.events).map(ev),
+    el('p.small', { style: { marginTop: '8px' }, text: `Read ${ago(o.at)}. Kalshi is a US exchange regulated by the CFTC.` }));
+}
+
+// ---------------------------------------------------------------- the practice portfolio: $10,000 of pretend money
+const PRINCIPLES = [
+  ['Start with the market as your yardstick', 'An S&P 500 index fund owns 500 large companies at once. Any stock you pick has to beat that to be worth the extra risk. This page shows how your picks compare.'],
+  ['Spread your money', 'One stock can fall by half on bad news. Many investors keep any single stock to a small part of their money, so one mistake cannot sink the rest.'],
+  ['Think in years, not days', 'Prices jump around every day for no lasting reason. A plan you would keep through a 20% fall is a plan you can actually follow.'],
+  ['Write down why, before you buy', 'One line: why this stock, and what would make you sell. It stops the news of the day from deciding for you.'],
+  ['Check who is saying it', 'A confident voice on TV is not a record. Look at how the expert’s past calls turned out before you act on their view.'],
+];
+export async function practice(root, refresh) {
+  root.append(el('.head', {}, el('div', {}, el('h1', { text: 'Practice portfolio' }), el('.sub', { text: 'Try your ideas with $10,000 of pretend money at real prices, before you risk your own.' }))));
+  if (data.example) { root.append(el('.card.empty', {}, el('h3', { text: 'Sign in to practise' }), 'Your practice portfolio is saved with your account.')); return; }
+  const hold = el('div', {}, skeleton(300)); root.append(hold);
+  const overview = await data.market('overview').catch(() => null), sp = overview && overview.sp500 && overview.sp500.price;
+  const P = data.profile.paper;
+  const principles = el('.card', {}, el('h2', { text: 'Five principles many investors start from' }), PRINCIPLES.map(([h, t]) => el('.theme', {}, el('b', { text: h }), el('span', { text: t }))),
+    el('p.small', { style: { marginTop: '8px' }, text: 'General principles, not advice for you. Econova lays out the evidence; the decision is yours.' }));
+  if (!P) {
+    hold.replaceChildren(el('.grid.g2', {}, el('.card', {}, el('h2', { text: 'How it works' }),
+      el('ul.small.notes', {}, ...['You get $10,000 of pretend money. Nothing real is bought or sold.', 'Buy and sell any stock Econova covers, at its latest closing price.',
+        'See how your picks do against simply holding the S&P 500, and against what the experts said.', 'Start again whenever you like.'].map(t => el('li', { text: t }))),
+      el('div', { style: { marginTop: '14px' } }, el('button.btn.primary', { onclick: async e => { e.currentTarget.disabled = true; await data.paperStart(sp); refresh(); } }, icon('plus'), 'Start with $10,000'))), principles));
+    return;
+  }
+  const tickers = P.positions.map(x => x.t), cards = tickers.length ? await data.cards(tickers) : {};
+  const priced = P.positions.map(x => { const c = cards[x.t] || {}, px = c.price != null ? c.price : x.cost; return { ...x, c, px, value: x.sh * px }; });
+  const invested = priced.reduce((a, x) => a + x.value, 0), total = P.cash + invested, gain = (total / P.start_cash - 1) * 100;
+  const market = sp && P.sp0 ? (sp / P.sp0 - 1) * 100 : null;
+  const money0 = v => money(v, 'USD');
+
+  // the trade box
+  const input = el('input.input', { placeholder: 'Stock, e.g. NVDA', autocomplete: 'off', 'aria-label': 'Stock to buy' }), results = el('.results', { hidden: true });
+  const amount = el('input.input', { type: 'number', min: 1, step: 'any', inputmode: 'decimal', placeholder: 'Amount in $', 'aria-label': 'Amount in dollars' });
+  const note = el('p.small', { style: { marginTop: '8px', minHeight: '18px' } });
+  let chosen = '';
+  input.oninput = async () => { chosen = ''; const q = input.value.trim().toUpperCase(); results.textContent = ''; if (!q) { results.hidden = true; return; }
+    const hits = search(await data.symbols(), q).slice(0, 6);
+    for (const [t, nm] of hits) results.append(el('button', { onclick: () => { chosen = t; input.value = t; results.hidden = true; amount.focus(); } }, el('span.badge', { text: t }), el('span.nm', { text: nm })));
+    results.hidden = !hits.length; };
+  const buy = el('button.btn.primary', { onclick: async () => {
+    const t = cleanTicker(chosen || input.value), dollars = Number(amount.value);
+    if (!t) { note.textContent = 'Choose a stock first.'; return; }
+    if (!(dollars > 0)) { note.textContent = 'Type how many dollars to put in.'; return; }
+    if (dollars > P.cash + 0.005) { note.textContent = `You have ${money0(P.cash)} of pretend cash left.`; return; }
+    const c = await data.card(t);
+    if (!c || c.price == null) { note.textContent = `We do not have a price for ${t} yet. Look it up once so we start covering it.`; data.request(t); return; }
+    buy.disabled = true;
+    try { await data.paperTrade(t, 'buy', dollars / c.price, c.price, c.as_of); toast(`Bought ${money0(dollars)} of ${t} at ${money(c.price, c.currency)} (pretend)`); refresh(); }
+    catch (e) { buy.disabled = false; note.textContent = e.message || friendly(e); }
+  } }, 'Buy');
+  const tradeCard = el('.card', {}, el('h2', { text: 'Buy' }), el('.paper-buy', {}, el('.search', {}, icon('search'), input, results), amount, buy), note,
+    el('p.small', { text: 'At the latest closing price. Pretend money: nothing real is bought.' }));
+
+  // positions
+  const body = el('tbody');
+  for (const x of priced.sort((a, b) => b.value - a.value)) {
+    const w = total ? x.value / total * 100 : 0;
+    body.append(el('tr', {}, el('td', {}, el('a.badge', { href: '#/s/' + encodeURIComponent(x.t), text: x.t })), el('td.r', { text: num(x.sh, 3) }),
+      el('td.r.hide-s', { text: money0(x.cost) }), el('td.r', { text: money0(x.px) }), el('td.r', { text: money0(x.value) }),
+      el('td.r', { class: tone(x.px / x.cost - 1), text: pct((x.px / x.cost - 1) * 100) }), el('td.r.hide-s', { class: w > 25 ? 'down' : '', text: Math.round(w) + '%' }),
+      el('td.c', {}, sig(x.c.signal || 'none')),
+      el('td.c', {}, el('button.btn.sm', { onclick: () => sellModal(x, refresh) }, 'Sell'))));
+  }
+  const biggest = priced.length ? Math.max(...priced.map(x => x.value)) / total * 100 : 0;
+  hold.replaceChildren(
+    el('.grid.g4', {}, tile('Portfolio value', money0(total), `${money0(P.cash)} in cash`),
+      tile('Your result', pct(gain), `since ${day(P.start)}`, tone(gain)),
+      tile('The S&P 500 over the same days', market == null ? '—' : pct(market), 'the yardstick', tone(market)),
+      tile('You vs the market', market == null ? '—' : `${gain - market > 0 ? '+' : ''}${(gain - market).toFixed(1)} pts`, gain - market >= 0 ? 'ahead of the S&P 500' : 'behind the S&P 500', market == null ? '' : tone(gain - market))),
+    biggest > 25 ? el('.banner', { style: { marginTop: '14px' } }, `One stock is ${Math.round(biggest)}% of this portfolio. Many investors keep any one stock much smaller, so a single bad day cannot do much harm.`) : null,
+    el('.cols', { style: { marginTop: '14px' } }, el('.stack', {}, tradeCard,
+      el('.card.flush', {}, el('h2', { style: { padding: '16px 20px 0' }, text: 'Holdings' }), priced.length ? el('.scroll', {}, el('table', {}, el('thead', {}, el('tr', {},
+        el('th', { text: 'Stock' }), el('th.r', { text: 'Shares' }), el('th.r.hide-s', { text: 'Paid' }), el('th.r', { text: 'Price' }), el('th.r', { text: 'Value' }), el('th.r', { text: 'Gain' }),
+        el('th.r.hide-s', { text: 'Weight' }), el('th.c', { text: 'Experts' }), el('th.c', { text: '' }))), body)) : el('.empty', { text: 'Nothing bought yet. Pick a stock above.' })),
+      (P.trades || []).length ? el('.card', {}, el('h2', { text: 'Your trades' }), el('.list', {}, P.trades.slice(-12).reverse().map(tr => el('div', { style: { alignItems: 'center' } },
+        el('span.when', { text: day(tr.d) }), el('span.pill.' + (tr.side === 'buy' ? 'bullish' : 'bearish'), { text: tr.side }), el('span.badge', { text: tr.t }),
+        el('span.body.small', { text: `${num(tr.sh, 3)} shares at ${money0(tr.px)}` }))))) : null),
+      el('.stack', {}, principles, el('.card', {}, el('h2', { text: 'Start again' }), el('p.small', { style: { marginBottom: '10px' }, text: 'Sell everything and go back to $10,000 of pretend cash.' }),
+        el('button.btn.danger', { onclick: () => modal('Start the practice portfolio again?', el('p', { style: { marginTop: '8px' }, text: 'Your pretend holdings and trades are cleared. Your real list of stocks is not touched.' }),
+          done => [el('button.btn', { onclick: done }, 'Keep it'), el('button.btn.danger', { onclick: async () => { await data.paperStart(sp); done(); toast('Back to $10,000'); refresh(); } }, 'Start again')]) }, 'Start again')))));
+}
+function sellModal(x, refresh) {
+  const shares = el('input.input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', value: String(Math.round(x.sh * 1e4) / 1e4) });
+  modal(`Sell ${x.t} (pretend)`, el('div', { style: { marginTop: '10px' } }, el('.field', {}, el('label', { text: `Shares to sell (you hold ${num(x.sh, 4)})` }), shares),
+    el('p.small', { text: `At the latest close, ${money(x.px, 'USD')}.` })),
+  done => [el('button.btn', { onclick: done }, 'Cancel'), el('button.btn.primary', { onclick: async () => {
+    const n = Math.min(Number(shares.value) || 0, x.sh);
+    if (n <= 0) return;
+    try { await data.paperTrade(x.t, 'sell', n, x.px, (x.c && x.c.as_of) || null); done(); toast(`Sold ${num(n, 3)} ${x.t} (pretend)`); refresh(); } catch (e) { toast(e.message || friendly(e)); }
+  } }, 'Sell')]);
 }

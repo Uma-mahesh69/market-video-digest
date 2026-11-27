@@ -26,13 +26,18 @@ service cloud.firestore {
         && (!('daily' in p) || p.daily in ['every', 'changes', 'off'])
         && (!('weekly' in p) || p.weekly is bool);
     }
+    function validPaper(p) {
+      return p is map && p.keys().hasOnly(['start_cash', 'cash', 'start', 'sp0', 'positions', 'trades'])
+        && p.cash is number && p.positions is list && p.positions.size() <= 60 && p.trades is list && p.trades.size() <= 200;
+    }
     function validUser(d) {
-      return d.keys().hasOnly(['email', 'name', 'photo', 'stocks', 'follows', 'prefs', 'onboarded', 'created', 'updated'])
+      return d.keys().hasOnly(['email', 'name', 'photo', 'stocks', 'follows', 'paper', 'prefs', 'onboarded', 'created', 'updated'])
         && d.email is string && d.email == request.auth.token.email   // emails only ever go to the address signed in with
         && (!('name' in d) || (d.name is string && d.name.size() <= 80))
         && (!('photo' in d) || (d.photo is string && d.photo.size() <= 600))
         && (!('stocks' in d) || (d.stocks is list && d.stocks.size() <= 60))
         && (!('follows' in d) || (d.follows is list && d.follows.size() <= 50))   // the analysts they follow, by name
+        && (!('paper' in d) || validPaper(d.paper))                               // the practice portfolio (pretend money)
         && (!('prefs' in d) || validPrefs(d.prefs))
         && (!('onboarded' in d) || d.onboarded is bool)
         && (!('created' in d) || d.created is string)

@@ -12,7 +12,7 @@ import digest
 import prices
 import tipranks
 
-from cloud.engine import cards, mail, record, run as engine, street, videos
+from cloud.engine import cards, mail, odds, record, run as engine, street, videos
 from cloud.engine.store import MemoryStore, check, doc_id
 from cloud.tools import demo_data, make_symbols
 
@@ -200,7 +200,7 @@ class Engine(Globals):
     def test_a_run_writes_cards_charts_and_the_market_pages(self):
         store, status = self.fill()
         self.assertTrue(status["ok"], status["errors"])
-        self.assertEqual(sorted(store.all("market")), ["analysts", "calendar", "meta", "overview", "record", "status", "videos"])
+        self.assertEqual(sorted(store.all("market")), ["analysts", "calendar", "meta", "odds", "overview", "record", "status", "videos"])
         card = store.get("stocks", "NVDA")
         for key in ("ticker", "name", "price", "signal", "confidence_pct", "factors", "calls", "calls_list", "bulls", "bears", "spark", "street",
                     "history", "low_52w", "high_52w", "days_to_earnings", "sector", "h", "updated"):
@@ -658,6 +658,69 @@ class WhoWasRight(unittest.TestCase):
         calls = [self.call("UP", "bullish", "Ann", d[0]), self.call("UP", "bullish", "Ann", d[10]), self.call("DOWN", "bearish", "Ann", d[20]), self.call("UP", "bearish", "Bo", d[30])]
         rows = cards.coverage("Ann", calls, self.cache)
         self.assertEqual([(r["ticker"], r["calls"], r["hit_pct"]) for r in rows], [("DOWN", 1, 100), ("UP", 2, 100)])
+
+
+class MarketOdds(Globals):
+    """What the money says: Kalshi's public odds, read without the network here."""
+    NOW = datetime(2026, 11, 27, 9, tzinfo=timezone.utc)
+
+    def m(self, event, sub, bid, ask, close, last=None):
+        return {"event_ticker": event, "yes_sub_title": sub, "yes_bid_dollars": f"{bid:.4f}", "yes_ask_dollars": f"{ask:.4f}",
+                "last_price_dollars": f"{(last if last is not None else bid):.4f}", "close_time": close + "T19:00:00Z", "title": f"{event} question"}
+
+    def test_odds_are_the_middle_of_a_tight_market_else_the_last_trade(self):
+        self.assertEqual(odds.chance(self.m("E", "x", 0.60, 0.64, "2026-12-09")), 62)
+        self.assertEqual(odds.chance(self.m("E", "x", 0.10, 0.60, "2026-12-09", last=0.33)), 33)   # too wide a spread to trust
+        self.assertIsNone(odds.chance({"yes_bid_dollars": "0", "yes_ask_dollars": "0", "last_price_dollars": "0"}))
+
+    def test_the_soonest_open_event_is_read_and_next_years_recession(self):
+        fed = [self.m("FED-26DEC", "Hold", 0.61, 0.63, "2026-12-09"), self.m("FED-26DEC", "Cut 25bps", 0.34, 0.36, "2026-12-09"),
+               self.m("FED-26DEC", "Hike >25bps", 0.0, 0.01, "2026-12-09"), self.m("FED-27JAN", "Hold", 0.5, 0.52, "2027-01-27"),
+               self.m("FED-26NOV", "Hold", 0.9, 0.92, "2026-11-01")]   # already closed
+        e = odds.event_of("fed", "KXFEDDECISION", "The Fed", fed, self.NOW)
+        self.assertEqual((e["event"], [r["label"] for r in e["rows"]]), ("FED-26DEC", ["Hold", "Cut 25bps"]))   # a 0% outcome is left out
+        rec = [self.m("REC-26", "Yes", 0.02, 0.03, "2027-01-31"), self.m("REC-27", "Yes", 0.21, 0.23, "2028-01-31")]
+        self.assertEqual(odds.event_of("recession", "KXRECSSNBER", "A recession", rec, self.NOW)["rows"], [{"label": "Yes", "pct": 22}])
+
+    def test_a_ladder_keeps_the_likely_the_coin_toss_and_the_unlikely_step(self):
+        steps = [self.m("CPI-26NOV", f"Above {x / 10:.1f}%", p / 100, p / 100 + 0.01, "2026-12-10") for x, p in ((-2, 96), (-1, 84), (0, 51), (1, 30), (2, 14), (3, 4))]
+        rows = odds.event_of("cpi", "KXCPI", "CPI", steps, self.NOW)["rows"]
+        self.assertEqual([r["label"] for r in rows], ["Above -0.1%", "Above 0.0%", "Above 0.2%"])
+
+    def test_one_series_failing_keeps_the_others_and_none_means_nothing(self):
+        def fetcher(series):
+            if series == "KXCPI":
+                raise OSError("down")
+            return [self.m(series + "-1", "Yes", 0.4, 0.42, "2026-12-20")]
+        got = odds.read(now=self.NOW, fetcher=fetcher, log=lambda m: None)
+        self.assertEqual([e["key"] for e in got["events"]], ["fed", "jobs", "recession"])
+        self.assertIsNone(odds.read(now=self.NOW, fetcher=lambda s: [], log=lambda m: None))
+
+    def test_the_engine_reads_the_odds_once_a_day(self):
+        calls = []
+        def reader(now=None, log=print):
+            calls.append(now)
+            return {"events": [{"key": "fed", "rows": []}], "at": now.isoformat(), "source": "Kalshi"}
+        store = MemoryStore()
+        sources = {**engine.load_sources(), "channels": []}
+        for hour in (3, 4):
+            engine.run(store, {"site": "https://x/"}, sources=sources, now=datetime(2026, 11, 27, hour, tzinfo=timezone.utc), log=lambda m: None, work=self.work,
+                       read_videos=False, price_fetcher=lambda s: (_ for _ in ()).throw(prices.PriceError("none")), odds_reader=reader)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(store.get("market", "odds")["source"], "Kalshi")
+
+
+class TenThousand(unittest.TestCase):
+    def test_10000_follows_the_bullish_picks_month_by_month_without_overlap(self):
+        checks = [{"d": "2026-08-03", "e": "2026-09-01", "n_yes": 3, "yes_ret": 10.0, "sp500": 2.0},
+                  {"d": "2026-08-10", "e": "2026-09-08", "n_yes": 4, "yes_ret": 50.0, "sp500": 9.0},   # inside the first month: skipped
+                  {"d": "2026-09-02", "e": "2026-10-01", "n_yes": 0, "yes_ret": None, "sp500": -5.0},   # no Bullish pick: cash
+                  {"d": "2026-10-05", "e": "2026-11-03", "n_yes": 2, "yes_ret": -10.0, "sp500": 1.0}]
+        g = record.growth(checks)
+        self.assertEqual((g["value"], g["sp500"]), (9900, 9787))   # S&P: 1.02 x 0.95 x 1.01
+        self.assertEqual([x["v"] for x in g["path"]], [11000, 11000, 9900])
+        self.assertEqual((g["from"], g["to"]), ("2026-08-03", "2026-11-03"))
+        self.assertIsNone(record.growth([]))
 
 
 class FollowsAndFeedback(unittest.TestCase):
